@@ -231,11 +231,6 @@ exp.edit.store = Ok("bank 09: 6389/15104 bytes")
 exp.edit.reread_ok = true
 exp.after_edit.rom = ed267ede17a02175
 exp.play.level00 = boot=true entered=true abfad1705b604e13
-cmap.parse = aebde380290d3379
-cmap.linked = true true false
-cmap.neighbour = Some(3) Some(2) Some(0)
-cmap.toggle = 10de4439d432e334
-cmap.remove = af330de210cefe5c
 emu.f0059.screen = 14e3b442c87545e2
 emu.f0059.sound = 90258 88fa6ddebcf1e6c5
 emu.f0119.screen = 14e3b442c87545e2

@@ -1,8 +1,7 @@
-//! The cartridge files: the original (read only), the edited copy in `edits\` and its
-//! editor-made map file next to it (paths: `host::paths`).
+//! The cartridge files: the original (read only) and the edited copy in `edits\`
+//! (paths: `host::paths`).
 use crate::domain::document::EditorDocument;
 use crate::ports::EditedCopyStore;
-use cart_model::custom_map::CustomMap;
 use std::path::{Path, PathBuf};
 
 pub struct EditedCopyFile {
@@ -25,10 +24,6 @@ impl EditedCopyStore for EditedCopyFile {
         self.make_dir();
         std::fs::write(&self.path, rom)
     }
-    fn save_custom_map(&self, map: &CustomMap) -> std::io::Result<()> {
-        self.make_dir();
-        host::save_custom_map(map, &self.path)
-    }
 }
 
 /// What opening a cartridge gives: the document, where it saves, and whether an edited
@@ -43,9 +38,8 @@ pub fn open(original_path: &Path) -> Result<Opened, String> {
     let original = std::fs::read(original_path).map_err(|e| e.to_string())?;
     let path = host::edited_copy_path(original_path);
     let edited = std::fs::read(&path).ok();
-    let custom = host::load_custom_map(&path).unwrap_or_default();
     let had_copy = path.exists();
-    Ok(Opened { doc: EditorDocument::open(original, edited, custom), store: EditedCopyFile { path }, had_copy })
+    Ok(Opened { doc: EditorDocument::open(original, edited), store: EditedCopyFile { path }, had_copy })
 }
 
 /// Language from the game's settings file (English unless Spanish was chosen).

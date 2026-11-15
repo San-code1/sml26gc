@@ -11,7 +11,6 @@
 //! The ROM is taken from the `SML2_ROM` environment variable, else found the way the game
 //! finds it. Without a ROM the test is skipped (it prints why). Nothing from the ROM is
 //! written to the golden file except hashes, sizes and offsets.
-use cart_model::custom_map::CustomMap;
 use cart_model::{levels, objects, world, GameDriver};
 use gb_core::Buttons;
 use gb_core::Gb;
@@ -224,22 +223,6 @@ fn rom_data(rom: &[u8], out: &mut Out) {
     }
 }
 
-/// 4. The editor's own world map file format. (Level 200 is no level; the new levels
-/// made numbers up to 95 valid, so the sample's out-of-range level moved there from 40.)
-fn custom_map(out: &mut Out) {
-    let text = "# sample\npoint 10 20 0\npoint 100 20 -\npoint 100 200 31\npoint 300 40 200\n\
-                path 0 1\npath 1 2\npath 2 2\npath 1 9\npath 1 3\nstart 1\n";
-    let mut m = CustomMap::parse(text);
-    out.put("cmap.parse", fnv(m.to_text().as_bytes()));
-    out.put("cmap.linked", format!("{} {} {}", m.linked(0, 1), m.linked(1, 0), m.linked(0, 2)));
-    out.put("cmap.neighbour", format!("{:?} {:?} {:?}", m.neighbour(1, 1, 0), m.neighbour(1, 0, 1), m.neighbour(1, -1, 0)));
-    m.toggle_path(0, 2);
-    m.toggle_path(0, 1);
-    out.put("cmap.toggle", fnv(m.to_text().as_bytes()));
-    m.remove_point(1);
-    out.put("cmap.remove", fnv(m.to_text().as_bytes()));
-}
-
 #[test]
 fn golden() {
     // Without the cartridge nothing is checked, so that is a failure, not a pass.
@@ -250,7 +233,6 @@ fn golden() {
     let mut out = Out(Vec::new());
     out.put("rom.fingerprint", fnv(&rom));
     rom_data(&rom, &mut out);
-    custom_map(&mut out);
     emulation(&rom, &mut out);
     use_cases(&rom, &mut out);
     let text = out.0.join("\n") + "\n";

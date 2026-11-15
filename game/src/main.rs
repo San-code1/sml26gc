@@ -13,7 +13,7 @@ mod ports;
 mod selftest;
 
 use adapters::cpal_audio::Audio;
-use adapters::fs_stores::{BatteryFile, DefaultSettings, ProgressFile, SettingsFile};
+use adapters::fs_stores::{BatteryFile, DefaultSettings, SettingsFile};
 use adapters::macroquad_display::{save_window_png, MacroquadDisplay, MacroquadWindow};
 use adapters::macroquad_keyboard::MacroquadKeyboard;
 use adapters::macroquad_picker::{Choice, Picker};
@@ -21,7 +21,6 @@ use adapters::win32;
 use application::preferences::Preferences;
 use application::session::{Flow, GameSession, SessionParts};
 use domain::keys::Key;
-use domain::map_view::MapView;
 use ports::{AudioOut, Keyboard, SettingsStore};
 use std::path::PathBuf;
 
@@ -123,13 +122,9 @@ fn start(args: &Args, found: Result<PathBuf, String>, checking: bool, audio: &dy
         Ok(g) => g,
         Err(e) => return Err((prefs, e)),
     };
-    let progress = ProgressFile::for_rom(&rom);
-    let map_view = if checking { None } else { host::load_custom_map(&rom).map(|m| MapView::new(m, progress.load())) };
     let parts = SessionParts {
         prefs,
         saves: Box::new(BatteryFile { rom }),
-        progress: Box::new(progress),
-        map_view,
         start_level: args.level,
         checking,
     };

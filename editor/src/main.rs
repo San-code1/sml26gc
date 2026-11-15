@@ -18,7 +18,7 @@ use cart_model::original_points::OnMap;
 use cart_model::zone_maps::ZONES;
 use macroquad::prelude::*;
 use std::path::PathBuf;
-use ui::{col, Editor, Mode, TAB_CUSTOM, TAB_POINTS};
+use ui::{col, Editor, Mode, TAB_POINTS};
 
 fn conf() -> Conf {
     Conf { window_title: "Level Editor (Rust)".into(), window_width: 1280, window_height: 820, window_resizable: true, high_dpi: false, ..Default::default() }
@@ -70,14 +70,6 @@ async fn main() {
         // --map N: zone map N-1 (0 = the world map)
         if let Some(z) = value("--map").and_then(|v| v.parse::<usize>().ok()).filter(|&z| (1..=ZONES.len()).contains(&z)) {
             ed.show_map(OnMap::Zone(z - 1));
-        }
-        if flag("--custom") {
-            ed.world_tab = TAB_CUSTOM;
-            if flag("--original-points") {
-                ed.doc.add_original_points();
-            } else {
-                ed.sample_custom_map();
-            }
         }
     }
     if shot.is_some() && ed.mode == Mode::Objects {

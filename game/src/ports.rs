@@ -4,7 +4,6 @@
 use crate::domain::keys::Key;
 use crate::domain::settings::Settings;
 use gb_core::Gb;
-use std::collections::HashSet;
 
 /// The keyboard as seen during one frame.
 pub trait Keyboard {
@@ -38,9 +37,4 @@ pub trait SettingsStore {
 /// The cartridge's battery-backed memory (the game's own save slots).
 pub trait SaveStore {
     fn save(&self, gb: &mut Gb);
-}
-
-/// Levels cleared on the editor-made world map.
-pub trait ProgressStore {
-    fn save(&self, cleared: &HashSet<u8>);
 }
