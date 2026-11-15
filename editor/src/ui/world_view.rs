@@ -73,11 +73,12 @@ impl Editor {
     pub(super) fn update_world(&mut self) {
         let m: Vec2 = mouse_position().into();
         let ctrl = is_key_down(KeyCode::LeftControl) || is_key_down(KeyCode::RightControl);
-        if ctrl && is_key_pressed(KeyCode::Z) {
-            self.doc.world_undo();
+        let (undo, redo) = undo_keys(ctrl);
+        if undo {
+            self.world_undo();
         }
-        if ctrl && is_key_pressed(KeyCode::Y) {
-            self.doc.world_redo();
+        if redo {
+            self.world_redo();
         }
         if ctrl && is_key_pressed(KeyCode::S) {
             self.save();
@@ -185,8 +186,8 @@ impl Editor {
         };
         self.status_line(cw, ch);
         match act {
-            1 => self.doc.world_undo(),
-            2 => self.doc.world_redo(),
+            1 => self.world_undo(),
+            2 => self.world_redo(),
             3 => self.doc.restore_world(),
             4 => {
                 self.save();
@@ -194,6 +195,36 @@ impl Editor {
             6 => self.play_map(),
             9 => self.enter_world(false),
             _ => {}
+        }
+    }
+
+    /// Undo in the tab shown: the pictures, which level each original point opens, or
+    /// Your map.
+    fn world_undo(&mut self) {
+        let done = match self.world_tab {
+            TAB_PICTURE => {
+                self.doc.world_undo();
+                true
+            }
+            TAB_POINTS => self.doc.points_undo(),
+            _ => self.custom_undone(true),
+        };
+        if !done {
+            self.status = tr(self.es, "Nothing to undo.", "Nada que deshacer.").into();
+        }
+    }
+
+    fn world_redo(&mut self) {
+        let done = match self.world_tab {
+            TAB_PICTURE => {
+                self.doc.world_redo();
+                true
+            }
+            TAB_POINTS => self.doc.points_redo(),
+            _ => self.custom_undone(false),
+        };
+        if !done {
+            self.status = tr(self.es, "Nothing to redo.", "Nada que rehacer.").into();
         }
     }
 

@@ -34,10 +34,11 @@ impl Editor {
     pub(super) fn update_level(&mut self) {
         let m: Vec2 = mouse_position().into();
         let ctrl = is_key_down(KeyCode::LeftControl) || is_key_down(KeyCode::RightControl);
-        if ctrl && is_key_pressed(KeyCode::Z) {
+        let (undo, redo) = undo_keys(ctrl);
+        if undo {
             self.undo();
         }
-        if ctrl && is_key_pressed(KeyCode::Y) {
+        if redo {
             self.redo();
         }
         if ctrl && is_key_pressed(KeyCode::S) {
