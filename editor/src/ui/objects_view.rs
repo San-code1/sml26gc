@@ -58,18 +58,21 @@ impl Editor {
             }
         }
         let delete_here = is_mouse_button_pressed(MouseButton::Right) && in_view;
-        let target = if delete_here {
-            self.object_at(w)
-        } else if is_key_pressed(KeyCode::Delete) || is_key_pressed(KeyCode::Backspace) {
-            self.sel_obj
-        } else {
-            None
-        };
-        if let Some(i) = target {
-            self.doc.snapshot(l);
-            self.doc.remove_object(l, i);
-            self.sel_obj = None;
-            self.drag_obj = None;
+        if let Some(i) = delete_here.then(|| self.object_at(w)).flatten() {
+            self.delete_object(i);
+        }
+    }
+
+    fn delete_object(&mut self, i: usize) {
+        self.doc.snapshot(self.cur);
+        self.doc.remove_object(self.cur, i);
+        self.sel_obj = None;
+        self.drag_obj = None;
+    }
+
+    pub(super) fn delete_selected_object(&mut self) {
+        if let Some(i) = self.sel_obj {
+            self.delete_object(i);
         }
     }
 
@@ -84,10 +87,10 @@ impl Editor {
     pub(super) fn draw_objects(&self) {
         let objs_mode = self.mode == Mode::Objects;
         for (i, o) in self.doc.levels[self.cur].content.objs.iter().enumerate() {
-            let x = PANEL + (o.x as f32 - self.cam.x) * self.scale();
+            let x = self.panel + (o.x as f32 - self.cam.x) * self.scale();
             let y = (o.y as f32 - self.cam.y) * self.scale();
             let s = 16.0 * self.scale();
-            if x + s < PANEL || x > screen_width() || y + s < 0.0 || y > screen_height() {
+            if x + s < self.panel || x > screen_width() || y + s < 0.0 || y > screen_height() {
                 continue;
             }
             let a = if objs_mode { 0.75 } else { 0.4 };
@@ -127,6 +130,6 @@ impl Editor {
             }
             None => format!("{} #{:02X}", tr(self.es, "click: place object", "clic: poner objeto"), self.kind),
         };
-        draw_text(&tip, PANEL + 8.0, ch - 8.0, 20.0, WHITE);
+        draw_text(&tip, self.panel + 8.0, ch - 8.0, 20.0, WHITE);
     }
 }

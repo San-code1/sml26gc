@@ -2,8 +2,9 @@
 //! (Picture tab), and the game's own points drawn where the game shows them with the level
 //! each one opens and the paths Mario walks between them (Points tab): levels, paths and new
 //! points can be changed there.
+use super::shortcuts::{keys, with_keys, Action};
 use super::widgets::*;
-use super::{left_button, Editor, WorldCanvas, TAB_PICTURE, TAB_POINTS};
+use super::{Editor, TAB_PICTURE, TAB_POINTS};
 use crate::domain::document::EditorDocument;
 use crate::domain::tools::ToolKind;
 use cart_model::doors::{self, Leads};
@@ -40,7 +41,7 @@ impl Editor {
 
     /// Screen position of a pixel of the shown map picture.
     fn on_screen(&self, x: i32, y: i32) -> Vec2 {
-        vec2(PANEL + (x as f32 - self.cam.x) * self.scale(), (y as f32 - self.cam.y) * self.scale())
+        vec2(self.panel + (x as f32 - self.cam.x) * self.scale(), (y as f32 - self.cam.y) * self.scale())
     }
 
     /// The points drawn on the shown map: the game's own (where it draws them) and, on the
@@ -99,70 +100,137 @@ impl Editor {
         Some(format!("{p:02X} > {}", self.leads_name(self.doc.doors.exits[i].1)))
     }
 
-    /// The doors part of the points panel: where the chosen point leads.
-    fn door_rows(&mut self, mut y: f32) -> f32 {
+    /// The exits of the shown zone that can be moved to the chosen point.
+    fn exit_sites(&self) -> Vec<usize> {
+        let p = self.point as u8;
+        let OnMap::Zone(z) = self.world_map else { return Vec::new() };
+        if self.doc.doors.into.is_empty() || self.doc.doors.exit_on(p).is_some() || self.is_world_point(p) || self.chosen_at().is_none() {
+            return Vec::new();
+        }
+        (0..doors::EXITS.len()).filter(|&i| original_points::SPOTS.iter().any(|s| s.point == doors::EXITS[i].point && s.map == OnMap::Zone(z))).collect()
+    }
+
+    /// Move the `k`th exit of the shown zone to the chosen point.
+    fn make_exit(&mut self, k: usize) {
+        if let Some(&i) = self.exit_sites().get(k) {
+            let leads = self.doc.doors.exits[i].1;
+            self.doc.set_exit(i, self.point as u8, leads);
+        }
+    }
+
+    /// The chosen point's door (a world point) or exit (a zone's): one step through where
+    /// it can lead.
+    fn door_step(&mut self, step: i32) {
         if self.doc.doors.into.is_empty() {
-            return y;
+            return;
         }
         let p = self.point as u8;
         if let Some(i) = self.doc.doors.exit_on(p) {
             let (at, leads) = self.doc.doors.exits[i];
             let targets = self.exit_targets();
-            draw_text(tr(self.es, "Exit to", "Sale a"), 10.0, y + 18.0, 18.0, col(3));
-            let mut step = 0;
-            if button(Rect::new(70.0, y, 26.0, 26.0), "-", false, 18.0) {
-                step = -1;
-            }
-            draw_text(&self.leads_name(leads), 104.0, y + 18.0, 16.0, col(3));
-            if button(Rect::new(260.0, y, 26.0, 26.0), "+", false, 18.0) {
-                step = 1;
-            }
-            if step != 0 {
-                let k = targets.iter().position(|&t| t == leads).unwrap_or(0) as i32;
-                let n = targets[(k + step).rem_euclid(targets.len() as i32) as usize];
-                self.doc.set_exit(i, at, n);
-            }
-            y += 30.0;
+            let k = targets.iter().position(|&t| t == leads).unwrap_or(0) as i32;
+            self.doc.set_exit(i, at, targets[(k + step).rem_euclid(targets.len() as i32) as usize]);
         } else if self.is_world_point(p) {
-            let cur = self.doc.doors.door_of(p);
-            draw_text(tr(self.es, "Door", "Puerta"), 10.0, y + 18.0, 18.0, col(3));
-            let mut step = 0;
-            if button(Rect::new(70.0, y, 26.0, 26.0), "-", false, 18.0) {
-                step = -1;
-            }
-            let name = match cur {
+            // none, then each zone
+            let count = doors::INTO.len() as i32 + 1;
+            let k = self.doc.doors.door_of(p).map(|z| z as i32 + 1).unwrap_or(0);
+            let n = (k + step).rem_euclid(count);
+            self.doc.set_door(p, if n == 0 { None } else { Some(n as usize - 1) });
+        }
+    }
+
+    /// A `-` value `+` row with the keys of its two actions beside its name. Returns the
+    /// action clicked.
+    fn stepper(&self, y: f32, name: &str, value: &str, plus_x: f32, (minus, plus): (Action, Action)) -> Option<Action> {
+        draw_text(name, 10.0, y + 18.0, 18.0, col(3));
+        let k = format!("{} {}", keys(minus), keys(plus));
+        draw_text(&k, 10.0, y + 32.0, 15.0, col(2));
+        let mut act = None;
+        if button(Rect::new(70.0, y, 26.0, 26.0), "-", false, 18.0) {
+            act = Some(minus);
+        }
+        draw_text(value, 104.0, y + 18.0, 16.0, col(3));
+        if button(Rect::new(plus_x, y, 26.0, 26.0), "+", false, 18.0) {
+            act = Some(plus);
+        }
+        act
+    }
+
+    /// The doors part of the points panel: where the chosen point leads.
+    fn door_rows(&mut self, mut y: f32) -> (f32, Option<Action>) {
+        if self.doc.doors.into.is_empty() {
+            return (y, None);
+        }
+        let p = self.point as u8;
+        let mut act = None;
+        if let Some(i) = self.doc.doors.exit_on(p) {
+            let leads = self.doc.doors.exits[i].1;
+            act = self.stepper(y, tr(self.es, "Exit to", "Sale a"), &self.leads_name(leads), 260.0, (Action::PrevDoor, Action::NextDoor));
+            y += 34.0;
+        } else if self.is_world_point(p) {
+            let name = match self.doc.doors.door_of(p) {
                 Some(z) => format!("{} {}", tr(self.es, "into", "entra en"), self.map_name(OnMap::Zone(doors::INTO[z].zone))),
                 None => tr(self.es, "none", "ninguna").to_string(),
             };
-            draw_text(&name, 104.0, y + 18.0, 16.0, col(3));
-            if button(Rect::new(260.0, y, 26.0, 26.0), "+", false, 18.0) {
-                step = 1;
-            }
-            if step != 0 {
-                // none, then each zone
-                let count = doors::INTO.len() as i32 + 1;
-                let k = cur.map(|z| z as i32 + 1).unwrap_or(0);
-                let n = (k + step).rem_euclid(count);
-                self.doc.set_door(p, if n == 0 { None } else { Some(n as usize - 1) });
-            }
-            y += 30.0;
-        } else if let OnMap::Zone(z) = self.world_map {
-            // a zone point: one of this zone's exits can be moved here
-            let sites: Vec<usize> = (0..doors::EXITS.len())
-                .filter(|&i| original_points::SPOTS.iter().any(|s| s.point == doors::EXITS[i].point && s.map == OnMap::Zone(z)))
-                .collect();
-            if self.chosen_at().is_some() {
-                for i in sites {
-                    let (at, leads) = self.doc.doors.exits[i];
-                    let label = format!("{} ({} {at:02X})", tr(self.es, "Make it the exit", "Hacer salida aqui"), tr(self.es, "now", "ahora"));
-                    if button(Rect::new(10.0, y, 276.0, 26.0), &label, false, 15.0) {
-                        self.doc.set_exit(i, p, leads);
-                    }
-                    y += 30.0;
+            act = self.stepper(y, tr(self.es, "Door", "Puerta"), &name, 260.0, (Action::PrevDoor, Action::NextDoor));
+            y += 34.0;
+        } else {
+            for (k, i) in self.exit_sites().into_iter().enumerate().take(2) {
+                let at = self.doc.doors.exits[i].0;
+                let a = if k == 0 { Action::MakeExit1 } else { Action::MakeExit2 };
+                let label = format!("{} ({} {at:02X})", tr(self.es, "Make it the exit", "Hacer salida aqui"), tr(self.es, "now", "ahora"));
+                if button(Rect::new(10.0, y, 276.0, 26.0), &with_keys(&label, a), false, 15.0) {
+                    act = Some(a);
                 }
+                y += 30.0;
             }
         }
-        y
+        (y, act)
+    }
+
+    /// Show the map `step` places further in the map selector.
+    pub(super) fn step_map(&mut self, step: i32) {
+        let maps = all_maps();
+        let i = maps.iter().position(|&m| m == self.world_map).unwrap_or(0) as i32;
+        self.show_map(maps[(i + step).rem_euclid(maps.len() as i32) as usize]);
+    }
+
+    /// The Points tab's actions.
+    pub(super) fn run_points(&mut self, a: Action) {
+        let n = world::POINT_COUNT;
+        match a {
+            Action::PrevPoint => self.select_original_point((self.point + n - 1) % n),
+            Action::NextPoint => self.select_original_point((self.point + 1) % n),
+            Action::PrevOpens => self.doc.step_point_level(self.point, -1),
+            Action::NextOpens => self.doc.step_point_level(self.point, 1),
+            Action::PrevDoor => self.door_step(-1),
+            Action::NextDoor => self.door_step(1),
+            Action::MakeExit1 => self.make_exit(0),
+            Action::MakeExit2 => self.make_exit(1),
+            Action::DeletePathRight | Action::DeletePathLeft | Action::DeletePathUp | Action::DeletePathDown => {
+                let d = [Action::DeletePathRight, Action::DeletePathLeft, Action::DeletePathUp, Action::DeletePathDown].iter().position(|&x| x == a).unwrap_or(0);
+                if self.point < map_routes::POINTS {
+                    self.doc.set_way(self.point, d, None);
+                }
+            }
+            Action::NewPath => {
+                let drawing = self.route_draw.is_some();
+                let can_draw = self.point < map_routes::POINTS && self.chosen_at().is_some();
+                self.placing_point = false;
+                self.route_draw = if drawing || !can_draw { None } else { Some(Vec::new()) };
+                if !can_draw {
+                    self.status = tr(self.es, "Choose a point on the map shown first.", "Elige antes un punto del mapa que se ve.").into();
+                }
+            }
+            Action::NewPoint if self.world_map == OnMap::World => {
+                self.route_draw = None;
+                self.placing_point = !self.placing_point;
+            }
+            Action::DeletePoint if self.doc.routes.added.contains(&(self.point as u8)) => {
+                self.doc.remove_point(self.point as u8);
+            }
+            _ => {}
+        }
     }
 
     /// Choose a point and show its map (for the command line).
@@ -190,7 +258,7 @@ impl Editor {
 
     /// Clicks on the map in the Points tab: choose a point, put a new one, or draw a path.
     fn points_clicks(&mut self, m: Vec2) {
-        let clicked = is_mouse_button_pressed(MouseButton::Left) && m.x >= PANEL && m.y < screen_height() - STATUS_H;
+        let clicked = is_mouse_button_pressed(MouseButton::Left) && m.x >= self.panel && m.y < screen_height() - STATUS_H;
         if self.placing_point {
             if is_key_pressed(KeyCode::Escape) || is_mouse_button_pressed(MouseButton::Right) {
                 self.placing_point = false;
@@ -254,7 +322,7 @@ impl Editor {
 
     /// Tile under the mouse on the shown map.
     pub(super) fn world_cell(&self, m: Vec2) -> Option<(usize, usize)> {
-        if m.x < PANEL || m.y > screen_height() - STATUS_H {
+        if m.x < self.panel || m.y > screen_height() - STATUS_H {
             return None;
         }
         let w = self.world_pos(m);
@@ -270,20 +338,6 @@ impl Editor {
     pub(super) fn update_world(&mut self) {
         let m: Vec2 = mouse_position().into();
         let ctrl = is_key_down(KeyCode::LeftControl) || is_key_down(KeyCode::RightControl);
-        let (undo, redo) = undo_keys(ctrl);
-        if undo {
-            self.world_undo();
-        }
-        if redo {
-            self.world_redo();
-        }
-        if ctrl && is_key_pressed(KeyCode::S) {
-            self.save();
-        }
-        if is_key_pressed(KeyCode::F5) {
-            self.play_map();
-        }
-        self.tool_keys(ctrl);
         let (space, _, _) = self.navigate(m, ctrl, self.map_px());
         if self.pan.is_some() || space {
             return;
@@ -292,20 +346,14 @@ impl Editor {
             self.points_clicks(m);
             return;
         }
-        let cell = self.world_cell(m);
-        if is_mouse_button_pressed(MouseButton::Right) {
-            if let Some((x, y)) = cell {
-                self.tile = self.doc.tile(self.world_map, x, y);
-            }
-        }
-        let mut canvas = WorldCanvas { doc: &mut self.doc, map: self.world_map, tile: self.tile };
-        self.tool.handle(&mut canvas, cell.map(|(x, y)| (x as i32, y as i32)), left_button());
+        let cell = self.world_cell(m).map(|(x, y)| (x as i32, y as i32));
+        self.edit_grid(cell);
     }
 
     pub(super) fn draw_world(&mut self) {
         clear_background(col(3));
         let s = self.scale() * 8.0;
-        let (cw, ch) = (screen_width() - PANEL, screen_height() - STATUS_H);
+        let (cw, ch) = (screen_width() - self.panel, screen_height() - STATUS_H);
         let (mw, mh) = EditorDocument::map_size(self.world_map);
         if let Some(atlas) = self.map_atlas() {
             let x0 = (self.cam.x / 8.0).floor() as i32;
@@ -338,28 +386,19 @@ impl Editor {
                 }
                 for y in y0..=(y0 + ny).min(mh as i32) {
                     let py = self.on_screen(0, y * 8).y;
-                    draw_line(PANEL, py, end.x.min(screen_width()), py, 1.0, gc);
+                    draw_line(self.panel, py, end.x.min(screen_width()), py, 1.0, gc);
                 }
             }
             let m: Vec2 = mouse_position().into();
             if self.world_tab == TAB_POINTS {
                 self.draw_original_points();
-            } else if let Some((x, y)) = self.world_cell(m) {
-                let p = self.on_screen(x as i32 * 8, y as i32 * 8);
-                draw_texture_ex(
-                    atlas,
-                    p.x,
-                    p.y,
-                    Color::new(1.0, 1.0, 1.0, 0.6),
-                    DrawTextureParams {
-                        source: Some(Rect::new((self.tile % 16) as f32 * 8.0, (self.tile / 16) as f32 * 8.0, 8.0, 8.0)),
-                        dest_size: Some(vec2(s, s)),
-                        ..Default::default()
-                    },
-                );
-                draw_rectangle_lines(p.x, p.y, s, s, 2.0, WHITE);
-                let t = self.doc.tile(self.world_map, x, y);
-                draw_text(&format!("{x},{y}  #{t:02X}"), PANEL + 8.0, ch - 8.0, 20.0, WHITE);
+            } else {
+                let cell = self.world_cell(m);
+                self.draw_grid_overlay(atlas, cell.map(|(x, y)| (x as i32, y as i32)));
+                if let Some((x, y)) = cell {
+                    let t = self.doc.tile(self.world_map, x, y);
+                    draw_text(&format!("{x},{y}  #{t:02X}"), self.panel + 8.0, ch - 8.0, 20.0, WHITE);
+                }
             }
         }
         let (act, y) = self.world_panel_top();
@@ -368,27 +407,16 @@ impl Editor {
                 self.tile_palette(y);
                 act
             }
-            _ => {
-                self.points_panel(y);
-                act
-            }
+            _ => self.points_panel(y).or(act),
         };
         self.status_line(cw, ch);
-        match act {
-            1 => self.world_undo(),
-            2 => self.world_redo(),
-            3 => self.doc.restore_world(),
-            4 => {
-                self.save();
-            }
-            6 => self.play_map(),
-            9 => self.enter_world(false),
-            _ => {}
+        if let Some(a) = act {
+            self.run(a);
         }
     }
 
     /// Undo in the tab shown: the map pictures, or the points (levels, paths, doors).
-    fn world_undo(&mut self) {
+    pub(super) fn world_undo(&mut self) {
         let done = match self.world_tab {
             TAB_PICTURE => {
                 self.doc.world_undo();
@@ -401,7 +429,7 @@ impl Editor {
         }
     }
 
-    fn world_redo(&mut self) {
+    pub(super) fn world_redo(&mut self) {
         let done = match self.world_tab {
             TAB_PICTURE => {
                 self.doc.world_redo();
@@ -416,99 +444,71 @@ impl Editor {
 
     /// Title, map choice, tabs, tools, undo and save. Returns the action chosen and where
     /// the panel continues.
-    fn world_panel_top(&mut self) -> (u32, f32) {
-        draw_rectangle(0.0, 0.0, PANEL, screen_height(), col(0));
-        draw_rectangle(PANEL - 3.0, 0.0, 3.0, screen_height(), col(3));
+    fn world_panel_top(&mut self) -> (Option<Action>, f32) {
+        draw_rectangle(0.0, 0.0, self.panel, screen_height(), col(0));
+        draw_rectangle(self.panel - 3.0, 0.0, 3.0, screen_height(), col(3));
         draw_text(tr(self.es, "WORLD MAP EDITOR", "EDITOR DEL MAPA"), 10.0, 22.0, 24.0, col(3));
+        let es = self.es;
         let mut y = 34.0;
-        let mut act = 0;
-        if button(Rect::new(10.0, y, 276.0, 26.0), tr(self.es, "Back to the levels", "Volver a los niveles"), false, 16.0) {
-            act = 9;
-        }
+        let mut act = None;
+        let mut b = |r: Rect, name: &str, a: Action, on: bool| {
+            if button(r, &with_keys(name, a), on, 16.0) {
+                act = Some(a);
+            }
+        };
+        let (w2, w3) = (136.0, 89.0);
+        let col2 = |i: usize| 10.0 + i as f32 * (w2 + 4.0);
+        let col3 = |i: usize| 10.0 + i as f32 * (w3 + 4.0);
+        b(Rect::new(10.0, y, 276.0, 26.0), tr(es, "Back to the levels", "Volver a los niveles"), Action::WorldEditor, false);
         y += 30.0;
         // which map: the world map or a zone map
-        let maps = all_maps();
-        let i = maps.iter().position(|&m| m == self.world_map).unwrap_or(0);
-        if button(Rect::new(10.0, y, 30.0, 26.0), "<", false, 18.0) {
-            self.show_map(maps[(i + maps.len() - 1) % maps.len()]);
-        }
         let name = self.map_name(self.world_map);
         let d = measure_text(name, None, 18, 1.0);
-        draw_text(name, 148.0 - d.width / 2.0, y + 18.0, 18.0, col(3));
-        if button(Rect::new(256.0, y, 30.0, 26.0), ">", false, 18.0) {
-            self.show_map(maps[(i + 1) % maps.len()]);
+        draw_text(name, 148.0 - d.width / 2.0, y + 15.0, 18.0, col(3));
+        let k = format!("{} / {}", keys(Action::PrevMap), keys(Action::NextMap));
+        let d = measure_text(&k, None, 12, 1.0);
+        draw_text(&k, 148.0 - d.width / 2.0, y + 27.0, 12.0, col(2));
+        if button(Rect::new(10.0, y, 30.0, 28.0), "<", false, 18.0) {
+            act = Some(Action::PrevMap);
         }
-        y += 30.0;
-        if button(Rect::new(10.0, y, 88.0, 26.0), tr(self.es, "Picture", "Dibujo"), self.world_tab == TAB_PICTURE, 15.0) {
+        if button(Rect::new(256.0, y, 30.0, 28.0), ">", false, 18.0) {
+            act = Some(Action::NextMap);
+        }
+        y += 32.0;
+        let picture = self.world_tab == TAB_PICTURE;
+        if button(Rect::new(col3(0), y, w3, 26.0), &with_keys(tr(es, "Picture", "Dibujo"), Action::SwitchTab), picture, 15.0) {
             self.world_tab = TAB_PICTURE;
         }
-        if button(Rect::new(102.0, y, 88.0, 26.0), tr(self.es, "Points", "Puntos"), self.world_tab == TAB_POINTS, 15.0) {
+        if button(Rect::new(col3(1), y, w3, 26.0), &with_keys(tr(es, "Points", "Puntos"), Action::SwitchTab), !picture, 15.0) {
             self.world_tab = TAB_POINTS;
         }
-        if button(Rect::new(194.0, y, 92.0, 26.0), tr(self.es, "Play (F5)", "Jugar (F5)"), false, 15.0) {
-            act = 6;
+        let mut b = |r: Rect, name: &str, a: Action, on: bool| {
+            if button(r, &with_keys(name, a), on, 16.0) {
+                act = Some(a);
+            }
+        };
+        b(Rect::new(col3(2), y, w3, 26.0), tr(es, "Play", "Jugar"), Action::Play, false);
+        y += 30.0;
+        let tool = self.tool.kind();
+        if picture {
+            b(Rect::new(col3(0), y, w3, 26.0), tr(es, "Pencil", "Lapiz"), Action::Pencil, tool == ToolKind::Pencil);
+            b(Rect::new(col3(1), y, w3, 26.0), tr(es, "Box", "Caja"), Action::BoxFill, tool == ToolKind::Box);
+            b(Rect::new(col3(2), y, w3, 26.0), tr(es, "Select", "Seleccion"), Action::Select, tool == ToolKind::Select);
+            y += 30.0;
+        }
+        b(Rect::new(col2(0), y, w2, 26.0), tr(es, "Undo", "Deshacer"), Action::Undo, false);
+        b(Rect::new(col2(1), y, w2, 26.0), tr(es, "Redo", "Rehacer"), Action::Redo, false);
+        y += 30.0;
+        if picture {
+            b(Rect::new(col3(0), y, w3, 26.0), tr(es, "Grid", "Rejilla"), Action::Grid, self.grid);
+            b(Rect::new(col3(1), y, 276.0 - w3 - 4.0, 26.0), "Original", Action::Original, false);
+        } else {
+            b(Rect::new(10.0, y, 276.0, 26.0), "Original", Action::Original, false);
         }
         y += 30.0;
-        if button(Rect::new(10.0, y, 92.0, 26.0), tr(self.es, "Pencil (B)", "Lapiz (B)"), self.tool.kind() == ToolKind::Pencil, 16.0) {
-            self.set_tool(ToolKind::Pencil);
-        }
-        if button(Rect::new(106.0, y, 92.0, 26.0), tr(self.es, "Box (R)", "Caja (R)"), self.tool.kind() == ToolKind::Box, 16.0) {
-            self.set_tool(ToolKind::Box);
-        }
-        if button(Rect::new(202.0, y, 84.0, 26.0), tr(self.es, "Grid (G)", "Rejilla (G)"), self.grid, 16.0) {
-            self.grid = !self.grid;
-        }
-        y += 30.0;
-        if button(Rect::new(10.0, y, 92.0, 26.0), tr(self.es, "Undo", "Deshacer"), false, 16.0) {
-            act = 1;
-        }
-        if button(Rect::new(106.0, y, 92.0, 26.0), tr(self.es, "Redo", "Rehacer"), false, 16.0) {
-            act = 2;
-        }
-        if button(Rect::new(202.0, y, 84.0, 26.0), tr(self.es, "Original", "Original"), false, 16.0) {
-            act = 3;
-        }
-        y += 30.0;
-        if button(Rect::new(10.0, y, 276.0, 28.0), tr(self.es, "Save (Ctrl+S)", "Guardar (Ctrl+S)"), false, 17.0) {
-            act = 4;
-        }
-        y += 38.0;
+        b(Rect::new(10.0, y, 276.0, 28.0), tr(es, "Save", "Guardar"), Action::Save, false);
+        y += 36.0;
         (act, y)
-    }
-
-    /// The shown map's 256 tiles to paint with.
-    fn tile_palette(&mut self, mut y: f32) {
-        let mp: Vec2 = mouse_position().into();
-        draw_text(&format!("{} #{:02X}", tr(self.es, "TILES  selected", "TILES  elegido"), self.tile), 10.0, y + 12.0, 18.0, col(3));
-        y += 18.0;
-        let Some(atlas) = self.map_atlas() else { return };
-        let cell = (17.0f32).min((screen_height() - y - 30.0) / 16.0);
-        let mut picked = None;
-        for t in 0..=255u8 {
-            let x = 10.0 + (t % 16) as f32 * cell;
-            let yy = y + (t / 16) as f32 * cell;
-            draw_texture_ex(
-                atlas,
-                x,
-                yy,
-                WHITE,
-                DrawTextureParams {
-                    source: Some(Rect::new((t % 16) as f32 * 8.0, (t / 16) as f32 * 8.0, 8.0, 8.0)),
-                    dest_size: Some(vec2(cell - 1.0, cell - 1.0)),
-                    ..Default::default()
-                },
-            );
-            if t == self.tile {
-                draw_rectangle_lines(x - 1.0, yy - 1.0, cell + 1.0, cell + 1.0, 2.0, col(3));
-            }
-            if Rect::new(x, yy, cell - 1.0, cell - 1.0).contains(mp) && is_mouse_button_pressed(MouseButton::Left) {
-                picked = Some(t);
-            }
-        }
-        if let Some(t) = picked {
-            self.tile = t;
-        }
-        draw_text(tr(self.es, "Right click on the map: pick a tile", "Clic derecho en el mapa: coger tile"), 10.0, (y + 16.0 * cell + 14.0).min(screen_height() - 4.0), 15.0, col(2));
     }
 
     /// The points on the shown map: where the game draws them, the level each opens, the
@@ -606,19 +606,12 @@ impl Editor {
     }
 
     /// Which level each point of the game's own map opens.
-    fn points_panel(&mut self, mut y: f32) {
-        draw_text(tr(self.es, "Point", "Punto"), 10.0, y + 18.0, 18.0, col(3));
-        if button(Rect::new(70.0, y, 26.0, 26.0), "-", false, 18.0) {
-            self.select_original_point((self.point + world::POINT_COUNT - 1) % world::POINT_COUNT);
-        }
-        draw_text(&format!("{:02X}", self.point), 104.0, y + 18.0, 20.0, col(3));
-        if button(Rect::new(130.0, y, 26.0, 26.0), "+", false, 18.0) {
-            self.select_original_point((self.point + 1) % world::POINT_COUNT);
-        }
+    fn points_panel(&mut self, mut y: f32) -> Option<Action> {
+        let mut act = self.stepper(y, tr(self.es, "Point", "Punto"), &format!("{:02X}", self.point), 130.0, (Action::PrevPoint, Action::NextPoint));
         let new = self.doc.routes.added.contains(&(self.point as u8));
         let drawn = if new { Some(tr(self.es, "new point", "punto nuevo")) } else { original_points::SPOTS.iter().find(|s| s.point as usize == self.point).map(|s| self.map_name(s.map)) };
         draw_text(drawn.unwrap_or(tr(self.es, "(not drawn)", "(no se dibuja)")), 162.0, y + 18.0, 15.0, col(2));
-        y += 30.0;
+        y += 34.0;
         let cur = self.doc.points[self.point];
         let label = match self.doc.point_level(self.point) {
             Some(l) if l >= cart_model::levels::LEVELS => format!("{} {l:02} ({} {:02})", tr(self.es, "level", "nivel"), tr(self.es, "new, as", "nuevo, como"), self.doc.base_of(l)),
@@ -626,20 +619,13 @@ impl Editor {
             None if cur == world::NO_LEVEL => tr(self.es, "no level", "sin nivel").to_string(),
             None => format!("{} ${cur:02X}", tr(self.es, "special", "especial")),
         };
-        draw_text(tr(self.es, "Opens", "Abre"), 10.0, y + 18.0, 18.0, col(3));
-        let mut change: i32 = 0;
-        if button(Rect::new(70.0, y, 26.0, 26.0), "-", false, 18.0) {
-            change = -1;
-        }
-        draw_text(&label, 104.0, y + 18.0, 18.0, col(3));
-        if button(Rect::new(210.0, y, 26.0, 26.0), "+", false, 18.0) {
-            change = 1;
-        }
-        self.doc.step_point_level(self.point, change);
-        y += 32.0;
-        y = self.door_rows(y);
+        act = act.or(self.stepper(y, tr(self.es, "Opens", "Abre"), &label, 210.0, (Action::PrevOpens, Action::NextOpens)));
+        y += 34.0;
+        let (ny, door) = self.door_rows(y);
+        y = ny;
+        act = act.or(door);
         // the ways out of the point
-        draw_text(tr(self.es, "Paths (pad > point)", "Caminos (cruceta > punto)"), 10.0, y + 12.0, 15.0, col(2));
+        draw_text(tr(self.es, "Paths (pad > point); button: delete", "Caminos (cruceta > punto); boton: borrar"), 10.0, y + 12.0, 15.0, col(2));
         y += 18.0;
         if self.point < map_routes::POINTS {
             for d in 0..4 {
@@ -647,8 +633,9 @@ impl Editor {
                 match self.doc.routes.ways[self.point][d].as_ref().map(|w| w.to) {
                     Some(to) => {
                         draw_text(&format!("{} > {to:02X}", DIRS[d]), r.x + 4.0, r.y + 17.0, 17.0, col(3));
-                        if button(Rect::new(r.x + 70.0, r.y, 60.0, 22.0), tr(self.es, "Delete", "Borrar"), false, 14.0) {
-                            self.doc.set_way(self.point, d, None);
+                        let a = [Action::DeletePathRight, Action::DeletePathLeft, Action::DeletePathUp, Action::DeletePathDown][d];
+                        if button(Rect::new(r.x + 58.0, r.y, 76.0, 22.0), keys(a), false, 14.0) {
+                            act = Some(a);
                         }
                     }
                     None => {
@@ -658,23 +645,16 @@ impl Editor {
             }
             y += 54.0;
         }
-        let drawing = self.route_draw.is_some();
-        let can_draw = self.point < map_routes::POINTS && self.chosen_at().is_some();
-        if button(Rect::new(10.0, y, 134.0, 26.0), tr(self.es, "New path", "Nuevo camino"), drawing, 15.0) {
-            self.placing_point = false;
-            self.route_draw = if drawing || !can_draw { None } else { Some(Vec::new()) };
-            if !can_draw {
-                self.status = tr(self.es, "Choose a point on the map shown first.", "Elige antes un punto del mapa que se ve.").into();
-            }
+        if button(Rect::new(10.0, y, 134.0, 26.0), &with_keys(tr(self.es, "New path", "Nuevo camino"), Action::NewPath), self.route_draw.is_some(), 15.0) {
+            act = Some(Action::NewPath);
         }
-        if self.world_map == OnMap::World && button(Rect::new(148.0, y, 138.0, 26.0), tr(self.es, "New point", "Nuevo punto"), self.placing_point, 15.0) {
-            self.route_draw = None;
-            self.placing_point = !self.placing_point;
+        if self.world_map == OnMap::World && button(Rect::new(148.0, y, 138.0, 26.0), &with_keys(tr(self.es, "New point", "Nuevo punto"), Action::NewPoint), self.placing_point, 15.0) {
+            act = Some(Action::NewPoint);
         }
         y += 30.0;
         if new {
-            if button(Rect::new(10.0, y, 134.0, 26.0), tr(self.es, "Delete point", "Borrar punto"), false, 15.0) {
-                self.doc.remove_point(self.point as u8);
+            if button(Rect::new(10.0, y, 134.0, 26.0), &with_keys(tr(self.es, "Delete point", "Borrar punto"), Action::DeletePoint), false, 15.0) {
+                act = Some(Action::DeletePoint);
             }
             y += 30.0;
         }
@@ -710,5 +690,6 @@ impl Editor {
         for (i, line) in wrap(note, 36).iter().enumerate() {
             draw_text(line, 10.0, yy + i as f32 * 16.0, 15.0, col(2));
         }
+        act
     }
 }

@@ -6,8 +6,8 @@ use macroquad::prelude::*;
 
 impl Editor {
     pub(super) fn status_line(&self, cw: f32, ch: f32) {
-        draw_rectangle(PANEL, ch, cw, STATUS_H, col(1));
-        draw_text(&self.status, PANEL + 8.0, ch + 18.0, 18.0, col(3));
+        draw_rectangle(self.panel, ch, cw, STATUS_H, col(1));
+        draw_text(&self.status, self.panel + 8.0, ch + 18.0, 18.0, col(3));
     }
 
     pub(super) fn level_status_bar(&mut self, cw: f32, ch: f32) {

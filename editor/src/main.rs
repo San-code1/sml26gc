@@ -56,11 +56,11 @@ async fn main() {
         Ok(o) => o,
         Err(e) => show_forever(&e, 26.0, 0.0).await,
     };
-    let mut ed = Editor::new(opened.doc, Box::new(opened.store), Box::new(GameProcess), opened.had_copy, fs_repository::spanish());
+    let mut ed = Editor::new(opened.doc, Box::new(opened.store), Box::new(GameProcess), Box::new(fs_repository::PrefsFile), opened.had_copy, fs_repository::spanish());
 
     ed.select_level(level.unwrap_or(0).min(ed.level_count() - 1));
     if flag("--objects") {
-        ed.mode = Mode::Objects;
+        ed.set_mode(Mode::Objects);
     }
     if flag("--world") {
         ed.enter_world(true);

@@ -2,9 +2,11 @@
 //! level shown, camera, zoom, tool, selection, textures); what is being edited lives in
 //! `EditorDocument`, and saving / graphics / starting the game go through the application
 //! layer and the ports.
+mod grid_edit;
 mod level_view;
 mod objects_view;
 mod palette;
+mod shortcuts;
 mod status_bar;
 mod widgets;
 mod world_view;
@@ -13,9 +15,14 @@ pub use widgets::col;
 
 use crate::application::art_service::{ArtService, Capture};
 use crate::application::save::{self, SaveError};
-use crate::domain::document::{EditorDocument, Saved};
+use crate::domain::document::{EditorDocument, Grid, Saved};
+use crate::domain::prefs::{Prefs, PALETTE_ZOOMS};
+use crate::domain::stamp::Stamp;
 use crate::domain::tools::{self, GridCanvas, Pointer, Tool, ToolKind};
-use crate::ports::{EditedCopyStore, GameLauncher};
+use crate::ports::{EditedCopyStore, GameLauncher, PrefsStore};
+use grid_edit::Brush;
+use palette::PaletteView;
+use shortcuts::{Action, Ctx};
 use cart_model::levels::{COLS, LEVELS, ROWS};
 use cart_model::original_points::OnMap;
 use cart_model::zone_maps::ZONES;
@@ -46,7 +53,7 @@ pub struct Editor {
     /// relative to the object's position. None = draws nothing.
     looks: HashMap<(usize, u8), Option<(Texture2D, f32, f32)>>,
     pub(crate) cur: usize,
-    block: u8,
+    blocks: Brush,
     cam: Vec2,
     zoom: usize,
     tool: Box<dyn Tool>,
@@ -64,7 +71,21 @@ pub struct Editor {
     sel_obj: Option<usize>,
     drag_obj: Option<(usize, Vec2)>,
     in_world: bool,
-    tile: u8,
+    tiles: Brush,
+    /// A palette selection being dragged: where it started (column, row).
+    palette_drag: Option<(i32, i32)>,
+    /// A right-button drag on the grid picking a brush: where it started.
+    pick_from: Option<(i32, i32)>,
+    /// Copied cells and the level or map they came from (pasted only there).
+    clipboard: Option<(Grid, Stamp)>,
+    /// The tool to go back to after pasting.
+    prev_tool: ToolKind,
+    prefs: Prefs,
+    prefs_store: Box<dyn PrefsStore>,
+    level_palette: PaletteView,
+    map_palette: PaletteView,
+    /// The side panel's width: as wide as its palette (see `fitted_panel`).
+    panel: f32,
     pub(crate) world_tab: usize,
     /// Which map picture the world map editor shows: the world map or a zone map.
     pub(crate) world_map: OnMap,
@@ -77,38 +98,21 @@ pub struct Editor {
     placing_point: bool,
 }
 
-/// Painting blocks into the level shown.
-struct LevelCanvas<'a> {
+/// Painting into the level or map picture shown.
+struct DocCanvas<'a> {
     doc: &'a mut EditorDocument,
-    level: usize,
-    block: u8,
+    grid: Grid,
     changed: &'a mut bool,
 }
 
-impl GridCanvas for LevelCanvas<'_> {
+impl GridCanvas for DocCanvas<'_> {
     fn begin_edit(&mut self) {
-        self.doc.snapshot(self.level);
+        self.doc.grid_snapshot(self.grid);
     }
-    fn paint(&mut self, x: i32, y: i32) {
-        if self.doc.set_block(self.level, x, y, self.block) {
+    fn paint(&mut self, x: i32, y: i32, v: u8) {
+        if self.doc.set_cell(self.grid, x, y, v) {
             *self.changed = true;
         }
-    }
-}
-
-/// Painting tiles into a map picture (the world map or a zone map).
-struct WorldCanvas<'a> {
-    doc: &'a mut EditorDocument,
-    map: OnMap,
-    tile: u8,
-}
-
-impl GridCanvas for WorldCanvas<'_> {
-    fn begin_edit(&mut self) {
-        self.doc.world_snapshot();
-    }
-    fn paint(&mut self, x: i32, y: i32) {
-        self.doc.set_tile(self.map, x as usize, y as usize, self.tile);
     }
 }
 
@@ -121,7 +125,7 @@ fn left_button() -> Pointer {
 }
 
 impl Editor {
-    pub fn new(doc: EditorDocument, store: Box<dyn EditedCopyStore>, launcher: Box<dyn GameLauncher>, had_copy: bool, es: bool) -> Editor {
+    pub fn new(doc: EditorDocument, store: Box<dyn EditedCopyStore>, launcher: Box<dyn GameLauncher>, prefs_store: Box<dyn PrefsStore>, had_copy: bool, es: bool) -> Editor {
         let status = if !had_copy {
             tr(es, "Original cartridge opened. Saving makes an edited copy; the original is never changed.", "Cartucho original abierto. Al guardar se crea una copia editada; el original no se toca.").to_string()
         } else {
@@ -138,7 +142,7 @@ impl Editor {
             zone_atlases: ZONES.iter().map(|_| None).collect(),
             looks: HashMap::new(),
             cur: 0,
-            block: 0,
+            blocks: Brush::new(),
             cam: Vec2::ZERO,
             zoom: 3,
             tool: tools::make(ToolKind::Pencil),
@@ -156,7 +160,16 @@ impl Editor {
             sel_obj: None,
             drag_obj: None,
             in_world: false,
-            tile: 0,
+            tiles: Brush::new(),
+            palette_drag: None,
+            pick_from: None,
+            clipboard: None,
+            prev_tool: ToolKind::Pencil,
+            prefs: prefs_store.load(),
+            prefs_store,
+            level_palette: PaletteView::default(),
+            map_palette: PaletteView::default(),
+            panel: PANEL_MIN,
             world_tab: TAB_PICTURE,
             world_map: OnMap::World,
             point: 0,
@@ -167,8 +180,12 @@ impl Editor {
         }
     }
 
-    /// One frame: input, then drawing.
+    /// One frame: shortcuts, input, then drawing.
     pub fn frame(&mut self) {
+        for a in shortcuts::pressed(self.ctx()) {
+            self.run(a);
+        }
+        self.panel = self.fitted_panel();
         if self.in_world {
             self.update_world();
             self.draw_world();
@@ -190,22 +207,84 @@ impl Editor {
 
     /// Where the mouse points, in the shown picture's pixels.
     fn world_pos(&self, m: Vec2) -> Vec2 {
-        (m - vec2(PANEL, 0.0)) / self.scale() + self.cam
+        (m - vec2(self.panel, 0.0)) / self.scale() + self.cam
     }
 
-    /// Keyboard shortcuts shared by both views: grid and tools (Ctrl ones are per view).
-    fn tool_keys(&mut self, ctrl: bool) {
-        if !ctrl {
-            if is_key_pressed(KeyCode::G) {
-                self.grid = !self.grid;
-            }
-            if is_key_pressed(KeyCode::B) {
-                self.set_tool(ToolKind::Pencil);
-            }
-            if is_key_pressed(KeyCode::R) {
-                self.set_tool(ToolKind::Box);
-            }
+    fn ctx(&self) -> Ctx {
+        match (self.in_world, self.world_tab == TAB_POINTS, self.mode) {
+            (true, true, _) => Ctx::Points,
+            (true, false, _) => Ctx::Picture,
+            (false, _, Mode::Objects) => Ctx::Objects,
+            (false, _, Mode::Blocks) => Ctx::Blocks,
         }
+    }
+
+    /// Do what a shortcut or a panel button asks.
+    fn run(&mut self, a: Action) {
+        match a {
+            Action::Undo if self.in_world => self.world_undo(),
+            Action::Undo => self.undo(),
+            Action::Redo if self.in_world => self.world_redo(),
+            Action::Redo => self.redo(),
+            Action::Save => {
+                self.save();
+            }
+            Action::Play if self.in_world => self.play_map(),
+            Action::Play => self.play(),
+            Action::Grid => self.grid = !self.grid,
+            Action::Pencil => self.set_tool(ToolKind::Pencil),
+            Action::BoxFill => self.set_tool(ToolKind::Box),
+            Action::Select => self.set_tool(ToolKind::Select),
+            Action::Overview => self.show_overview = !self.show_overview,
+            Action::BlocksObjects => self.set_mode(if self.mode == Mode::Blocks { Mode::Objects } else { Mode::Blocks }),
+            Action::PrevLevel => self.select_level((self.cur + self.level_count() - 1) % self.level_count()),
+            Action::NextLevel => self.select_level((self.cur + 1) % self.level_count()),
+            Action::NewLevel => self.new_level(),
+            Action::DeleteLevel => self.delete_level(),
+            Action::WorldEditor => self.enter_world(!self.in_world),
+            Action::PrevMap => self.step_map(-1),
+            Action::NextMap => self.step_map(1),
+            Action::SwitchTab => self.world_tab = if self.world_tab == TAB_PICTURE { TAB_POINTS } else { TAB_PICTURE },
+            Action::Original if self.in_world => self.doc.restore_world(),
+            Action::Original => self.restore_original(),
+            Action::ZoomOut => self.palette_zoom(-1),
+            Action::ZoomIn => self.palette_zoom(1),
+            Action::Copy => self.copy_selection(false),
+            Action::Cut => self.copy_selection(true),
+            Action::Paste => self.start_paste(),
+            Action::ClearSelection => self.clear_selection_cells(),
+            Action::Escape => self.escape_grid(),
+            Action::DeleteObject => self.delete_selected_object(),
+            _ => self.run_points(a),
+        }
+    }
+
+    pub fn set_mode(&mut self, mode: Mode) {
+        self.mode = mode;
+        self.sel_obj = None;
+        self.leave_grid();
+    }
+
+    fn palette_zoom_now(&self) -> u32 {
+        if self.in_world {
+            self.prefs.map_palette_zoom
+        } else {
+            self.prefs.level_palette_zoom
+        }
+    }
+
+    /// One step bigger or smaller for the palette shown.
+    fn palette_zoom(&mut self, d: i32) {
+        let z = (self.palette_zoom_now() as i32 + d).clamp(*PALETTE_ZOOMS.start() as i32, *PALETTE_ZOOMS.end() as i32) as u32;
+        if z == self.palette_zoom_now() {
+            return;
+        }
+        if self.in_world {
+            self.prefs.map_palette_zoom = z;
+        } else {
+            self.prefs.level_palette_zoom = z;
+        }
+        self.prefs_store.save(&self.prefs);
     }
 
     /// Pan with arrows / WASD, middle mouse or Space + left mouse; zoom at the mouse with
@@ -214,21 +293,23 @@ impl Editor {
     fn navigate(&mut self, m: Vec2, ctrl: bool, size: Vec2) -> (bool, Vec2, Vec2) {
         let speed = 600.0 * get_frame_time() / self.scale();
         let mut d = Vec2::ZERO;
-        if is_key_down(KeyCode::Left) || (!ctrl && is_key_down(KeyCode::A)) {
+        // Shift + arrows are shortcuts
+        let arrows = !(is_key_down(KeyCode::LeftShift) || is_key_down(KeyCode::RightShift));
+        if (arrows && is_key_down(KeyCode::Left)) || (!ctrl && is_key_down(KeyCode::A)) {
             d.x -= speed;
         }
-        if is_key_down(KeyCode::Right) || (!ctrl && is_key_down(KeyCode::D)) {
+        if (arrows && is_key_down(KeyCode::Right)) || (!ctrl && is_key_down(KeyCode::D)) {
             d.x += speed;
         }
-        if is_key_down(KeyCode::Up) || (!ctrl && is_key_down(KeyCode::W)) {
+        if (arrows && is_key_down(KeyCode::Up)) || (!ctrl && is_key_down(KeyCode::W)) {
             d.y -= speed;
         }
-        if is_key_down(KeyCode::Down) || (!ctrl && is_key_down(KeyCode::S)) {
+        if (arrows && is_key_down(KeyCode::Down)) || (!ctrl && is_key_down(KeyCode::S)) {
             d.y += speed;
         }
         self.cam += d;
         let space = is_key_down(KeyCode::Space);
-        if m.x >= PANEL && (is_mouse_button_pressed(MouseButton::Middle) || (space && is_mouse_button_pressed(MouseButton::Left))) {
+        if m.x >= self.panel && (is_mouse_button_pressed(MouseButton::Middle) || (space && is_mouse_button_pressed(MouseButton::Left))) {
             self.pan = Some((m, self.cam));
         }
         if let Some((m0, c0)) = self.pan {
@@ -239,16 +320,16 @@ impl Editor {
             }
         }
         let wheel = mouse_wheel().1;
-        if wheel != 0.0 && m.x >= PANEL {
+        if wheel != 0.0 && m.x >= self.panel {
             let before = self.world_pos(m);
             if wheel > 0.0 && self.zoom + 1 < ZOOMS.len() {
                 self.zoom += 1;
             } else if wheel < 0.0 && self.zoom > 0 {
                 self.zoom -= 1;
             }
-            self.cam = before - (m - vec2(PANEL, 0.0)) / self.scale();
+            self.cam = before - (m - vec2(self.panel, 0.0)) / self.scale();
         }
-        let view = vec2(screen_width() - PANEL, screen_height() - STATUS_H) / self.scale();
+        let view = vec2(screen_width() - self.panel, screen_height() - STATUS_H) / self.scale();
         let max = (size - view).max(Vec2::ZERO);
         self.cam = self.cam.clamp(Vec2::ZERO, max);
         (space, view, max)
@@ -301,11 +382,13 @@ impl Editor {
         }
         self.world_map = map;
         self.cam = Vec2::ZERO;
+        self.leave_grid();
         self.ensure_world_art();
     }
 
     pub fn select_level(&mut self, l: usize) {
         self.cur = l;
+        self.leave_grid();
         self.ensure_art(l);
         // Start the view on the part of the map that isn't the background filler.
         let (c0, r0, r1) = self.doc.content_area(l);
@@ -326,6 +409,7 @@ impl Editor {
         if on == self.in_world {
             return;
         }
+        self.leave_grid();
         if on {
             self.level_cam = self.cam;
             self.ensure_world_art();
@@ -363,6 +447,9 @@ impl Editor {
     /// Delete the new level shown (the 32 of the game stay).
     fn delete_level(&mut self) {
         let l = self.cur;
+        if l < LEVELS {
+            return;
+        }
         if self.doc.remove_level(l) {
             self.select_level(l.min(self.doc.levels.len() - 1));
             self.status = format!("{} {l:02} {}", tr(self.es, "Level", "Nivel"), tr(self.es, "deleted (save to keep it); the ones after it moved down a number.", "borrado (guarda para conservarlo); los siguientes bajan un numero."));

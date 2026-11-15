@@ -80,11 +80,14 @@ ports with fakes.
 ```
 editor/src/
 ├─ domain/        document (everything being edited, dirty flags, commit to the ROM image),
-│                 history (generic undo/redo), tools (Tool trait: pencil, box fill)
+│                 history (generic undo/redo), tools (Tool trait: pencil, box, select, paste),
+│                 stamp (a rectangle of cells: brush and clipboard), prefs (editor.cfg text)
 ├─ application/   save (commit + write through a port), art_service (captured graphics)
-├─ ports.rs       EditedCopyStore, GameLauncher
-├─ adapters/      file repository, game.exe launcher
-├─ ui/            macroquad panels: level, objects, palette, world map, status bar, widgets
+├─ ports.rs       EditedCopyStore, GameLauncher, PrefsStore
+├─ adapters/      file repository (edited copy, editor.cfg), game.exe launcher
+├─ ui/            macroquad panels: level, objects, palettes, world map, status bar, widgets;
+│                 grid_edit (painting and clipboard shared by both views), shortcuts (one
+│                 table for keys and button labels)
 └─ main.rs        composition root
 ```
 
@@ -106,6 +109,7 @@ trace, ROM views, and checks that play the edited data in the emulator (`routech
 | Battery saves | `saves/<name>.sav` |
 | Last cartridge chosen | `last_cartridge.txt` |
 | Settings (the editor reads the language) | `settings.cfg` |
+| Editor settings (palette zoom) | `editor.cfg` |
 
 Paths and names live in `host::paths`, so both programs compute them the same way.
 
