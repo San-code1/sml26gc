@@ -1,0 +1,558 @@
+rom.fingerprint = 98482b6c7898aa5a
+rom.size = 524288
+rom.can_expand = true
+rom.level00.header = at=0560b bank=09 map=0 entry=242f0 start=24500
+rom.level00.map = 33d750b5f3e2a593 used=2395
+rom.level00.encode = len=2395 roundtrip=true same_as_rom=true
+rom.level00.sharing = []
+rom.level00.objects = n=23 bytes=70 623c72bc2283c1c6
+rom.level00.objects_packed = c5f28d6c90f056fd
+rom.level01.header = at=0561f bank=0a map=0 entry=282f0 start=28500
+rom.level01.map = 364f51c503f76df5 used=3227
+rom.level01.encode = len=3227 roundtrip=true same_as_rom=true
+rom.level01.sharing = []
+rom.level01.objects = n=34 bytes=103 49912bb1dbcfda89
+rom.level01.objects_packed = 5a00249e1dcae589
+rom.level02.header = at=05633 bank=0a map=1 entry=282f2 start=2919b
+rom.level02.map = ca02cd33918d332f used=6380
+rom.level02.encode = len=6380 roundtrip=true same_as_rom=true
+rom.level02.sharing = []
+rom.level02.objects = n=31 bytes=94 8e0b0cb9d3b8904e
+rom.level02.objects_packed = 944f1b2a29a7a513
+rom.level03.header = at=05647 bank=0a map=2 entry=282f4 start=2aa87
+rom.level03.map = 0182b33b57c6fb82 used=1934
+rom.level03.encode = len=1934 roundtrip=true same_as_rom=true
+rom.level03.sharing = []
+rom.level03.objects = n=36 bytes=109 60b043d16d4b6d0b
+rom.level03.objects_packed = 78dde8989ed9c06e
+rom.level04.header = at=0565b bank=0b map=0 entry=2c2f0 start=2c500
+rom.level04.map = a2d4b04cddaf0db6 used=1959
+rom.level04.encode = len=1959 roundtrip=true same_as_rom=true
+rom.level04.sharing = []
+rom.level04.objects = n=30 bytes=91 1f5c35a23717f18a
+rom.level04.objects_packed = a36b2846c98e190f
+rom.level05.header = at=0566f bank=0b map=1 entry=2c2f2 start=2cca7
+rom.level05.map = 44baa1f8013a40e7 used=1259
+rom.level05.encode = len=1259 roundtrip=true same_as_rom=true
+rom.level05.sharing = []
+rom.level05.objects = n=29 bytes=88 5fe85e975600267c
+rom.level05.objects_packed = 2ebe19f6ecf539b0
+rom.level06.header = at=05683 bank=12 map=0 entry=482f0 start=48500
+rom.level06.map = cc3cff5a24f5be72 used=2345
+rom.level06.encode = len=2345 roundtrip=true same_as_rom=true
+rom.level06.sharing = []
+rom.level06.objects = n=35 bytes=106 dd71a676e5347a12
+rom.level06.objects_packed = 45d8c42e62373492
+rom.level07.header = at=05697 bank=12 map=1 entry=482f2 start=48e29
+rom.level07.map = 14fecf10e044917b used=1712
+rom.level07.encode = len=1712 roundtrip=true same_as_rom=true
+rom.level07.sharing = []
+rom.level07.objects = n=40 bytes=121 ffcf84fbb38a791a
+rom.level07.objects_packed = 37c49a768102c366
+rom.level08.header = at=056ab bank=12 map=2 entry=482f4 start=494d9
+rom.level08.map = 32b2a15c19bc6bcf used=2841
+rom.level08.encode = len=2841 roundtrip=true same_as_rom=true
+rom.level08.sharing = []
+rom.level08.objects = n=26 bytes=79 b32b096c76246e6d
+rom.level08.objects_packed = c72572fc094fe0d2
+rom.level09.header = at=056bf bank=12 map=3 entry=482f6 start=49ff2
+rom.level09.map = 537ebad3cb695145 used=2390
+rom.level09.encode = len=2390 roundtrip=true same_as_rom=true
+rom.level09.sharing = []
+rom.level09.objects = n=31 bytes=94 9fb7513304796c0f
+rom.level09.objects_packed = 4fc74a03cef950a8
+rom.level10.header = at=056d3 bank=17 map=0 entry=5c2f0 start=5c500
+rom.level10.map = bd7df7eeef31bea9 used=2337
+rom.level10.encode = len=2337 roundtrip=true same_as_rom=true
+rom.level10.sharing = []
+rom.level10.objects = n=35 bytes=106 37e3be14235dd29e
+rom.level10.objects_packed = 14c71e438369ed23
+rom.level11.header = at=056e7 bank=17 map=1 entry=5c2f2 start=5ce21
+rom.level11.map = 913be02bbacc8409 used=2911
+rom.level11.encode = len=2911 roundtrip=true same_as_rom=true
+rom.level11.sharing = []
+rom.level11.objects = n=31 bytes=94 827672e4f49e2511
+rom.level11.objects_packed = b343c9133f77b7cd
+rom.level12.header = at=056fb bank=17 map=2 entry=5c2f4 start=5d980
+rom.level12.map = 9c0b3fa5ee1804d7 used=2932
+rom.level12.encode = len=2932 roundtrip=true same_as_rom=true
+rom.level12.sharing = []
+rom.level12.objects = n=34 bytes=103 f69c02c4b272cd26
+rom.level12.objects_packed = ce707472b1e88fd2
+rom.level13.header = at=0570f bank=17 map=3 entry=5c2f6 start=5e4f4
+rom.level13.map = 727da428702b9735 used=4902
+rom.level13.encode = len=4902 roundtrip=true same_as_rom=true
+rom.level13.sharing = []
+rom.level13.objects = n=32 bytes=97 03f608c2588d3271
+rom.level13.objects_packed = 31a6167dac1d2db1
+rom.level14.header = at=05723 bank=14 map=0 entry=502f0 start=50500
+rom.level14.map = 140a976faeeec940 used=1460
+rom.level14.encode = len=1460 roundtrip=true same_as_rom=true
+rom.level14.sharing = []
+rom.level14.objects = n=35 bytes=106 db265c4c2493effd
+rom.level14.objects_packed = b5c3e83e12d72582
+rom.level15.header = at=05737 bank=14 map=1 entry=502f2 start=50ab4
+rom.level15.map = a7b56baefb22c6c4 used=5141
+rom.level15.encode = len=5141 roundtrip=true same_as_rom=true
+rom.level15.sharing = []
+rom.level15.objects = n=49 bytes=148 cb290502bd36e0fd
+rom.level15.objects_packed = c248664129eb8180
+rom.level16.header = at=0574b bank=14 map=2 entry=502f4 start=51ec9
+rom.level16.map = 9eb1b30841f2518c used=1144
+rom.level16.encode = len=1144 roundtrip=true same_as_rom=true
+rom.level16.sharing = []
+rom.level16.objects = n=23 bytes=70 40e2d563bc7b3639
+rom.level16.objects_packed = 151ac33e36beaa13
+rom.level17.header = at=0575f bank=13 map=0 entry=4c2f0 start=4c500
+rom.level17.map = 0e3378d19f720145 used=2329
+rom.level17.encode = len=2329 roundtrip=true same_as_rom=true
+rom.level17.sharing = []
+rom.level17.objects = n=39 bytes=118 5ce8149aa31007b3
+rom.level17.objects_packed = 7abc8d5fba652088
+rom.level18.header = at=05773 bank=13 map=1 entry=4c2f2 start=4ce19
+rom.level18.map = 64b1ffdfdb52846a used=3302
+rom.level18.encode = len=3302 roundtrip=true same_as_rom=true
+rom.level18.sharing = []
+rom.level18.objects = n=25 bytes=76 1a171a96896244bc
+rom.level18.objects_packed = e80d393e7f64ca2d
+rom.level19.header = at=05787 bank=13 map=2 entry=4c2f4 start=4daff
+rom.level19.map = 4e8270819722b573 used=2107
+rom.level19.encode = len=2107 roundtrip=true same_as_rom=true
+rom.level19.sharing = []
+rom.level19.objects = n=30 bytes=91 ea04294efffd68ed
+rom.level19.objects_packed = 12942fe4c6576e70
+rom.level20.header = at=0579b bank=15 map=0 entry=542f0 start=54500
+rom.level20.map = e88e5b572b2ecd06 used=1601
+rom.level20.encode = len=1601 roundtrip=true same_as_rom=true
+rom.level20.sharing = []
+rom.level20.objects = n=36 bytes=109 42e4de9fbe34466a
+rom.level20.objects_packed = a062b45ce43a99f5
+rom.level21.header = at=057af bank=15 map=1 entry=542f2 start=54b41
+rom.level21.map = bb9bae27e9700e4c used=1793
+rom.level21.encode = len=1793 roundtrip=true same_as_rom=true
+rom.level21.sharing = []
+rom.level21.objects = n=34 bytes=103 ee2b36e0e2432913
+rom.level21.objects_packed = 5af385737a1500d0
+rom.level22.header = at=057c3 bank=15 map=2 entry=542f4 start=55242
+rom.level22.map = c6e754df16108e32 used=2570
+rom.level22.encode = len=2570 roundtrip=true same_as_rom=true
+rom.level22.sharing = []
+rom.level22.objects = n=31 bytes=94 084294f012f6adee
+rom.level22.objects_packed = 8e49177dcf82fae4
+rom.level23.header = at=057d7 bank=15 map=3 entry=542f6 start=55c4c
+rom.level23.map = 952235d7f23be9ec used=1682
+rom.level23.encode = len=1682 roundtrip=true same_as_rom=true
+rom.level23.sharing = []
+rom.level23.objects = n=24 bytes=73 0b478ebdc317c0b7
+rom.level23.objects_packed = dbfdc956bde91502
+rom.level24.header = at=057eb bank=13 map=3 entry=4c2f6 start=4e33a
+rom.level24.map = dd3d24112e4a44cd used=7029
+rom.level24.encode = len=7029 roundtrip=true same_as_rom=true
+rom.level24.sharing = []
+rom.level24.objects = n=48 bytes=145 6a6b127aa1f3239a
+rom.level24.objects_packed = d5c654565356f09d
+rom.level25.header = at=057ff bank=09 map=1 entry=242f2 start=24e5b
+rom.level25.map = 0b924313f02f2755 used=682
+rom.level25.encode = len=682 roundtrip=true same_as_rom=true
+rom.level25.sharing = []
+rom.level25.objects = n=26 bytes=79 bdfa260773cfc94e
+rom.level25.objects_packed = c485a96fb0b64ebf
+rom.level26.header = at=05813 bank=09 map=2 entry=242f4 start=25105
+rom.level26.map = 06e6f6cf211b7488 used=1057
+rom.level26.encode = len=1057 roundtrip=true same_as_rom=true
+rom.level26.sharing = []
+rom.level26.objects = n=12 bytes=37 1bdc4e2f0dfa93b1
+rom.level26.objects_packed = f660f0c04a3a52c5
+rom.level27.header = at=05827 bank=09 map=3 entry=242f6 start=25526
+rom.level27.map = 2151269d1c462ad9 used=2001
+rom.level27.encode = len=2001 roundtrip=true same_as_rom=true
+rom.level27.sharing = []
+rom.level27.objects = n=14 bytes=43 78c04fb1d912f52f
+rom.level27.objects_packed = ec7e039eb49ff461
+rom.level28.header = at=0583b bank=0b map=4 entry=2c2f8 start=2d8d7
+rom.level28.map = a6baf40de1e798a3 used=2078
+rom.level28.encode = len=2078 roundtrip=true same_as_rom=true
+rom.level28.sharing = []
+rom.level28.objects = n=6 bytes=19 71d6134e5796ef25
+rom.level28.objects_packed = bd5b42737711528f
+rom.level29.header = at=0584f bank=0b map=3 entry=2c2f6 start=2d40b
+rom.level29.map = 69a8dbaca60e9cd1 used=1228
+rom.level29.encode = len=1228 roundtrip=true same_as_rom=true
+rom.level29.sharing = []
+rom.level29.objects = n=31 bytes=94 379e49c4658c0a61
+rom.level29.objects_packed = 7f6ff869246f4e22
+rom.level30.header = at=05863 bank=0b map=2 entry=2c2f4 start=2d192
+rom.level30.map = 9838de779e4df1a0 used=633
+rom.level30.encode = len=633 roundtrip=true same_as_rom=true
+rom.level30.sharing = []
+rom.level30.objects = n=7 bytes=22 ae4ad9a897706180
+rom.level30.objects_packed = 5327ee8acdee37e7
+rom.level31.header = at=05877 bank=0b map=5 entry=2c2fa start=2e0f5
+rom.level31.map = 0d50e386c8a67e0c used=1461
+rom.level31.encode = len=1461 roundtrip=true same_as_rom=true
+rom.level31.sharing = []
+rom.level31.objects = n=32 bytes=97 b27fb05ad87173c0
+rom.level31.objects_packed = d20108ebaba8e2a8
+rom.objects.region = (57463, 2879)
+rom.world.picture = 3c44a1c8710da7e7
+rom.world.point_levels = 379c3c9a99c6cf12
+rom.bank09.maps = [(0, 148208, 148736, 2395), (1, 148210, 151131, 682), (2, 148212, 151813, 1057), (3, 148214, 152870, 2001)]
+rom.bank09.capacity = (148736, 6135)
+rom.bank0a.maps = [(0, 164592, 165120, 3227), (1, 164594, 168347, 6380), (2, 164596, 174727, 1934)]
+rom.bank0a.capacity = (165120, 11541)
+rom.bank0b.maps = [(0, 180976, 181504, 1959), (1, 180978, 183463, 1259), (2, 180980, 184722, 633), (3, 180982, 185355, 1228), (4, 180984, 186583, 2078), (5, 180986, 188661, 1461)]
+rom.bank0b.capacity = (181504, 8618)
+rom.bank12.maps = [(0, 295664, 296192, 2345), (1, 295666, 298537, 1712), (2, 295668, 300249, 2841), (3, 295670, 303090, 2390)]
+rom.bank12.capacity = (296192, 9288)
+rom.bank13.maps = [(0, 312048, 312576, 2329), (1, 312050, 314905, 3302), (2, 312052, 318207, 2107), (3, 312054, 320314, 7029)]
+rom.bank13.capacity = (312576, 14767)
+rom.bank14.maps = [(0, 328432, 328960, 1460), (1, 328434, 330420, 5141), (2, 328436, 335561, 1144)]
+rom.bank14.capacity = (328960, 7745)
+rom.bank15.maps = [(0, 344816, 345344, 1601), (1, 344818, 346945, 1793), (2, 344820, 348738, 2570), (3, 344822, 351308, 1682)]
+rom.bank15.capacity = (345344, 7646)
+rom.bank17.maps = [(0, 377584, 378112, 2337), (1, 377586, 380449, 2911), (2, 377588, 383360, 2932), (3, 377590, 386292, 4902)]
+rom.bank17.capacity = (378112, 13082)
+exp.rom = 6cdb131323f0643d
+exp.flags = expanded=true objects_patched=true
+exp.objects.region = (573440, 8247)
+exp.objects.space = (2879, 8247)
+exp.bank09.store = Ok("bank 09: 6135/15104 bytes")
+exp.bank0a.store = Ok("bank 0A: 11541/15104 bytes")
+exp.bank0b.store = Ok("bank 0B: 8618/15104 bytes")
+exp.bank12.store = Ok("bank 12: 9288/15104 bytes")
+exp.bank13.store = Ok("bank 13: 14767/15104 bytes")
+exp.bank14.store = Ok("bank 14: 7745/15104 bytes")
+exp.bank15.store = Ok("bank 15: 7646/15104 bytes")
+exp.bank17.store = Ok("bank 17: 13082/15104 bytes")
+exp.objects.store = Ok("objects 2879/8247 bytes")
+exp.after_store.rom = 9e2e6cc1b783d0e2
+exp.edit.space = (6389, 15104)
+exp.edit.store = Ok("bank 09: 6389/15104 bytes")
+exp.edit.reread_ok = true
+exp.after_edit.rom = ed267ede17a02175
+exp.play.level00 = boot=true entered=true abfad1705b604e13
+cmap.parse = aebde380290d3379
+cmap.linked = true true false
+cmap.neighbour = Some(3) Some(2) Some(0)
+cmap.toggle = 10de4439d432e334
+cmap.remove = af330de210cefe5c
+emu.f0059.screen = 14e3b442c87545e2
+emu.f0059.sound = 90258 88fa6ddebcf1e6c5
+emu.f0119.screen = 14e3b442c87545e2
+emu.f0119.sound = 88602 a212248d305e8145
+emu.f0179.screen = 14e3b442c87545e2
+emu.f0179.sound = 88604 43cc8de2eef79be5
+emu.f0239.screen = 55ba08f94cbabdd8
+emu.f0239.sound = 89190 7a645503f63dd6e1
+emu.f0299.screen = f1c8eb9d73abd811
+emu.f0299.sound = 88604 ed60b9538a5765a5
+emu.f0359.screen = be707a2d9bea62ce
+emu.f0359.sound = 88602 6be2382ac5117fd5
+emu.f0419.screen = 40fa37f8f3a7be2b
+emu.f0419.sound = 89664 aa4809662ae611a9
+emu.f0479.screen = 410f0dfb8327f0eb
+emu.f0479.sound = 89332 e7dd65f6a0c95ce9
+emu.f0539.screen = 150cb5c428f65379
+emu.f0539.sound = 88602 ae9099bff4a3b005
+emu.f0599.screen = 40778fa42b950ba9
+emu.f0599.sound = 88604 1dea037c9be619b9
+emu.f0659.screen = 40778fa42b950ba9
+emu.f0659.sound = 88602 b50e31dd868c8949
+emu.f0719.screen = f6c8b0e2774a7d75
+emu.f0719.sound = 88602 ebf1617f8b7327fd
+emu.f0779.screen = 266ca497d98be107
+emu.f0779.sound = 88602 85538b18c136b0d5
+emu.f0839.screen = bc684bcc46babb5b
+emu.f0839.sound = 88602 79c79ffe715f3011
+emu.f0899.screen = a0c2a73614dcd3ab
+emu.f0899.sound = 88604 70d64911b24d205d
+emu.f0959.screen = 17c558dec1db4590
+emu.f0959.sound = 88602 69ea6132369f73e1
+emu.f1019.screen = bf1ae4286b240d1e
+emu.f1019.sound = 88602 07ccb89ba00be5c9
+emu.f1079.screen = 3c7ecd19ab74b869
+emu.f1079.sound = 88602 dc89f883766aa101
+emu.f1139.screen = 669256f1c811bb5d
+emu.f1139.sound = 88602 2f8cfa7bd18be141
+emu.f1199.screen = 42ed7ded69133389
+emu.f1199.sound = 88604 f8edeb033acc4905
+emu.f1259.screen = b324e4414dd7ab36
+emu.f1259.sound = 88602 31ea2d108b8f4975
+emu.f1319.screen = 0713b3dd6244c52a
+emu.f1319.sound = 88602 0923ef7fbd9fcbe9
+emu.f1379.screen = af9028d3beb0d7ec
+emu.f1379.sound = 88602 38645c213c360ab1
+emu.f1439.screen = 2af400cb94c9e25a
+emu.f1439.sound = 88602 7390ae30fe96a685
+emu.f1499.screen = eb9afbdcd9467b0b
+emu.f1499.sound = 88604 1eadd2b94af246f1
+emu.f1559.screen = 8c5ee02af2e97740
+emu.f1559.sound = 88602 df189d3e574044a9
+emu.f1619.screen = c1edbb5d002f5184
+emu.f1619.sound = 88602 5b2118adf0bcc425
+emu.f1679.screen = 26f62ba517d08b92
+emu.f1679.sound = 88602 f41e511e973e976d
+emu.f1739.screen = 68ec5162d1e3569b
+emu.f1739.sound = 88602 844e74517d0bd459
+emu.f1799.screen = 3eab34a50fa63f8c
+emu.f1799.sound = 88604 9db1923b9a5c9df5
+emu.f1859.screen = 688afb5a1795470a
+emu.f1859.sound = 88602 a118e63581fee43d
+emu.f1919.screen = 688afb5a1795470a
+emu.f1919.sound = 88602 1ec4afee5119394d
+emu.f1979.screen = 683c065bda2e48a2
+emu.f1979.sound = 88602 27fc6fd450e81c15
+emu.f2039.screen = 4197f68c49cfb4ea
+emu.f2039.sound = 88602 27fc6fd450e81c15
+emu.f2099.screen = 3dc04b4d2133c0da
+emu.f2099.sound = 88604 d7a955698bb64c45
+emu.f2159.screen = 3dc04b4d2133c0da
+emu.f2159.sound = 88602 27fc6fd450e81c15
+emu.f2219.screen = 4197f68c49cfb4ea
+emu.f2219.sound = 88602 27fc6fd450e81c15
+emu.f2279.screen = 683c065bda2e48a2
+emu.f2279.sound = 88602 27fc6fd450e81c15
+emu.f2339.screen = 688afb5a1795470a
+emu.f2339.sound = 88602 27fc6fd450e81c15
+emu.f2399.screen = 688afb5a1795470a
+emu.f2399.sound = 88604 d7a955698bb64c45
+emu.f2459.screen = ceafaa75c30b2b09
+emu.f2459.sound = 88602 280586aaf6be4d79
+emu.f2519.screen = 7c35ffb662e89966
+emu.f2519.sound = 88602 df553a51665a7209
+emu.f2579.screen = 2f41c6fd7cf20aa1
+emu.f2579.sound = 88602 21a16035e22816d5
+emu.f2639.screen = 67b23a08088b11ff
+emu.f2639.sound = 88602 a3089d22357892e1
+emu.f2699.screen = 86db1555a1270b81
+emu.f2699.sound = 88604 3ac5313bf04d0751
+emu.f2759.screen = 03239df071cc28e1
+emu.f2759.sound = 88602 22531ca3235b3701
+emu.f2819.screen = 69d2ff2a0832d998
+emu.f2819.sound = 88602 949815632ce2a3fd
+emu.f2879.screen = 5c018aa81b587dae
+emu.f2879.sound = 88602 b331364da1b7439d
+emu.f2939.screen = 145f2ef5c0745ca9
+emu.f2939.sound = 88602 f2488ae431c4e0d5
+emu.f2999.screen = b8e58cfa0fbab0c3
+emu.f2999.sound = 88604 4edadb7f33140329
+emu.f3059.screen = 779d8b8bf7325533
+emu.f3059.sound = 88602 cca576a9107fa691
+emu.f3119.screen = 779d8b8bf7325533
+emu.f3119.sound = 88602 81dd0cc962bb0449
+emu.f3179.screen = 9f54bb0e93519f03
+emu.f3179.sound = 88602 27fc6fd450e81c15
+emu.f3239.screen = b2ff280cbf093581
+emu.f3239.sound = 88602 27fc6fd450e81c15
+emu.f3299.screen = a3f471cca89b8c55
+emu.f3299.sound = 88604 d7a955698bb64c45
+emu.f3359.screen = a3f471cca89b8c55
+emu.f3359.sound = 88602 27fc6fd450e81c15
+emu.f3419.screen = 66c884a5b4f4723b
+emu.f3419.sound = 88602 27fc6fd450e81c15
+emu.f3479.screen = 5d0250bb757bc7e4
+emu.f3479.sound = 88602 27fc6fd450e81c15
+emu.f3539.screen = 779d8b8bf7325533
+emu.f3539.sound = 88602 27fc6fd450e81c15
+emu.f3599.screen = 779d8b8bf7325533
+emu.f3599.sound = 88604 d7a955698bb64c45
+emu.end.mode = 08
+emu.end.wram = aa11e15494ac04a1
+emu.end.cart_ram = 52fcf224ba850af7
+emu.end.vram = dbfd3047e94ffd70
+emu.end.oam = a94a0e306f7bdc38
+uc.boot_to_map = true
+uc.map.screen = d42ffb4775cd1d92
+uc.map.world_art = 2f54b86c9ab13ebd
+uc.level00.entered = true mode=04
+uc.level00.screen = 410f0dfb8327f0eb
+uc.level00.map_in_memory = 33d750b5f3e2a593
+uc.level00.art = 563da34a9317aa60
+uc.level00.after_run.screen = 30f4ad3bcf046888
+uc.level00.back_to_map.mode = 0c
+uc.level01.entered = true mode=04
+uc.level01.screen = 9a2091328e1fe41e
+uc.level01.map_in_memory = 364f51c503f76df5
+uc.level01.art = 0bf101e7c8332e98
+uc.level01.after_run.screen = 89e55a205ee95370
+uc.level01.back_to_map.mode = 0c
+uc.level02.entered = true mode=04
+uc.level02.screen = 7c22c1f95e58fcf2
+uc.level02.map_in_memory = ca02cd33918d332f
+uc.level02.art = e7a2690b850133b3
+uc.level02.after_run.screen = 95615630efe2cc97
+uc.level02.back_to_map.mode = 0c
+uc.level03.entered = true mode=04
+uc.level03.screen = 66264097b7457bec
+uc.level03.map_in_memory = 0182b33b57c6fb82
+uc.level03.art = dc5ca9a0fc1279a5
+uc.level03.after_run.screen = 631ca6e7b2508210
+uc.level03.back_to_map.mode = 0c
+uc.level04.entered = true mode=04
+uc.level04.screen = 60f920e8ba2365aa
+uc.level04.map_in_memory = a2d4b04cddaf0db6
+uc.level04.art = 682feb9bd9ea0bfc
+uc.level04.after_run.screen = 0559cd229b2b8983
+uc.level04.back_to_map.mode = 0c
+uc.level05.entered = true mode=04
+uc.level05.screen = e4d39b6260259a48
+uc.level05.map_in_memory = 44baa1f8013a40e7
+uc.level05.art = dd39b14a1010edca
+uc.level05.after_run.screen = 21224fe096cfc1f8
+uc.level05.back_to_map.mode = 0c
+uc.level06.entered = true mode=04
+uc.level06.screen = 4f918324643df7de
+uc.level06.map_in_memory = cc3cff5a24f5be72
+uc.level06.art = d369a9276a58dd18
+uc.level06.after_run.screen = b42f55b3cc0e4683
+uc.level06.back_to_map.mode = 0c
+uc.level07.entered = true mode=04
+uc.level07.screen = 727ba098ac1f1ef2
+uc.level07.map_in_memory = 14fecf10e044917b
+uc.level07.art = 5465aa72495d4e59
+uc.level07.after_run.screen = 005e14eae5cd2d72
+uc.level07.back_to_map.mode = 0c
+uc.level08.entered = true mode=04
+uc.level08.screen = c80c3e94a691f26b
+uc.level08.map_in_memory = 32b2a15c19bc6bcf
+uc.level08.art = 96275c6ec8fc7677
+uc.level08.after_run.screen = d10bfbf62b261fce
+uc.level08.back_to_map.mode = 0c
+uc.level09.entered = true mode=04
+uc.level09.screen = cdff4bda4daa2dbc
+uc.level09.map_in_memory = 537ebad3cb695145
+uc.level09.art = 5b0b29336ecff9d3
+uc.level09.after_run.screen = 6ed8d8c6fb45487c
+uc.level09.back_to_map.mode = 0c
+uc.level10.entered = true mode=04
+uc.level10.screen = a9c4b9ff9b3b9430
+uc.level10.map_in_memory = bd7df7eeef31bea9
+uc.level10.art = 3ff5f6d7849fcaa2
+uc.level10.after_run.screen = a3eb0335067da601
+uc.level10.back_to_map.mode = 0c
+uc.level11.entered = true mode=04
+uc.level11.screen = c9937373f8adb664
+uc.level11.map_in_memory = 913be02bbacc8409
+uc.level11.art = 995aee193ad6d6aa
+uc.level11.after_run.screen = 730eaba46312ebc8
+uc.level11.back_to_map.mode = 0c
+uc.level12.entered = true mode=04
+uc.level12.screen = 38af35011db91e52
+uc.level12.map_in_memory = 9c0b3fa5ee1804d7
+uc.level12.art = 6eb59484f145a498
+uc.level12.after_run.screen = f5f891310f5bee25
+uc.level12.back_to_map.mode = 0c
+uc.level13.entered = true mode=04
+uc.level13.screen = df2a5e0ee8d33d2c
+uc.level13.map_in_memory = 727da428702b9735
+uc.level13.art = f3e2e30f917feabb
+uc.level13.after_run.screen = 83224c63c4b8d0ae
+uc.level13.back_to_map.mode = 0c
+uc.level14.entered = true mode=04
+uc.level14.screen = 679a2d2998553a78
+uc.level14.map_in_memory = 140a976faeeec940
+uc.level14.art = 60acc440239c257b
+uc.level14.after_run.screen = 3ab5b9bdd60ff000
+uc.level14.back_to_map.mode = 0c
+uc.level15.entered = true mode=04
+uc.level15.screen = 6ebba61ca5db2aeb
+uc.level15.map_in_memory = a7b56baefb22c6c4
+uc.level15.art = c0655eb7afd8d323
+uc.level15.after_run.screen = 7ba945db8555882f
+uc.level15.back_to_map.mode = 0c
+uc.level16.entered = true mode=04
+uc.level16.screen = 2e3b5fee5cda0576
+uc.level16.map_in_memory = 9eb1b30841f2518c
+uc.level16.art = 9fe840294a52c1ca
+uc.level16.after_run.screen = 88efae22bc852f94
+uc.level16.back_to_map.mode = 0c
+uc.level17.entered = true mode=04
+uc.level17.screen = 71f1c7fa5bc2b1fd
+uc.level17.map_in_memory = 0e3378d19f720145
+uc.level17.art = b3bfc7d176732813
+uc.level17.after_run.screen = 03d37def2c48ebd4
+uc.level17.back_to_map.mode = 0c
+uc.level18.entered = true mode=04
+uc.level18.screen = 2416f80cc0f0aaf9
+uc.level18.map_in_memory = 64b1ffdfdb52846a
+uc.level18.art = 5cd9324574e092ec
+uc.level18.after_run.screen = 0c5e3932833e84e9
+uc.level18.back_to_map.mode = 0c
+uc.level19.entered = true mode=04
+uc.level19.screen = dd7aa5240d126140
+uc.level19.map_in_memory = 4e8270819722b573
+uc.level19.art = dd1eb30b604386e3
+uc.level19.after_run.screen = 971b9a4203b84be9
+uc.level19.back_to_map.mode = 0c
+uc.level20.entered = true mode=04
+uc.level20.screen = 7fa56ba2cf60eef4
+uc.level20.map_in_memory = e88e5b572b2ecd06
+uc.level20.art = a8392e4e203baa4c
+uc.level20.after_run.screen = 4d9ff9860285ff56
+uc.level20.back_to_map.mode = 0c
+uc.level21.entered = true mode=04
+uc.level21.screen = b6c613a37674671d
+uc.level21.map_in_memory = bb9bae27e9700e4c
+uc.level21.art = f0bb0bab8e94c929
+uc.level21.after_run.screen = 18d4d8b4255d7bf1
+uc.level21.back_to_map.mode = 0c
+uc.level22.entered = true mode=04
+uc.level22.screen = 7fbb4dc3937dd79f
+uc.level22.map_in_memory = c6e754df16108e32
+uc.level22.art = 3b09c16ea0e87c32
+uc.level22.after_run.screen = 3b26c16c0ed8e460
+uc.level22.back_to_map.mode = 0c
+uc.level23.entered = true mode=04
+uc.level23.screen = f7831bf1b4789775
+uc.level23.map_in_memory = 952235d7f23be9ec
+uc.level23.art = 9c336883c9e0778c
+uc.level23.after_run.screen = 3cfadfabfbae3651
+uc.level23.back_to_map.mode = 0c
+uc.level24.entered = true mode=04
+uc.level24.screen = 5a0ea9474e0a0caf
+uc.level24.map_in_memory = dd3d24112e4a44cd
+uc.level24.art = ea3762ffb031b880
+uc.level24.after_run.screen = 6d56f608253bd45a
+uc.level24.back_to_map.mode = 0c
+uc.level25.entered = true mode=04
+uc.level25.screen = fcb45ae92317f070
+uc.level25.map_in_memory = 0b924313f02f2755
+uc.level25.art = 2c72af8bca68340e
+uc.level25.after_run.screen = 7a43c3f8ea0b7d9e
+uc.level25.back_to_map.mode = 0c
+uc.level26.entered = true mode=04
+uc.level26.screen = 0a1232d0acbde75f
+uc.level26.map_in_memory = 06e6f6cf211b7488
+uc.level26.art = f7c608305dccfa5c
+uc.level26.after_run.screen = 146e120ebc4b7dc5
+uc.level26.back_to_map.mode = 0c
+uc.level27.entered = true mode=04
+uc.level27.screen = 75609d8593d48a26
+uc.level27.map_in_memory = 2151269d1c462ad9
+uc.level27.art = d3ea9ccc9677604d
+uc.level27.after_run.screen = 7d303b26e5143ceb
+uc.level27.back_to_map.mode = 0c
+uc.level28.entered = true mode=04
+uc.level28.screen = c03a70bb1030d379
+uc.level28.map_in_memory = a6baf40de1e798a3
+uc.level28.art = 84b2372490dfa3e5
+uc.level28.after_run.screen = ca5ea717ec3c1d24
+uc.level28.back_to_map.mode = 0c
+uc.level29.entered = true mode=04
+uc.level29.screen = cac247a25f4d2f63
+uc.level29.map_in_memory = 69a8dbaca60e9cd1
+uc.level29.art = 9e4bc08ed5075678
+uc.level29.after_run.screen = d506e9f014761e96
+uc.level29.back_to_map.mode = 0c
+uc.level30.entered = true mode=04
+uc.level30.screen = 94da5b909a5e82ef
+uc.level30.map_in_memory = 9838de779e4df1a0
+uc.level30.art = fe4cd2d7123d6df0
+uc.level30.after_run.screen = 0b9a4f397eacdcb9
+uc.level30.back_to_map.mode = 0c
+uc.level31.entered = true mode=04
+uc.level31.screen = 64a95642bf25dcba
+uc.level31.map_in_memory = 0d50e386c8a67e0c
+uc.level31.art = 3de6ce27893175db
+uc.level31.after_run.screen = 668b4e3eab2e4cb3
+uc.level31.back_to_map.mode = 0c
