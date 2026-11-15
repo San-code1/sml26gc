@@ -4,7 +4,7 @@
 //!
 //! Commands are rows of `COMMANDS`: a name and a function reading its arguments. They
 //! only read the cartridge (and write pictures where asked); nothing here is used by the
-//! game or the editor. (Before the workspace split this was `gb_port --research ...`.)
+//! game or the editor.
 mod checks;
 mod console;
 mod disasm;
@@ -91,9 +91,9 @@ const COMMANDS: &[(&str, Run)] = &[
 ];
 
 const USAGE: &str = "research [--with-save]: disasm BANK ADDR N | table OFF LEN ROW | find SCRIPT | watch SCRIPT ADDRS FROM TO | trace SCRIPT ADDRS FROM TO\n\
-                     \x20         poke | leave | cmpmap | diff | worldshot | looks | worldcheck | objcheck | objects | reads | free | storecheck | extracheck | routecheck | levels | modes
-\n                               (RESEARCH_ROM=<file> uses that cartridge file)\n\
-                     (customcheck and menushots belong to the game: game --research ...)";
+                     \x20         poke | leave | cmpmap | diff | worldshot | looks | worldcheck | objcheck | objects | reads | free | storecheck | extracheck | routecheck | levels | modes ...\n\
+                     RESEARCH_ROM=<file> uses that cartridge file\n\
+                     (menushots belongs to the game: game --research menushots DIR)";
 
 fn main() {
     let mut v: Vec<String> = std::env::args().skip(1).collect();
