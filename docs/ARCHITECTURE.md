@@ -182,6 +182,20 @@ editor/src/
 Tests: historial, herramientas con un lienzo falso, y documento con la ROM real (pintar,
 deshacer/rehacer, objeto, tile, commit y releer como lo hará el juego; restaurar original).
 
+## 5b. `tools/research/` ✅
+
+```
+tools/research/
+├─ src/main.rs        Tabla COMMANDS (nombre → función que lee sus argumentos) y Args
+├─ src/console.rs     Cargar la ROM, un frame de guion, instantáneas de RAM, pokes, shown()
+├─ src/probe.rs       Probe: BusObserver que registra escrituras y lecturas de ROM
+├─ src/disasm.rs      Desensamblador SM83 (con tests) y tablas de la ROM
+├─ src/memory.rs      modes, diff, poke, leave, cmpmap, reads, find, watch, trace
+├─ src/checks.rs      levels, storecheck, objcheck, worldcheck
+├─ src/rom_views.rs   free, objects, worldshot, looks
+└─ all_commands.sh    Ejecuta los 20 comandos y guarda su salida, para comparar versiones
+```
+
 ## 6. Contrato entre juego y editor
 
 Lo único que comparten fuera de los crates comunes (se mantiene **compatible** con lo actual,
@@ -220,7 +234,7 @@ cartucho), `battery`, `progress`, `settings_file`, `custom_map_file` y `png_out`
 | 3 ✅ | `host`: localizar ROM, rutas, ajustes |
 | 4 ✅ | `game/`: dominio puro + puertos + adaptadores + raíz de composición |
 | 5 ✅ | `editor/`: romper el objeto gigante en documento, historial, herramientas, comandos y paneles |
-| 6 | `tools/research/` |
+| 6 ✅ | `tools/research/`: comandos en tabla, módulos por tema (disasm, memory, checks, rom_views, probe, console) |
 | 7 | Puntos de extensión: paletas desde fichero, paletas por capa, sustitución de gráficos, registro de ganchos |
 | 8 | Paridad confirmada → borrar `legacy/` |
 
