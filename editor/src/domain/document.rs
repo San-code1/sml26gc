@@ -1,11 +1,13 @@
 //! Everything being edited: the cartridge being built (the edited copy), the untouched
 //! original it is checked against, the 32 levels (blocks and objects) and the new ones
-//! after them (`extra_levels`) with their undo history, the world map picture and level
-//! points. What has changed since the last save is tracked here; the files are not.
+//! after them (`extra_levels`) with their undo history, the world map picture, the level
+//! each map point opens and the paths between points (`map_routes`). What has changed since
+//! the last save is tracked here; the files are not.
 use super::history::History;
 use cart_model::error::{BankUsage, ObjectsUsage};
 use cart_model::extra_levels::{self, Extra};
 use cart_model::levels::{self, COLS, LEVELS, ROWS};
+use cart_model::map_routes::{self, MapRoutes, Place, Way};
 use cart_model::objects::{self, Obj};
 use cart_model::original_points::OnMap;
 use cart_model::{layout, patch, world, zone_maps, CartError};
@@ -35,6 +37,8 @@ pub enum Saved {
     Bank(BankUsage),
     WorldMap,
     LevelPoints,
+    /// The map's paths and points: bytes the changed paths take.
+    Routes(usize),
     Objects(ObjectsUsage),
     /// The new levels: how many, bytes used.
     NewLevels(usize, usize),
@@ -58,7 +62,11 @@ pub struct EditorDocument {
     /// Which level each of the game's own map points opens.
     pub points: Vec<u8>,
     pub points_dirty: bool,
-    points_history: History<Vec<u8>>,
+    /// The paths between map points, where Mario stands on each, and the new points.
+    pub routes: MapRoutes,
+    pub routes_dirty: bool,
+    /// Undo of the Points tab: the levels the points open and the paths, together.
+    points_history: History<(Vec<u8>, MapRoutes)>,
 }
 
 fn level_from(rom: &[u8], l: usize) -> LevelContent {
@@ -87,6 +95,8 @@ impl EditorDocument {
             world_history: History::default(),
             points: world::point_levels(&rom),
             points_dirty: false,
+            routes: map_routes::read(&rom),
+            routes_dirty: false,
             points_history: History::default(),
             original,
             rom,
@@ -325,9 +335,12 @@ impl EditorDocument {
         self.world_snapshot();
         self.world = world::read(&self.original);
         self.zones = (0..zone_maps::ZONES.len()).map(|z| zone_maps::read(&self.original, z)).collect();
+        self.points_history.record((self.points.clone(), self.routes.clone()));
         self.points = world::point_levels(&self.original);
+        self.routes = map_routes::read(&self.original);
         self.world_dirty = true;
         self.points_dirty = true;
+        self.routes_dirty = true;
     }
 
     /// Does map point `point` open a level (one of the 32 or a new one)?
@@ -345,23 +358,96 @@ impl EditorDocument {
         if step == 0 || !((cur as i32) < count || cur == world::NO_LEVEL) {
             return;
         }
-        self.points_history.record(self.points.clone());
+        self.points_record();
         let i = if cur == world::NO_LEVEL { count } else { cur as i32 };
         let n = (i + step).rem_euclid(count + 1);
         self.points[point] = if n == count { world::NO_LEVEL } else { n as u8 };
         self.points_dirty = true;
     }
 
-    pub fn points_undo(&mut self) -> bool {
-        let done = self.points_history.undo(&mut self.points);
+    fn points_record(&mut self) {
+        self.points_history.record((self.points.clone(), self.routes.clone()));
+    }
+
+    fn points_swap(&mut self, undo: bool) -> bool {
+        let mut now = (std::mem::take(&mut self.points), std::mem::take(&mut self.routes));
+        let done = if undo { self.points_history.undo(&mut now) } else { self.points_history.redo(&mut now) };
+        (self.points, self.routes) = now;
         self.points_dirty |= done;
+        self.routes_dirty |= done;
         done
     }
 
+    pub fn points_undo(&mut self) -> bool {
+        self.points_swap(true)
+    }
+
     pub fn points_redo(&mut self) -> bool {
-        let done = self.points_history.redo(&mut self.points);
-        self.points_dirty |= done;
-        done
+        self.points_swap(false)
+    }
+
+    // ------------------------------------------------------------ paths and new points
+
+    /// Set or take out the way from `point` in direction `dir` (0 right, 1 left, 2 up,
+    /// 3 down), undoable.
+    pub fn set_way(&mut self, point: usize, dir: usize, way: Option<Way>) {
+        if point >= map_routes::POINTS || self.routes.ways[point][dir] == way {
+            return;
+        }
+        self.points_record();
+        self.routes.ways[point][dir] = way;
+        self.routes_dirty = true;
+    }
+
+    /// A path drawn from `from` through `corners` (pixels from `from`) to point `to`: the
+    /// way out of `from` in the direction it starts in, and the way back the same road if
+    /// `to` has none in the direction it would start in. Returns the directions used.
+    pub fn draw_path(&mut self, from: usize, to: u8, corners: &[(i32, i32)]) -> Option<(usize, Option<usize>)> {
+        let way = Way::through(corners, to);
+        let dir = first_dir(&way)?;
+        self.points_record();
+        let end = *way.track().last()?;
+        let back_corners: Vec<(i32, i32)> = corners.iter().rev().skip(1).map(|c| (c.0 - end.0, c.1 - end.1)).chain(std::iter::once((-end.0, -end.1))).collect();
+        let back = Way::through(&back_corners, from as u8);
+        let mut back_dir = None;
+        if let Some(bd) = first_dir(&back) {
+            let t = to as usize;
+            if t < map_routes::POINTS && self.routes.ways[t][bd].is_none() {
+                self.routes.ways[t][bd] = Some(back);
+                back_dir = Some(bd);
+            }
+        }
+        self.routes.ways[from][dir] = Some(way);
+        self.routes_dirty = true;
+        Some((dir, back_dir))
+    }
+
+    /// A new point on the world map at `(x, y)` (pixels of the picture), opening no level
+    /// yet. None when every free number is taken.
+    pub fn add_point(&mut self, x: i32, y: i32) -> Option<u8> {
+        let p = self.routes.free_point()?;
+        self.points_record();
+        self.routes.added.push(p);
+        self.routes.ways[p as usize] = Default::default();
+        self.routes.places[p as usize] = Place::at_world(x, y);
+        self.points[p as usize] = world::NO_LEVEL;
+        self.routes_dirty = true;
+        self.points_dirty = true;
+        Some(p)
+    }
+
+    /// Take out a new point and every path to it.
+    pub fn remove_point(&mut self, p: u8) -> bool {
+        if !self.routes.added.contains(&p) {
+            return false;
+        }
+        self.points_record();
+        self.routes.remove_point(p);
+        self.routes.places[p as usize] = map_routes::read(&self.original).places[p as usize];
+        self.points[p as usize] = world::NO_LEVEL;
+        self.routes_dirty = true;
+        self.points_dirty = true;
+        true
     }
 
     // ------------------------------------------------------------ space and saving
@@ -438,6 +524,12 @@ impl EditorDocument {
             self.points_dirty = false;
             notes.push(Saved::LevelPoints);
         }
+        if self.routes_dirty {
+            let mut rom = self.rom.clone();
+            notes.push(Saved::Routes(map_routes::write(&mut rom, &self.routes)?));
+            self.rom = rom;
+            self.routes_dirty = false;
+        }
         if self.levels[..LEVELS].iter().any(|l| l.objects_dirty) {
             let mut rom = self.rom.clone();
             notes.push(Saved::Objects(objects::store(&mut rom, &self.original, &self.object_lists())?));
@@ -462,6 +554,20 @@ impl EditorDocument {
             notes.push(Saved::NewLevels(self.extras.len(), used));
         }
         Ok(notes)
+    }
+}
+
+/// The pad direction a way starts in (0 right, 1 left, 2 up, 3 down): its first step's;
+/// a diagonal one goes by where the way ends up most.
+fn first_dir(w: &Way) -> Option<usize> {
+    use map_routes::{DOWN, LEFT, RIGHT, UP};
+    let s = *w.steps.first()?;
+    let end = *w.track().last()?;
+    let h = if s & RIGHT != 0 { Some(0) } else if s & LEFT != 0 { Some(1) } else { None };
+    let v = if s & UP != 0 { Some(2) } else if s & DOWN != 0 { Some(3) } else { None };
+    match (h, v) {
+        (Some(h), Some(v)) => Some(if end.0.abs() >= end.1.abs() { h } else { v }),
+        (h, v) => h.or(v),
     }
 }
 
@@ -507,7 +613,7 @@ mod tests {
         assert!(!doc.levels.iter().any(|l| l.dirty()) && !doc.world_dirty);
 
         // Read back from the cartridge image, as the game will.
-        let again = EditorDocument::open(doc.original.clone(), Some(doc.rom.clone()), CustomMap::default());
+        let again = EditorDocument::open(doc.original.clone(), Some(doc.rom.clone()));
         assert_eq!(again.block(3, 10, 5), new);
         assert!(again.levels[3].content.objs.iter().any(|o| (o.x, o.y, o.kind) == (72, 40, 5)));
         assert_eq!(again.tile(OnMap::World, 1, 1), tile);
@@ -572,6 +678,7 @@ mod tests {
         doc.add_object(m, Obj { x: 80, y: 40, kind: 5, flag: false });
         doc.points[0] = m as u8; // the game's first point opens the second new level
         doc.points[1] = n as u8;
+        doc.points_dirty = true;
         doc.commit().unwrap();
         let again = EditorDocument::open(doc.original.clone(), Some(doc.rom.clone()));
         assert_eq!((again.points[0], again.point_level(1)), (m as u8, Some(n)));
@@ -582,5 +689,31 @@ mod tests {
         assert_eq!(doc.points[0], n as u8, "the point follows its level");
         assert_eq!(doc.points[1], world::NO_LEVEL, "a point to a deleted level opens nothing");
         assert_eq!(doc.levels[n].content, again.levels[m].content);
+    }
+
+    #[test]
+    fn paths_and_new_points_are_drawn_saved_and_undone() {
+        let Some(mut doc) = open() else {
+            eprintln!("no cartridge found: document test skipped");
+            return;
+        };
+        let original = doc.routes.clone();
+        // a new point 32 pixels above point 04, a path up to it (and back down), level 7
+        let (x, y) = doc.routes.places[4].on_world();
+        let p = doc.add_point(x, y - 32).unwrap();
+        assert_eq!(doc.draw_path(4, p, &[(0, -32)]), Some((2, Some(3))));
+        doc.step_point_level(p as usize, 8); // no level -> 7
+        assert_eq!(doc.point_level(p as usize), Some(7));
+        assert_eq!(doc.routes.ways[p as usize][3].as_ref().map(|w| (w.to, w.track().last().copied())), Some((4, Some((0, 32)))));
+        let parts = doc.commit().unwrap();
+        assert!(parts.iter().any(|s| matches!(s, Saved::Routes(_))));
+        let again = EditorDocument::open(doc.original.clone(), Some(doc.rom.clone()));
+        assert_eq!(again.routes, doc.routes);
+        assert_eq!(again.point_level(p as usize), Some(7));
+        // undo the level, the path and the point
+        assert!(doc.points_undo() && doc.points_undo() && doc.points_undo());
+        assert_eq!(doc.routes, original);
+        assert!(doc.points_redo() && doc.remove_point(p));
+        assert_eq!(doc.routes, original, "taking the point out takes its paths");
     }
 }

@@ -1,11 +1,13 @@
 //! The world map editor: the world map and the zone maps, each picture painted tile by tile
 //! (Picture tab), and the game's own points drawn where the game shows them with the level
-//! each one opens, which can be changed (Points tab).
+//! each one opens and the paths Mario walks between them (Points tab): levels, paths and new
+//! points can be changed there.
 use super::widgets::*;
 use super::{left_button, Editor, WorldCanvas, TAB_PICTURE, TAB_POINTS};
 use crate::domain::document::EditorDocument;
 use crate::domain::tools::ToolKind;
-use cart_model::original_points::{self, OnMap, Spot};
+use cart_model::map_routes::{self, DIRS};
+use cart_model::original_points::{self, OnMap};
 use cart_model::world;
 use cart_model::zone_maps::ZONES;
 use macroquad::prelude::*;
@@ -40,17 +42,114 @@ impl Editor {
         vec2(PANEL + (x as f32 - self.cam.x) * self.scale(), (y as f32 - self.cam.y) * self.scale())
     }
 
-    /// The game's own point drawn under the mouse on the shown map.
-    fn spot_at(&self, m: Vec2) -> Option<&'static Spot> {
-        let w = self.world_pos(m);
-        original_points::on(self.world_map).find(|s| (vec2(s.x as f32, s.y as f32) - w).length() <= 7.0)
+    /// The points drawn on the shown map: the game's own (where it draws them) and, on the
+    /// world map, the new ones. (point, x, y, new)
+    fn map_points(&self) -> Vec<(u8, i32, i32, bool)> {
+        let mut v: Vec<(u8, i32, i32, bool)> = original_points::on(self.world_map).map(|s| (s.point, s.x, s.y, false)).collect();
+        if self.world_map == OnMap::World {
+            for &p in &self.doc.routes.added {
+                let (x, y) = self.doc.routes.places[p as usize].on_world();
+                v.push((p, x, y, true));
+            }
+        }
+        v
     }
 
-    /// Choose one of the game's own points; the map it is drawn on is shown.
+    /// The point drawn under the mouse on the shown map.
+    fn point_at(&self, m: Vec2) -> Option<(u8, i32, i32, bool)> {
+        let w = self.world_pos(m);
+        self.map_points().into_iter().find(|s| (vec2(s.1 as f32, s.2 as f32) - w).length() <= 7.0)
+    }
+
+    /// Where the chosen point is drawn on the shown map, if it is.
+    fn chosen_at(&self) -> Option<(i32, i32)> {
+        self.map_points().into_iter().find(|s| s.0 as usize == self.point).map(|s| (s.1, s.2))
+    }
+
+    /// Choose a point and show its map (for the command line).
+    pub fn choose_point(&mut self, p: usize) {
+        self.select_original_point(p);
+    }
+
+    /// Choose a point; the map it is drawn on is shown.
     fn select_original_point(&mut self, p: usize) {
         self.point = p;
-        if let Some(s) = original_points::SPOTS.iter().find(|s| s.point as usize == p) {
+        self.route_draw = None;
+        if self.doc.routes.added.contains(&(p as u8)) {
+            self.show_map(OnMap::World);
+        } else if let Some(s) = original_points::SPOTS.iter().find(|s| s.point as usize == p) {
             self.show_map(s.map);
+        }
+    }
+
+    /// The mouse on the picture, on the 4-pixel steps paths are made of, counted from `from`.
+    fn snapped(&self, m: Vec2, from: (i32, i32)) -> (i32, i32) {
+        let w = self.world_pos(m);
+        let s = |v: f32, o: i32| o + ((v - o as f32) / 4.0).round() as i32 * 4;
+        (s(w.x, from.0), s(w.y, from.1))
+    }
+
+    /// Clicks on the map in the Points tab: choose a point, put a new one, or draw a path.
+    fn points_clicks(&mut self, m: Vec2) {
+        let clicked = is_mouse_button_pressed(MouseButton::Left) && m.x >= PANEL && m.y < screen_height() - STATUS_H;
+        if self.placing_point {
+            if is_key_pressed(KeyCode::Escape) || is_mouse_button_pressed(MouseButton::Right) {
+                self.placing_point = false;
+            } else if clicked {
+                // world points sit 2 pixels below the 4-pixel grid
+                let (x, y) = self.snapped(m, (0, 2));
+                self.placing_point = false;
+                self.status = match self.doc.add_point(x, y) {
+                    Some(p) => {
+                        self.point = p as usize;
+                        format!("{} {p:02X}", tr(self.es, "New point", "Punto nuevo"))
+                    }
+                    None => tr(self.es, "No free point numbers left.", "No quedan numeros de punto libres.").into(),
+                };
+            }
+            return;
+        }
+        if let Some(corners) = &mut self.route_draw {
+            if is_key_pressed(KeyCode::Escape) || is_mouse_button_pressed(MouseButton::Right) {
+                self.route_draw = None;
+                return;
+            }
+            if is_key_pressed(KeyCode::Backspace) {
+                corners.pop();
+            }
+            if !clicked {
+                return;
+            }
+            let Some(start) = self.chosen_at() else {
+                self.route_draw = None;
+                return;
+            };
+            match self.point_at(m) {
+                Some((p, x, y, _)) if p as usize != self.point && (p as usize) < map_routes::POINTS => {
+                    let mut rel: Vec<(i32, i32)> = self.route_draw.take().unwrap_or_default().iter().map(|c| (c.0 - start.0, c.1 - start.1)).collect();
+                    rel.push((x - start.0, y - start.1));
+                    self.status = match self.doc.draw_path(self.point, p, &rel) {
+                        Some((d, back)) => {
+                            let back = back.map(|b| format!(", {} {p:02X} {} > {:02X}", tr(self.es, "and", "y"), DIRS[b], self.point)).unwrap_or_default();
+                            format!("{} {:02X} {} > {p:02X}{back}", tr(self.es, "Path", "Camino"), self.point, DIRS[d])
+                        }
+                        None => tr(self.es, "That path has no steps.", "Ese camino no tiene pasos.").into(),
+                    };
+                }
+                Some(_) => {}
+                None => {
+                    let c = self.snapped(m, start);
+                    if let Some(corners) = &mut self.route_draw {
+                        corners.push(c);
+                    }
+                }
+            }
+            return;
+        }
+        if clicked {
+            if let Some(s) = self.point_at(m) {
+                self.point = s.0 as usize;
+            }
         }
     }
 
@@ -91,11 +190,7 @@ impl Editor {
             return;
         }
         if self.world_tab == TAB_POINTS {
-            if is_mouse_button_pressed(MouseButton::Left) && m.x >= PANEL {
-                if let Some(s) = self.spot_at(m) {
-                    self.point = s.point as usize;
-                }
-            }
+            self.points_clicks(m);
             return;
         }
         let cell = self.world_cell(m);
@@ -318,15 +413,44 @@ impl Editor {
         draw_text(tr(self.es, "Right click on the map: pick a tile", "Clic derecho en el mapa: coger tile"), 10.0, (y + 16.0 * cell + 14.0).min(screen_height() - 4.0), 15.0, col(2));
     }
 
-    /// The game's own points on the shown map: where the game draws them, the level each
-    /// opens, the chosen one ringed.
+    /// The points on the shown map: where the game draws them, the level each opens, the
+    /// paths Mario walks out of each (the chosen point's highlighted), the chosen one ringed.
     fn draw_original_points(&self) {
         let r = (4.0 * self.scale()).max(6.0);
-        for road in original_points::links_on(self.world_map) {
-            for w in road.windows(2) {
-                let (s, e) = (self.on_screen(w[0].0, w[0].1), self.on_screen(w[1].0, w[1].1));
-                draw_line(s.x, s.y, e.x, e.y, 3.0, Color::new(0.1, 0.1, 0.1, 0.8));
+        let pts = self.map_points();
+        for &(p, x, y, _) in &pts {
+            let Some(ways) = self.doc.routes.ways.get(p as usize) else { continue };
+            let chosen = p as usize == self.point;
+            for (d, w) in ways.iter().enumerate() {
+                let Some(w) = w else { continue };
+                let track: Vec<Vec2> = w.track().iter().map(|t| self.on_screen(x + t.0, y + t.1)).collect();
+                let (c, th) = if chosen { (Color::new(1.0, 0.85, 0.1, 0.95), 3.0) } else { (Color::new(0.1, 0.1, 0.1, 0.75), 2.0) };
+                for s in track.windows(2) {
+                    draw_line(s[0].x, s[0].y, s[1].x, s[1].y, th, c);
+                }
+                if chosen && track.len() > 1 {
+                    let a = track[(track.len() / 2).max(1)];
+                    let t = format!("{} > {:02X}", DIRS[d], w.to);
+                    draw_text(&t, a.x + 5.0, a.y - 3.0, 16.0, BLACK);
+                    draw_text(&t, a.x + 4.0, a.y - 4.0, 16.0, Color::new(1.0, 0.95, 0.5, 1.0));
+                }
             }
+        }
+        // the path being drawn, to the mouse
+        if let (Some(corners), Some(start)) = (&self.route_draw, self.chosen_at()) {
+            let m = self.snapped(mouse_position().into(), start);
+            let mut line = vec![start];
+            line.extend(corners.iter().copied());
+            line.push(m);
+            for s in line.windows(2) {
+                let (a, b) = (self.on_screen(s[0].0, s[0].1), self.on_screen(s[1].0, s[1].1));
+                draw_line(a.x, a.y, b.x, b.y, 3.0, WHITE);
+            }
+        }
+        if self.placing_point {
+            let (x, y) = self.snapped(mouse_position().into(), (0, 2));
+            let c = self.on_screen(x, y);
+            draw_circle_lines(c.x, c.y, r, 2.0, WHITE);
         }
         for (i, sp) in original_points::SPOTS.iter().enumerate() {
             if sp.map != self.world_map {
@@ -355,6 +479,28 @@ impl Editor {
                 draw_circle_lines(c.x, c.y, r + 5.0, 3.0, WHITE);
             }
         }
+        // the new points
+        for &(p, x, y, new) in &pts {
+            if !new {
+                continue;
+            }
+            let c = self.on_screen(x, y);
+            let level = self.doc.points[p as usize];
+            draw_circle(c.x, c.y, r + 2.0, BLACK);
+            draw_circle(c.x, c.y, r, Color::new(0.2, 0.7, 0.3, 1.0));
+            if (level as usize) < self.doc.levels.len() {
+                let fs = (r * 1.3).clamp(13.0, 22.0);
+                let t = format!("{level:02}");
+                let d = measure_text(&t, None, fs as u16, 1.0);
+                draw_text(&t, c.x - d.width / 2.0, c.y + d.offset_y / 2.0, fs, WHITE);
+            }
+            let tag = format!("{p:02X} {}", tr(self.es, "(new)", "(nuevo)"));
+            draw_text(&tag, c.x + r + 3.0, c.y - r * 0.4 + 1.0, 15.0, BLACK);
+            draw_text(&tag, c.x + r + 2.0, c.y - r * 0.4, 15.0, WHITE);
+            if p as usize == self.point {
+                draw_circle_lines(c.x, c.y, r + 5.0, 3.0, WHITE);
+            }
+        }
     }
 
     /// Which level each point of the game's own map opens.
@@ -367,7 +513,8 @@ impl Editor {
         if button(Rect::new(130.0, y, 26.0, 26.0), "+", false, 18.0) {
             self.select_original_point((self.point + 1) % world::POINT_COUNT);
         }
-        let drawn = original_points::SPOTS.iter().find(|s| s.point as usize == self.point).map(|s| self.map_name(s.map));
+        let new = self.doc.routes.added.contains(&(self.point as u8));
+        let drawn = if new { Some(tr(self.es, "new point", "punto nuevo")) } else { original_points::SPOTS.iter().find(|s| s.point as usize == self.point).map(|s| self.map_name(s.map)) };
         draw_text(drawn.unwrap_or(tr(self.es, "(not drawn)", "(no se dibuja)")), 162.0, y + 18.0, 15.0, col(2));
         y += 30.0;
         let cur = self.doc.points[self.point];
@@ -387,11 +534,52 @@ impl Editor {
             change = 1;
         }
         self.doc.step_point_level(self.point, change);
-        y += 34.0;
+        y += 32.0;
+        // the ways out of the point
+        draw_text(tr(self.es, "Paths (pad > point)", "Caminos (cruceta > punto)"), 10.0, y + 12.0, 15.0, col(2));
+        y += 18.0;
+        if self.point < map_routes::POINTS {
+            for d in 0..4 {
+                let r = Rect::new(10.0 + (d % 2) as f32 * 138.0, y + (d / 2) as f32 * 26.0, 134.0, 24.0);
+                match self.doc.routes.ways[self.point][d].as_ref().map(|w| w.to) {
+                    Some(to) => {
+                        draw_text(&format!("{} > {to:02X}", DIRS[d]), r.x + 4.0, r.y + 17.0, 17.0, col(3));
+                        if button(Rect::new(r.x + 70.0, r.y, 60.0, 22.0), tr(self.es, "Delete", "Borrar"), false, 14.0) {
+                            self.doc.set_way(self.point, d, None);
+                        }
+                    }
+                    None => {
+                        draw_text(&format!("{}  -", DIRS[d]), r.x + 4.0, r.y + 17.0, 17.0, col(2));
+                    }
+                }
+            }
+            y += 54.0;
+        }
+        let drawing = self.route_draw.is_some();
+        let can_draw = self.point < map_routes::POINTS && self.chosen_at().is_some();
+        if button(Rect::new(10.0, y, 134.0, 26.0), tr(self.es, "New path", "Nuevo camino"), drawing, 15.0) {
+            self.placing_point = false;
+            self.route_draw = if drawing || !can_draw { None } else { Some(Vec::new()) };
+            if !can_draw {
+                self.status = tr(self.es, "Choose a point on the map shown first.", "Elige antes un punto del mapa que se ve.").into();
+            }
+        }
+        if self.world_map == OnMap::World && button(Rect::new(148.0, y, 138.0, 26.0), tr(self.es, "New point", "Nuevo punto"), self.placing_point, 15.0) {
+            self.route_draw = None;
+            self.placing_point = !self.placing_point;
+        }
+        y += 30.0;
+        if new {
+            if button(Rect::new(10.0, y, 134.0, 26.0), tr(self.es, "Delete point", "Borrar punto"), false, 15.0) {
+                self.doc.remove_point(self.point as u8);
+            }
+            y += 30.0;
+        }
+        y += 4.0;
         let title = format!("{} {}:", tr(self.es, "Points on", "Puntos en"), self.map_name(self.world_map));
         draw_text(&title, 10.0, y + 12.0, 15.0, col(2));
         y += 18.0;
-        let list: Vec<usize> = original_points::on(self.world_map).map(|s| s.point as usize).collect();
+        let list: Vec<usize> = self.map_points().iter().map(|s| s.0 as usize).collect();
         for (k, &p) in list.iter().enumerate() {
             let r = Rect::new(10.0 + (k % 3) as f32 * 92.0, y + (k / 3) as f32 * 24.0, 88.0, 22.0);
             let l = self.doc.points[p];
@@ -401,11 +589,21 @@ impl Editor {
             }
         }
         let yy = y + list.len().div_ceil(3) as f32 * 24.0 + 16.0;
-        let note = tr(
-            self.es,
-            "Click a point on the map to choose it, and with - + choose the level it opens: one of the 32, a new level (made in the level editor) or none. Saved into the edited copy; Play (F5) tries it in the game. Where the points sit and the paths between them are in the game's code (measured and drawn here); changing them is not possible yet.",
-            "Haz clic en un punto del mapa para elegirlo y con - + elige el nivel que abre: uno de los 32, un nivel nuevo (creado en el editor de niveles) o ninguno. Se guarda en la copia editada; Jugar (F5) lo prueba en el juego. Donde estan los puntos y sus caminos esta en el codigo del juego (medido y dibujado aqui); cambiarlos aun no es posible.",
-        );
+        let note = if self.route_draw.is_some() {
+            tr(
+                self.es,
+                "Drawing a path: click the corners, then the point it goes to. The pad direction is the way it starts; the way back is added too if that point has none that way. Backspace: last corner off. Esc or right click: cancel.",
+                "Dibujando un camino: haz clic en las esquinas y luego en el punto al que va. La direccion de la cruceta es hacia donde empieza; tambien se crea la vuelta si ese punto no tiene camino en esa direccion. Retroceso: quitar la ultima esquina. Esc o clic derecho: cancelar.",
+            )
+        } else if self.placing_point {
+            tr(self.es, "Click on the world map where the new point goes. Esc: cancel.", "Haz clic en el mapa del mundo donde va el punto nuevo. Esc: cancelar.")
+        } else {
+            tr(
+                self.es,
+                "Click a point on the map to choose it; with - + choose the level it opens. Its paths are drawn in yellow. New path draws one from it; New point puts one on the world map (the game has 6 numbers free). Saved into the edited copy; Play (F5) tries it in the game. The road drawn under the paths is changed in the Picture tab.",
+                "Haz clic en un punto del mapa para elegirlo; con - + elige el nivel que abre. Sus caminos se ven en amarillo. Nuevo camino dibuja uno desde el; Nuevo punto pone uno en el mapa del mundo (el juego tiene 6 numeros libres). Se guarda en la copia editada; Jugar (F5) lo prueba en el juego. El camino pintado bajo los caminos se cambia en la ficha Dibujo.",
+            )
+        };
         for (i, line) in wrap(note, 36).iter().enumerate() {
             draw_text(line, 10.0, yy + i as f32 * 16.0, 15.0, col(2));
         }

@@ -67,6 +67,10 @@ async fn main() {
         if flag("--points") {
             ed.world_tab = TAB_POINTS;
         }
+        // --point HEX: choose that map point (its map is shown)
+        if let Some(p) = value("--point").and_then(|v| usize::from_str_radix(v, 16).ok()).filter(|&p| p < cart_model::world::POINT_COUNT) {
+            ed.choose_point(p);
+        }
         // --map N: zone map N-1 (0 = the world map)
         if let Some(z) = value("--map").and_then(|v| v.parse::<usize>().ok()).filter(|&z| (1..=ZONES.len()).contains(&z)) {
             ed.show_map(OnMap::Zone(z - 1));

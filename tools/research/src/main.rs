@@ -70,6 +70,7 @@ const COMMANDS: &[(&str, Run)] = &[
     ("free", |r, _| rom_views::free_space(r)),
     ("storecheck", |r, _| checks::store_check(r)),
     ("extracheck", |r, _| checks::extra_check(r)),
+    ("routecheck", |r, _| checks::route_check(r)),
     ("levels", |r, _| checks::levels_check(r)),
     ("modes", |r, a| memory::modes(r, &a.s(1), &a.s(2))),
     ("find", |r, a| memory::find_player(r, &a.s(1))),
@@ -87,7 +88,8 @@ const COMMANDS: &[(&str, Run)] = &[
 ];
 
 const USAGE: &str = "research [--with-save]: disasm BANK ADDR N | table OFF LEN ROW | find SCRIPT | watch SCRIPT ADDRS FROM TO | trace SCRIPT ADDRS FROM TO\n\
-                     \x20         poke | leave | cmpmap | diff | worldshot | looks | worldcheck | objcheck | objects | reads | free | storecheck | extracheck | levels | modes\n\
+                     \x20         poke | leave | cmpmap | diff | worldshot | looks | worldcheck | objcheck | objects | reads | free | storecheck | extracheck | routecheck | levels | modes
+\n                               (RESEARCH_ROM=<file> uses that cartridge file)\n\
                      (customcheck and menushots belong to the game: game --research ...)";
 
 fn main() {
@@ -97,7 +99,7 @@ fn main() {
         console::use_battery_save(true);
     }
     let args = Args(v);
-    let rom = host::require_rom(None).unwrap_or_else(|e| {
+    let rom = host::require_rom(std::env::var_os("RESEARCH_ROM").map(std::path::PathBuf::from)).unwrap_or_else(|e| {
         eprintln!("{e}");
         std::process::exit(1)
     });
@@ -116,6 +118,6 @@ mod tests {
         let a = Args(["watch", "x", "ffc2,a200-a202", "0x10", "12"].map(String::from).to_vec());
         assert_eq!(a.list(2), vec![0xFFC2, 0xA200, 0xA201, 0xA202]);
         assert_eq!((a.hex(3), a.big(3), a.num(4), a.num(9)), (0x10, 0x10, 12, 0));
-        assert_eq!(COMMANDS.len(), 29);
+        assert_eq!(COMMANDS.len(), 30);
     }
 }

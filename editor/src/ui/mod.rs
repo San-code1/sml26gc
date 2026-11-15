@@ -71,7 +71,10 @@ pub struct Editor {
     point: usize,
     world_cam: Vec2,
     level_cam: Vec2,
-    // the editor-made world map
+    /// A path being drawn from the chosen point: its corners so far (pixels of the picture).
+    route_draw: Option<Vec<(i32, i32)>>,
+    /// The next click on the world map puts a new point there.
+    placing_point: bool,
 }
 
 /// Painting blocks into the level shown.
@@ -158,6 +161,8 @@ impl Editor {
             world_map: OnMap::World,
             point: 0,
             world_cam: Vec2::ZERO,
+            route_draw: None,
+            placing_point: false,
             level_cam: Vec2::ZERO,
         }
     }
@@ -400,6 +405,7 @@ impl Editor {
                         Saved::Objects(n) => n.to_string(),
                         Saved::WorldMap => tr(es, "world map", "mapa de mundos").to_string(),
                         Saved::LevelPoints => tr(es, "level points", "puntos de nivel").to_string(),
+                        Saved::Routes(n) => format!("{} ({n} bytes)", tr(es, "map paths", "caminos del mapa")),
                         Saved::NewLevels(n, used) => format!("{n} {} {used} bytes", tr(es, "new levels", "niveles nuevos")),
                     })
                     .collect();
