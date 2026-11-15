@@ -23,13 +23,12 @@ impl Audio {
     }
 
     /// Queue interleaved stereo samples, keeping the delay short.
-    pub fn push(&self, samples: &mut Vec<f32>, volume: f32) {
+    pub fn push(&self, samples: &[f32], volume: f32) {
         if self._stream.is_none() {
-            samples.clear();
             return;
         }
         let mut q = self.queue.lock().unwrap();
-        q.extend(samples.drain(..).map(|s| s * volume));
+        q.extend(samples.iter().map(|s| s * volume));
         let max = (self.rate as usize / 8) * 2; // ~125 ms
         while q.len() > max {
             q.pop_front();

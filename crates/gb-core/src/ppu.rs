@@ -3,15 +3,18 @@
 pub const W: usize = 160;
 pub const H: usize = 144;
 
+/// One picture: 160 x 144 shades, 0 (lightest) ..= 3 (darkest), row by row.
+pub type Screen = [u8; W * H];
+
 #[derive(Clone)]
 pub struct Ppu {
-    pub vram: [u8; 0x2000],
-    pub oam: [u8; 0xA0],
-    pub lcdc: u8,
+    pub(crate) vram: [u8; 0x2000],
+    pub(crate) oam: [u8; 0xA0],
+    pub(crate) lcdc: u8,
     stat: u8,
     scy: u8,
     scx: u8,
-    pub ly: u8,
+    pub(crate) ly: u8,
     lyc: u8,
     bgp: u8,
     obp0: u8,
@@ -23,12 +26,12 @@ pub struct Ppu {
     win_line: u8,
     stat_line: bool,
     /// Shades 0 (lightest) ..= 3 (darkest), one byte per pixel.
-    pub fb: [u8; W * H],
-    pub frame_ready: bool,
+    pub(crate) fb: Screen,
+    pub(crate) frame_ready: bool,
 }
 
 impl Ppu {
-    pub fn new() -> Ppu {
+    pub(crate) fn new() -> Ppu {
         Ppu {
             vram: [0; 0x2000],
             oam: [0; 0xA0],
@@ -52,6 +55,20 @@ impl Ppu {
         }
     }
 
+    /// Video memory: tile graphics at $8000-$97FF, tile maps at $9800-$9FFF.
+    pub fn vram(&self) -> &[u8; 0x2000] {
+        &self.vram
+    }
+
+    /// Sprite table: 40 entries of (y, x, tile, flags).
+    pub fn oam(&self) -> &[u8; 0xA0] {
+        &self.oam
+    }
+
+    pub fn lcdc(&self) -> u8 {
+        self.lcdc
+    }
+
     pub fn bgp(&self) -> u8 {
         self.bgp
     }
@@ -72,7 +89,7 @@ impl Ppu {
         self.lcdc & 0x80 != 0
     }
 
-    pub fn read(&self, addr: u16) -> u8 {
+    pub(crate) fn read(&self, addr: u16) -> u8 {
         match addr {
             0xFF40 => self.lcdc,
             0xFF41 => {
@@ -92,7 +109,7 @@ impl Ppu {
         }
     }
 
-    pub fn write(&mut self, addr: u16, v: u8) {
+    pub(crate) fn write(&mut self, addr: u16, v: u8) {
         match addr {
             0xFF40 => {
                 let was_on = self.lcd_on();
@@ -122,7 +139,7 @@ impl Ppu {
         }
     }
 
-    pub fn tick(&mut self, cycles: u32, iflag: &mut u8) {
+    pub(crate) fn tick(&mut self, cycles: u32, iflag: &mut u8) {
         if !self.lcd_on() {
             return;
         }

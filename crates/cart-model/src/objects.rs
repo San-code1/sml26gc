@@ -10,6 +10,7 @@
 //!   - type (0-127) = b.4→bit6, b.7→bit5, b.6→bit4, b.5→bit3, c bits 5-7 → bits 0-2
 //!   The game unpacks each one into 6 bytes at $AB06 (0, X page, X, flag, Y page, Y, type).
 use crate::driver::GameDriver;
+use gb_core::Buttons;
 use crate::levels::LEVELS;
 
 /// The bank the object loader reads: 3, or its twin $23 in an expanded copy
@@ -165,7 +166,7 @@ pub struct Look {
 }
 
 fn sprites(g: &gb_core::Gb) -> Vec<[u8; 4]> {
-    (0..40).map(|i| [g.bus.ppu.oam[i * 4], g.bus.ppu.oam[i * 4 + 1], g.bus.ppu.oam[i * 4 + 2], g.bus.ppu.oam[i * 4 + 3]]).filter(|s| s[0] != 0 && s[0] < 160).collect()
+    (0..40).map(|i| [g.video().oam()[i * 4], g.video().oam()[i * 4 + 1], g.video().oam()[i * 4 + 2], g.video().oam()[i * 4 + 3]]).filter(|s| s[0] != 0 && s[0] < 160).collect()
 }
 
 /// Let the game show one object of type `kind` alone beside Mario at the start of `level`,
@@ -179,12 +180,12 @@ pub fn capture_look(map_state: &gb_core::Gb, rom: &[u8], original: &[u8], level:
     let mut r0 = rom.to_vec();
     store(&mut r0, original, &empty).ok()?;
     let mut g0 = map_state.clone();
-    g0.bus.cart.set_rom(&r0);
+    g0.cart_mut().set_rom(&r0);
     if !g0.enter_level(level as u8) {
         return None;
     }
-    let mx = (g0.bus.read(0xFFC3) as u16) << 8 | g0.bus.read(0xFFC2) as u16;
-    let my = (g0.bus.read(0xFFC1) as u16) << 8 | g0.bus.read(0xFFC0) as u16;
+    let mx = (g0.read(0xFFC3) as u16) << 8 | g0.read(0xFFC2) as u16;
+    let my = (g0.read(0xFFC1) as u16) << 8 | g0.read(0xFFC0) as u16;
     // just past the right edge of the screen: the game brings objects in as the view
     // scrolls, so Mario then walks right a little in both runs
     let obj = Obj { x: ((mx + 216) / 8) * 8, y: (my / 8) * 8, kind, flag: false };
@@ -193,12 +194,12 @@ pub fn capture_look(map_state: &gb_core::Gb, rom: &[u8], original: &[u8], level:
     let mut r1 = rom.to_vec();
     store(&mut r1, original, &one).ok()?;
     let mut g1 = map_state.clone();
-    g1.bus.cart.set_rom(&r1);
+    g1.cart_mut().set_rom(&r1);
     if !g1.enter_level(level as u8) {
         return None;
     }
     for f in 0..150 {
-        let b = if f < 130 { gb_core::bus::BTN_RIGHT } else { 0 };
+        let b = if f < 130 { Buttons::RIGHT } else { Buttons::NONE };
         g0.run_frame_with(b);
         g1.run_frame_with(b);
     }
@@ -208,7 +209,7 @@ pub fn capture_look(map_state: &gb_core::Gb, rom: &[u8], original: &[u8], level:
         eprintln!(
             "mario {mx},{my} obj {:?} rec {:02x?} base {:?} one {:?}",
             obj,
-            &g1.bus.cart.ram[0xB00..0xB12],
+            &g1.cart().ram()[0xB00..0xB12],
             base,
             sprites(&g1)
         );
@@ -216,7 +217,7 @@ pub fn capture_look(map_state: &gb_core::Gb, rom: &[u8], original: &[u8], level:
     if new.is_empty() {
         return None;
     }
-    let tall = g1.bus.ppu.lcdc & 0x04 != 0;
+    let tall = g1.video().lcdc() & 0x04 != 0;
     let sh = if tall { 16 } else { 8 };
     let x0 = new.iter().map(|s| s[1] as i32).min()?;
     let y0 = new.iter().map(|s| s[0] as i32).min()?;
@@ -232,13 +233,13 @@ pub fn capture_look(map_state: &gb_core::Gb, rom: &[u8], original: &[u8], level:
         if tall {
             tile &= 0xFE;
         }
-        let pal = g1.bus.ppu.obp((s[3] >> 4) & 1);
+        let pal = g1.video().obp((s[3] >> 4) & 1);
         for row in 0..sh as usize {
             let r = if s[3] & 0x40 != 0 { sh as usize - 1 - row } else { row };
             let a = tile * 16 + r * 2;
             for col in 0..8usize {
                 let bit = if s[3] & 0x20 != 0 { col } else { 7 - col };
-                let c = ((g1.bus.ppu.vram[a + 1] >> bit) & 1) << 1 | ((g1.bus.ppu.vram[a] >> bit) & 1);
+                let c = ((g1.video().vram()[a + 1] >> bit) & 1) << 1 | ((g1.video().vram()[a] >> bit) & 1);
                 if c == 0 {
                     continue;
                 }
@@ -250,10 +251,10 @@ pub fn capture_look(map_state: &gb_core::Gb, rom: &[u8], original: &[u8], level:
     }
     // screen position of the object = its world position minus the camera; the camera is
     // where Mario's world X/Y minus his sprite's screen place puts it (OAM is screen + 8/16)
-    let cx = ((g1.bus.read(0xFFC3) as i32) << 8) | g1.bus.read(0xFFC2) as i32;
-    let cy = ((g1.bus.read(0xFFC1) as i32) << 8) | g1.bus.read(0xFFC0) as i32;
-    let cam_x = cx - (g1.bus.ppu.oam[1] as i32 - 8);
-    let cam_y = cy - (g1.bus.ppu.oam[0] as i32 - 16);
+    let cx = ((g1.read(0xFFC3) as i32) << 8) | g1.read(0xFFC2) as i32;
+    let cy = ((g1.read(0xFFC1) as i32) << 8) | g1.read(0xFFC0) as i32;
+    let cam_x = cx - (g1.video().oam()[1] as i32 - 8);
+    let cam_y = cy - (g1.video().oam()[0] as i32 - 16);
     let dx = (x0 - 8 + cam_x) - obj.x as i32;
     let dy = (y0 - 16 + cam_y) - obj.y as i32;
     Some(Look { w, h, px, dx: dx.clamp(-32, 32), dy: dy.clamp(-32, 32) })

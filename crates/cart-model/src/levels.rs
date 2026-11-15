@@ -211,10 +211,10 @@ pub struct LevelArt {
 impl LevelArt {
     pub fn capture(gb: &Gb) -> LevelArt {
         LevelArt {
-            metatiles: gb.bus.cart.ram[0x600..0x800].to_vec(),
-            vram: gb.bus.ppu.vram.to_vec(),
-            lcdc: gb.bus.ppu.lcdc,
-            bgp: gb.bus.ppu.bgp(),
+            metatiles: gb.cart().ram()[0x600..0x800].to_vec(),
+            vram: gb.video().vram().to_vec(),
+            lcdc: gb.video().lcdc(),
+            bgp: gb.video().bgp(),
         }
     }
 
@@ -237,8 +237,8 @@ impl LevelArt {
 /// The level map as the game holds it after loading ($B000-$BFFF in cartridge RAM,
 /// $C000-$DFFF in work RAM).
 pub fn map_in_memory(gb: &Gb) -> Vec<u8> {
-    let mut m = gb.bus.cart.ram[0x1000..0x2000].to_vec();
-    m.extend_from_slice(&gb.bus.wram[..]);
+    let mut m = gb.cart().ram()[0x1000..0x2000].to_vec();
+    m.extend_from_slice(&gb.wram()[..]);
     m
 }
 

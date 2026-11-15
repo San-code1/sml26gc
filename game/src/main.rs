@@ -8,9 +8,8 @@ mod selftest;
 
 pub use cart_model::GameDriver;
 pub use gb_core::palette::{fb_to_rgba, PALETTES};
-pub use gb_core::{bus, ppu, Gb, FRAME_SECONDS};
+pub use gb_core::{ppu, Buttons, Gb, FRAME_SECONDS};
 pub use host::{find_rom, load_gb, save_path};
-use bus::*;
 use macroquad::prelude::*;
 use std::path::{Path, PathBuf};
 
@@ -75,33 +74,33 @@ fn parse_args() -> Args {
 }
 
 fn write_save(gb: &mut Gb, rom_path: &Path) {
-    if !gb.bus.cart.battery || !gb.bus.cart.ram_dirty {
+    if !gb.cart().has_battery() || !gb.cart().needs_saving() {
         return;
     }
     let p = save_path(rom_path);
     if let Some(d) = p.parent() {
         let _ = std::fs::create_dir_all(d);
     }
-    if std::fs::write(&p, &gb.bus.cart.ram).is_ok() {
-        gb.bus.cart.ram_dirty = false;
+    if std::fs::write(&p, gb.cart().ram()).is_ok() {
+        gb.cart_mut().mark_saved();
     }
 }
 
-fn read_keys(keys: &[KeyCode; 8]) -> u8 {
+fn read_keys(keys: &[KeyCode; 8]) -> Buttons {
     // Order matches menu::BUTTON_NAMES: Up, Down, Left, Right, A, B, Start, Select.
-    const BITS: [u8; 8] = [BTN_UP, BTN_DOWN, BTN_LEFT, BTN_RIGHT, BTN_A, BTN_B, BTN_START, BTN_SELECT];
-    let mut b = 0;
+    const BITS: [Buttons; 8] = [Buttons::UP, Buttons::DOWN, Buttons::LEFT, Buttons::RIGHT, Buttons::A, Buttons::B, Buttons::START, Buttons::SELECT];
+    let mut b = Buttons::NONE;
     for (k, bit) in keys.iter().zip(BITS) {
         if is_key_down(*k) {
             b |= bit;
         }
     }
     // A cartridge never sees opposite directions held together.
-    if b & (BTN_LEFT | BTN_RIGHT) == BTN_LEFT | BTN_RIGHT {
-        b &= !(BTN_LEFT | BTN_RIGHT);
+    if b & (Buttons::LEFT | Buttons::RIGHT) == Buttons::LEFT | Buttons::RIGHT {
+        b &= !(Buttons::LEFT | Buttons::RIGHT);
     }
-    if b & (BTN_UP | BTN_DOWN) == BTN_UP | BTN_DOWN {
-        b &= !(BTN_UP | BTN_DOWN);
+    if b & (Buttons::UP | Buttons::DOWN) == Buttons::UP | Buttons::DOWN {
+        b &= !(Buttons::UP | Buttons::DOWN);
     }
     b
 }
@@ -248,7 +247,7 @@ async fn run(args: Args, rom_path: Option<PathBuf>, title: String) {
             // mean it wasn't cleared; reaching the map ($0C) otherwise means it was.
             match mode {
                 0x04 if playing.is_none() => {
-                    playing = Some(g.bus.read(0xA269));
+                    playing = Some(g.read(0xA269));
                     lost_life = false;
                 }
                 0x09 | 0x05 => lost_life = true,
@@ -308,27 +307,27 @@ async fn run(args: Args, rom_path: Option<PathBuf>, title: String) {
                 for _ in 0..4 {
                     g.run_frame();
                 }
-                g.bus.apu.out.clear();
+                g.clear_audio();
             } else if pause.is_some() {
                 // Paused: the game is frozen and silent.
-                g.bus.apu.out.clear();
+                g.clear_audio();
                 acc = 0.0;
             } else {
                 let mut b = read_keys(&st.keys);
-                let held_any = b != 0 || is_key_down(KeyCode::Enter) || is_key_down(KeyCode::Space) || is_key_down(KeyCode::Escape);
+                let held_any = !b.is_empty() || is_key_down(KeyCode::Enter) || is_key_down(KeyCode::Space) || is_key_down(KeyCode::Escape);
                 if input_lock {
                     if held_any {
-                        b = 0;
+                        b = Buttons::NONE;
                     } else {
                         input_lock = false;
                     }
                 }
                 if in_level {
-                    b &= !BTN_START;
+                    b &= !Buttons::START;
                 }
                 if start_tap > 0 {
                     start_tap -= 1;
-                    b |= BTN_START;
+                    b |= Buttons::START;
                 }
                 if custom {
                     // Our map gets the buttons; the game's own map idles underneath (its music plays).
@@ -341,9 +340,9 @@ async fn run(args: Args, rom_path: Option<PathBuf>, title: String) {
                         acc = 0.0;
                         input_lock = true;
                     }
-                    b = 0;
+                    b = Buttons::NONE;
                 }
-                g.bus.set_buttons(b);
+                g.set_buttons(b);
                 let fast = is_key_down(KeyCode::LeftControl) || is_key_down(KeyCode::RightControl);
                 acc += get_frame_time().min(0.1) as f64;
                 // Keep the sound queue fed: nudge timing when it runs low or high.
@@ -359,9 +358,10 @@ async fn run(args: Args, rom_path: Option<PathBuf>, title: String) {
                     for _ in 0..3 {
                         g.run_frame();
                     }
-                    g.bus.apu.out.clear();
+                    g.clear_audio();
                 }
-                audio.push(&mut g.bus.apu.out, st.volume as f32 / 10.0);
+                audio.push(g.audio(), st.volume as f32 / 10.0);
+                g.clear_audio();
                 save_timer += get_frame_time();
                 if save_timer > 5.0 {
                     save_timer = 0.0;
@@ -370,7 +370,7 @@ async fn run(args: Args, rom_path: Option<PathBuf>, title: String) {
                     }
                 }
             }
-            screen.copy_from_slice(&g.bus.ppu.fb);
+            screen.copy_from_slice(g.screen());
             if custom {
                 if let Some(v) = &mapview {
                     v.draw(&mut screen, st.lang);

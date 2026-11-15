@@ -25,7 +25,7 @@ pub fn write_screen(path: &Path, fb: &[u8], pal: &Palette) -> Result<(), String>
 
 /// Save the Game Boy's current screen in the original green-grey colours.
 pub fn save_png(gb: &Gb, path: &Path) {
-    if let Err(e) = write_screen(path, &gb.bus.ppu.fb, &PALETTES[0]) {
+    if let Err(e) = write_screen(path, gb.screen(), &PALETTES[0]) {
         eprintln!("could not write {}: {e}", path.display());
     }
 }

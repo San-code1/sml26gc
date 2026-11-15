@@ -60,7 +60,7 @@ pub struct WorldArt {
 
 impl WorldArt {
     pub fn capture(gb: &Gb) -> WorldArt {
-        WorldArt { vram: gb.bus.ppu.vram.to_vec(), lcdc: gb.bus.ppu.lcdc, bgp: gb.bus.ppu.bgp() }
+        WorldArt { vram: gb.video().vram().to_vec(), lcdc: gb.video().lcdc(), bgp: gb.video().bgp() }
     }
     pub fn pixel(&self, tile: u8, x: usize, y: usize) -> u8 {
         let base = if self.lcdc & 0x10 != 0 { tile as usize * 16 } else { (0x1000 + (tile as i8 as i32) * 16) as usize };

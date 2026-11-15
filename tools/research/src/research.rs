@@ -1,6 +1,7 @@
 //! Research tools used to read the cartridge's code (SM83 disassembler, RAM search,
 //! write watches). They only print; the game itself never uses them.
 use crate::{load_gb, Gb, GameDriver};
+use gb_core::{BusObserver, Buttons, GameBoy};
 use gb_core::script::{buttons_at, parse_script};
 use host::png_out::{save_png, write_rgba};
 use std::path::Path;
@@ -114,7 +115,7 @@ pub fn disasm(rom: &Path, bank: usize, addr: u16, count: u32) {
     };
     let mut pc = addr;
     for _ in 0..count {
-        let b = [gb.bus.cart.rom_byte(off(pc)), gb.bus.cart.rom_byte(off(pc.wrapping_add(1))), gb.bus.cart.rom_byte(off(pc.wrapping_add(2)))];
+        let b = [gb.cart().rom_byte(off(pc)), gb.cart().rom_byte(off(pc.wrapping_add(1))), gb.cart().rom_byte(off(pc.wrapping_add(2)))];
         let (t, l) = dis1(&b, pc);
         let bytes: Vec<String> = b[..l as usize].iter().map(|x| format!("{x:02x}")).collect();
         println!("{:02x}:{pc:04x}  {:<9} {t}", if pc < 0x4000 { 0 } else { bank }, bytes.join(" "));
@@ -138,7 +139,7 @@ pub fn modes(rom: &Path, script: &str, frames: &str) {
         run_script(&mut gb, &sc, f);
         for (l, wf) in &want {
             if *wf == f {
-                snaps.push((l.clone(), addrs.iter().map(|&a| gb.bus.read(a)).collect()));
+                snaps.push((l.clone(), addrs.iter().map(|&a| gb.read(a)).collect()));
             }
         }
     }
@@ -189,11 +190,11 @@ pub fn diff(rom: &Path, script: &str, fa: u32, fb: u32, from_v: u8, to_v: u8) {
     for f in 0..=fb {
         run_script(&mut gb, &sc, f);
         if f == fa {
-            a = addrs.iter().map(|&x| gb.bus.read(x)).collect();
+            a = addrs.iter().map(|&x| gb.read(x)).collect();
         }
     }
     for (i, &x) in addrs.iter().enumerate() {
-        let v = gb.bus.read(x);
+        let v = gb.read(x);
         if a[i] == from_v && v == to_v {
             println!("{x:04x}");
         }
@@ -211,13 +212,13 @@ pub fn poke(rom: &Path, script: &str, at: u32, pokes: &str, until: u32, png: &Pa
                 if let Some((a, v)) = p.split_once('=') {
                     let a = u16::from_str_radix(a, 16).unwrap_or(0);
                     let v = u8::from_str_radix(v, 16).unwrap_or(0);
-                    gb.bus.write(a, v);
+                    gb.write(a, v);
                 }
             }
         }
         run_script(&mut gb, &sc, f);
         if f >= at && (f - at) % 20 == 0 {
-            println!("f{f} mode={:02x} lives={:02x}", gb.bus.read(0xFF9B), gb.bus.read(0xA22C));
+            println!("f{f} mode={:02x} lives={:02x}", gb.read(0xFF9B), gb.read(0xA22C));
         }
     }
     save_png(&gb, png);
@@ -233,7 +234,7 @@ pub fn leave(rom: &Path, script: &str, at: u32, kind: &str, until: u32, png: &Pa
         if f == at + 40 {
             for p in pokes.split(',') {
                 if let Some((a, v)) = p.split_once('=') {
-                    gb.bus.write(u16::from_str_radix(a, 16).unwrap_or(0), u8::from_str_radix(v, 16).unwrap_or(0));
+                    gb.write(u16::from_str_radix(a, 16).unwrap_or(0), u8::from_str_radix(v, 16).unwrap_or(0));
                 }
             }
         }
@@ -247,7 +248,7 @@ pub fn leave(rom: &Path, script: &str, at: u32, kind: &str, until: u32, png: &Pa
         }
         run_script(&mut gb, &sc, f);
         if f >= at && (f - at) % 20 == 0 {
-            println!("f{f} mode={:02x} lives={:02x}", gb.mode(), gb.bus.read(0xA22C));
+            println!("f{f} mode={:02x} lives={:02x}", gb.mode(), gb.read(0xA22C));
         }
     }
     save_png(&gb, png);
@@ -256,7 +257,7 @@ pub fn leave(rom: &Path, script: &str, at: u32, kind: &str, until: u32, png: &Pa
 /// Compare memory: run A (natural death) to `fa`; run B (back_to_map at `at`) to `fb`.
 pub fn cmp_map(rom: &Path, sa: &str, fa: u32, sb: &str, at: u32, fb: u32) {
     let snap = |gb: &mut Gb| -> Vec<(u16, u8)> {
-        (0xA000..=0xBFFFu16).chain(0xC000..=0xDFFF).chain(0xFF80..=0xFFFE).map(|a| (a, gb.bus.read(a))).collect()
+        (0xA000..=0xBFFFu16).chain(0xC000..=0xDFFF).chain(0xFF80..=0xFFFE).map(|a| (a, gb.read(a))).collect()
     };
     let Ok(mut a) = load_gb(rom, 44100, false) else { return };
     let sca = parse_script(sa);
@@ -282,7 +283,7 @@ pub fn cmp_map(rom: &Path, sa: &str, fa: u32, sb: &str, at: u32, fb: u32) {
 pub fn levels_check(rom_path: &Path) {
     use crate::levels::*;
     let Ok(mut gb) = load_gb(rom_path, 44100, false) else { return };
-    let rom = gb.bus.cart.rom_copy();
+    let rom = gb.cart().rom().to_vec();
     if !gb.boot_to_map() {
         println!("could not reach the map");
         return;
@@ -315,7 +316,7 @@ pub fn levels_check(rom_path: &Path) {
 pub fn store_check(rom_path: &Path) {
     use crate::levels::*;
     let Ok(gb) = load_gb(rom_path, 44100, false) else { return };
-    let original = gb.bus.cart.rom_copy();
+    let original = gb.cart().rom().to_vec();
     // 1) an expanded copy must play every level exactly like the original
     let expanded = match expand(&original) {
         Ok(r) => r,
@@ -439,15 +440,15 @@ pub fn free_space(rom_path: &Path) {
 /// Log data reads from ROM bank `bank` addresses lo..=hi between frames, summarised by
 /// reading instruction: how many reads and the address range each one touched.
 pub fn reads(rom: &Path, script: &str, bank: usize, lo: u16, hi: u16, from: u32, to: u32) {
-    let Ok(mut gb) = load_gb(rom, 44100, false) else { return };
+    let Some(mut gb) = probed(rom) else { return };
     let sc = parse_script(script);
     let mut by_pc: std::collections::BTreeMap<u32, (usize, u16, u16, Vec<u32>)> = Default::default();
     for f in 0..to {
         if f == from {
-            gb.bus.read_watch = Some((lo, hi, bank));
+            gb.observer_mut().read_watch = Some((lo, hi, bank));
         }
         run_script(&mut gb, &sc, f);
-        for (pc, a, b) in gb.bus.read_log.drain(..) {
+        for (pc, a, b) in gb.observer_mut().read_log.drain(..) {
             let key = (b as u32) << 16 | pc as u32;
             let e = by_pc.entry(key).or_insert((0, u16::MAX, 0, Vec::new()));
             e.0 += 1;
@@ -467,7 +468,7 @@ pub fn reads(rom: &Path, script: &str, bank: usize, lo: u16, hi: u16, from: u32,
 /// builds from it at $AB06 once the level has loaded.
 pub fn objects(rom_path: &Path, level: u8) {
     let Ok(mut gb) = load_gb(rom_path, 44100, false) else { return };
-    let rom = gb.bus.cart.rom_copy();
+    let rom = gb.cart().rom().to_vec();
     let t = 3 * 0x4000 + 0x2037 + level as usize * 2;
     let p = (rom[t] as usize | (rom[t + 1] as usize) << 8) - 0x4000 + 3 * 0x4000;
     let mut i = p;
@@ -479,7 +480,7 @@ pub fn objects(rom_path: &Path, level: u8) {
     gb.boot_to_map();
     gb.enter_level(level);
     for (k, (b, c, d)) in raw.iter().enumerate() {
-        let r: Vec<String> = (0..5).map(|j| format!("{:02x}", gb.bus.cart.ram[0xB06 + k * 5 + j])).collect();
+        let r: Vec<String> = (0..5).map(|j| format!("{:02x}", gb.cart().ram()[0xB06 + k * 5 + j])).collect();
         println!("{k:2}: {b:02x} {c:02x} {d:02x}   -> ram {}", r.join(" "));
     }
     println!("{} objects, list at file {p:05x}", raw.len());
@@ -491,7 +492,7 @@ pub fn objects(rom_path: &Path, level: u8) {
 pub fn objects_check(rom_path: &Path) {
     use cart_model::objects::{self, Obj};
     let Ok(mut gb) = load_gb(rom_path, 44100, false) else { return };
-    let original = gb.bus.cart.rom_copy();
+    let original = gb.cart().rom().to_vec();
     gb.boot_to_map();
     let mut total = 0;
     let mut good = 0;
@@ -511,7 +512,7 @@ pub fn objects_check(rom_path: &Path) {
         let (_, _) = (objs.len(), len);
         let mut g = gb.clone();
         g.enter_level(l as u8);
-        let mem = objects::in_memory(&g.bus.cart.ram, objs.len());
+        let mem = objects::in_memory(&g.cart().ram(), objs.len());
         let same = mem.iter().zip(&objs).filter(|(a, b)| a == b).count();
         if same == objs.len() {
             good += 1;
@@ -542,10 +543,10 @@ pub fn objects_check(rom_path: &Path) {
     g0.enter_level(0);
     let mut want = lists[0].clone();
     want.sort_by_key(|o| o.x / 256);
-    let mem = objects::in_memory(&g0.bus.cart.ram, want.len());
+    let mem = objects::in_memory(&g0.cart().ram(), want.len());
     let mut g1 = g.clone();
     g1.enter_level(1);
-    let mem1 = objects::in_memory(&g1.bus.cart.ram, lists[1].len());
+    let mem1 = objects::in_memory(&g1.cart().ram(), lists[1].len());
     println!(
         "edit: {res:?}; level 0 game records match edit: {}; level 1 (one removed: {removed:?}) match: {}",
         mem == want,
@@ -560,7 +561,7 @@ pub fn objects_check(rom_path: &Path) {
         let (objs, _) = objects::read(&original, l);
         let mut g = gx.clone();
         g.enter_level(l as u8);
-        if objects::in_memory(&g.bus.cart.ram, objs.len()) == objs && objects::read(&exp, l).0 == objs {
+        if objects::in_memory(&g.cart().ram(), objs.len()) == objs && objects::read(&exp, l).0 == objs {
             same += 1;
         }
     }
@@ -579,7 +580,7 @@ pub fn objects_check(rom_path: &Path) {
         gl.enter_level(l as u8);
         let mut want = lists[l].clone();
         want.sort_by_key(|o| o.x / 256);
-        let mem = objects::in_memory(&gl.bus.cart.ram, want.len());
+        let mem = objects::in_memory(&gl.cart().ram(), want.len());
         if mem == want {
             ok += 1;
         } else {
@@ -595,10 +596,10 @@ pub fn objects_check(rom_path: &Path) {
 pub fn world_shot(rom_path: &Path, off: usize, len: usize, width: usize, png: &Path) {
     let Ok(mut gb) = load_gb(rom_path, 44100, false) else { return };
     gb.boot_to_map();
-    let rom = gb.bus.cart.rom_copy();
-    let vram = gb.bus.ppu.vram.to_vec();
-    let lcdc = gb.bus.ppu.lcdc;
-    let bgp = gb.bus.ppu.bgp();
+    let rom = gb.cart().rom().to_vec();
+    let vram = gb.video().vram().to_vec();
+    let lcdc = gb.video().lcdc();
+    let bgp = gb.video().bgp();
     let h = len / width;
     let (w, hh) = (width * 8, h * 8);
     let mut rgba = vec![0u8; w * hh * 4];
@@ -638,9 +639,9 @@ pub fn world_shot(rom_path: &Path, off: usize, len: usize, width: usize, png: &P
 pub fn world_check(rom_path: &Path) {
     use cart_model::world;
     let Ok(gb) = load_gb(rom_path, 44100, false) else { return };
-    let original = gb.bus.cart.rom_copy();
+    let original = gb.cart().rom().to_vec();
     let pic = world::read(&original);
-    let window = |g: &crate::Gb| g.bus.ppu.vram[0x1800..0x1C00].to_vec();
+    let window = |g: &crate::Gb| g.video().vram()[0x1800..0x1C00].to_vec();
     // find where the VRAM window sits in the picture (the BG map wraps every 32 tiles)
     let find = |win: &[u8], pic: &[u8]| -> Option<(usize, usize)> {
         for oy in 0..world::H {
@@ -717,10 +718,10 @@ pub fn world_check(rom_path: &Path) {
     for f in 0..300u32 {
         let m = g.mode();
         if m == 0x0B {
-            level = Some(g.bus.read(0xA269));
+            level = Some(g.read(0xA269));
             break;
         }
-        g.run_frame_with(if f % 30 < 4 { crate::bus::BTN_START } else { 0 });
+        g.run_frame_with(if f % 30 < 4 { crate::Buttons::START } else { Buttons::NONE });
     }
     println!("edited: VRAM window best match with the edited picture {same_new}/1024; Start on point 0 opens level {level:?} (set to 6)");
 }
@@ -729,7 +730,7 @@ pub fn world_check(rom_path: &Path) {
 pub fn looks(rom_path: &Path, level: usize, png: &Path) {
     use cart_model::objects;
     let Ok(mut gb) = load_gb(rom_path, 44100, false) else { return };
-    let rom = gb.bus.cart.rom_copy();
+    let rom = gb.cart().rom().to_vec();
     gb.boot_to_map();
     let mut kinds: Vec<u8> = objects::read(&rom, level).0.iter().map(|o| o.kind).collect();
     kinds.sort();
@@ -764,7 +765,7 @@ pub fn table(rom: &Path, off: usize, len: usize, row: usize) {
     let Ok(gb) = load_gb(rom, 44100, false) else { return };
     let mut i = 0;
     while i < len {
-        let vals: Vec<i32> = (0..row.min(len - i)).map(|k| gb.bus.cart.rom_byte(off + i + k) as i8 as i32).collect();
+        let vals: Vec<i32> = (0..row.min(len - i)).map(|k| gb.cart().rom_byte(off + i + k) as i8 as i32).collect();
         let s: i32 = vals.iter().sum();
         let t: Vec<String> = vals.iter().map(|v| format!("{v:3}")).collect();
         println!("{:05x} idx {:02x}: {}  sum {s}", off + i, i, t.join(""));
@@ -772,10 +773,10 @@ pub fn table(rom: &Path, off: usize, len: usize, row: usize) {
     }
 }
 
-fn run_script(gb: &mut Gb, sc: &[(u8, u32, u32)], f: u32) {
-    gb.bus.set_buttons(buttons_at(sc, f));
+fn run_script<O: BusObserver>(gb: &mut GameBoy<O>, sc: &[(Buttons, u32, u32)], f: u32) {
+    gb.set_buttons(buttons_at(sc, f));
     gb.run_frame();
-    gb.bus.apu.out.clear();
+    gb.clear_audio();
 }
 
 /// Play the self-test script and print RAM bytes that move with the player.
@@ -787,16 +788,16 @@ pub fn find_player(rom: &Path, script: &str) {
     let mut prev = (0i32, 0u8);
     for f in 0..1230u32 {
         run_script(&mut gb, &sc, f);
-        let x = gb.bus.ppu.oam[1] as i32;
-        let scx = gb.bus.ppu.scx();
+        let x = gb.video().oam()[1] as i32;
+        let scx = gb.video().scx();
         world += (x - prev.0) + (scx.wrapping_sub(prev.1) as i8) as i32;
         prev = (x, scx);
         if f >= 940 {
-            let mut m = gb.bus.wram.to_vec();
+            let mut m = gb.wram().to_vec();
             for a in 0xFF80..=0xFFFEu16 {
-                m.push(gb.bus.read(a));
+                m.push(gb.read(a));
             }
-            frames.push((m, world, gb.bus.ppu.oam[0] as i32));
+            frames.push((m, world, gb.video().oam()[0] as i32));
         }
     }
     let name = |i: usize| if i < 0x2000 { 0xC000 + i } else { 0xFF80 + i - 0x2000 };
@@ -869,14 +870,14 @@ pub fn find_player(rom: &Path, script: &str) {
 
 /// Log every write to `addrs` during the script, with the instruction that made it.
 pub fn watch(rom: &Path, script: &str, addrs: &[u16], from: u32, to: u32) {
-    let Ok(mut gb) = load_gb(rom, 44100, false) else { return };
+    let Some(mut gb) = probed(rom) else { return };
     let sc = parse_script(script);
     for f in 0..to {
         if f == from {
-            gb.bus.watch = addrs.to_vec();
+            gb.observer_mut().watch = addrs.to_vec();
         }
         run_script(&mut gb, &sc, f);
-        for (pc, bank, a, v) in gb.bus.watch_log.drain(..) {
+        for (pc, bank, a, v) in gb.observer_mut().watch_log.drain(..) {
             println!("f{f} {bank:02x}:{pc:04x} [{a:04x}]={v:02x}");
         }
     }
@@ -889,8 +890,44 @@ pub fn trace(rom: &Path, script: &str, addrs: &[u16], from: u32, to: u32) {
     for f in 0..to {
         run_script(&mut gb, &sc, f);
         if f >= from {
-            let v: Vec<String> = addrs.iter().map(|&a| format!("{:02x}", gb.bus.read(a))).collect();
-            println!("f{f} btn={:02x} {}", buttons_at(&sc, f), v.join(" "));
+            let v: Vec<String> = addrs.iter().map(|&a| format!("{:02x}", gb.read(a))).collect();
+            println!("f{f} btn={:02x} {}", buttons_at(&sc, f).bits(), v.join(" "));
         }
     }
+}
+
+/// Watches memory for `watch` and `reads`: writes to chosen addresses, and data reads from a
+/// ROM range (instruction bytes are left out), each with the instruction that made it.
+#[derive(Clone, Default)]
+pub struct Probe {
+    pub watch: Vec<u16>,
+    pub watch_log: Vec<(u16, usize, u16, u8)>, // (pc, bank, addr, value)
+    /// (first address, last address, ROM bank or $FF for any)
+    pub read_watch: Option<(u16, u16, usize)>,
+    pub read_log: Vec<(u16, u16, u8)>, // (pc, addr, bank)
+}
+
+impl BusObserver for Probe {
+    const ENABLED: bool = true;
+
+    fn on_read(&mut self, pc: u16, bank: usize, addr: u16) {
+        if let Some((lo, hi, want)) = self.read_watch {
+            let fetch = addr >= pc && addr < pc.wrapping_add(3);
+            if addr >= lo && addr <= hi && (want == 0xFF || bank == want) && !fetch && self.read_log.len() < 200_000 {
+                self.read_log.push((pc, addr, bank as u8));
+            }
+        }
+    }
+
+    fn on_write(&mut self, pc: u16, bank: usize, addr: u16, value: u8) {
+        if !self.watch.is_empty() && self.watch.contains(&addr) && self.watch_log.len() < 100_000 {
+            self.watch_log.push((pc, bank, addr, value));
+        }
+    }
+}
+
+/// The cartridge on a Game Boy with a `Probe` on its bus (no battery save loaded).
+fn probed(rom: &Path) -> Option<GameBoy<Probe>> {
+    let data = std::fs::read(rom).map_err(|e| eprintln!("{e}")).ok()?;
+    GameBoy::with_observer(data, 44100, Probe::default()).map_err(|e| eprintln!("{e}")).ok()
 }

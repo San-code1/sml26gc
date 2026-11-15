@@ -11,15 +11,15 @@ enum Mbc {
 #[derive(Clone)]
 pub struct Cart {
     rom: Vec<u8>,
-    pub ram: Vec<u8>,
+    ram: Vec<u8>,
     mbc: Mbc,
     rom_bank: u16,
     bank2: u8,
     mode: u8,
     ram_en: bool,
-    pub battery: bool,
-    pub ram_dirty: bool,
-    pub title: String,
+    battery: bool,
+    ram_dirty: bool,
+    title: String,
 }
 
 impl Cart {
@@ -84,8 +84,46 @@ impl Cart {
         }
     }
 
-    pub fn rom_copy(&self) -> Vec<u8> {
-        self.rom.clone()
+    /// The whole ROM image (padded to a power of two of 16 KB banks).
+    pub fn rom(&self) -> &[u8] {
+        &self.rom
+    }
+
+    /// Battery-backed (or plain) cartridge RAM.
+    pub fn ram(&self) -> &[u8] {
+        &self.ram
+    }
+
+    pub fn ram_mut(&mut self) -> &mut [u8] {
+        &mut self.ram
+    }
+
+    /// Take the RAM out (leaving it empty), e.g. to carry it over to a fresh power-on.
+    pub fn take_ram(&mut self) -> Vec<u8> {
+        std::mem::take(&mut self.ram)
+    }
+
+    pub fn set_ram(&mut self, ram: Vec<u8>) {
+        self.ram = ram;
+    }
+
+    /// The cartridge keeps its RAM with a battery (it has save files).
+    pub fn has_battery(&self) -> bool {
+        self.battery
+    }
+
+    /// The program has changed the RAM since mark_saved.
+    pub fn needs_saving(&self) -> bool {
+        self.ram_dirty
+    }
+
+    pub fn mark_saved(&mut self) {
+        self.ram_dirty = false;
+    }
+
+    /// The name in the cartridge header.
+    pub fn title(&self) -> &str {
+        &self.title
     }
 
     /// A byte of the ROM file by its offset.
@@ -97,7 +135,7 @@ impl Cart {
         self.rom.len() / 0x4000
     }
 
-    pub fn read(&self, addr: u16) -> u8 {
+    pub(crate) fn read(&self, addr: u16) -> u8 {
         match addr {
             0x0000..=0x3FFF => {
                 let bank = if self.mbc == Mbc::Mbc1 && self.mode == 1 {
@@ -141,7 +179,7 @@ impl Cart {
         (bank * 0x2000 + (addr as usize - 0xA000)) % self.ram.len()
     }
 
-    pub fn write(&mut self, addr: u16, v: u8) {
+    pub(crate) fn write(&mut self, addr: u16, v: u8) {
         match addr {
             0x0000..=0x1FFF => self.ram_en = v & 0x0F == 0x0A,
             0x2000..=0x3FFF => match self.mbc {

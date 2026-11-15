@@ -226,7 +226,7 @@ impl Noise {
 }
 
 #[derive(Clone)]
-pub struct Apu {
+pub(crate) struct Apu {
     regs: [u8; 0x30],
     power: bool,
     fs_counter: u32,
@@ -244,7 +244,7 @@ pub struct Apu {
     cap_r: f32,
     hp: f32,
     /// Interleaved stereo samples waiting to be played.
-    pub out: Vec<f32>,
+    pub(crate) out: Vec<f32>,
 }
 
 const READ_MASK: [u8; 0x17] = [

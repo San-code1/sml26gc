@@ -73,10 +73,11 @@ pub fn save_path(rom: &Path) -> PathBuf {
 pub fn load_gb(rom_path: &Path, sample_rate: u32, load_save: bool) -> Result<Gb, String> {
     let rom = std::fs::read(rom_path).map_err(|e| format!("could not read {}: {e}", rom_path.display()))?;
     let mut gb = Gb::new(rom, sample_rate)?;
-    if load_save && gb.bus.cart.battery {
+    if load_save && gb.cart().has_battery() {
         if let Ok(data) = std::fs::read(save_path(rom_path)) {
-            let n = data.len().min(gb.bus.cart.ram.len());
-            gb.bus.cart.ram[..n].copy_from_slice(&data[..n]);
+            let ram = gb.cart_mut().ram_mut();
+            let n = data.len().min(ram.len());
+            ram[..n].copy_from_slice(&data[..n]);
         }
     }
     Ok(gb)

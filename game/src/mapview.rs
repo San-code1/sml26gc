@@ -50,7 +50,7 @@ impl MapView {
         if !self.picture.is_empty() {
             return;
         }
-        let rom = gb.bus.cart.rom_copy();
+        let rom = gb.cart().rom().to_vec();
         let tiles = world::read(&rom);
         let art = world::WorldArt::capture(gb);
         self.picture = vec![0; PW * PH];

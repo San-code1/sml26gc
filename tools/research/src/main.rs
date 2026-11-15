@@ -7,7 +7,7 @@ mod research;
 
 pub use cart_model::{levels, GameDriver};
 pub use gb_core::palette::PALETTES;
-pub use gb_core::{bus, Gb};
+pub use gb_core::{Buttons, Gb};
 pub use host::load_gb;
 use std::path::Path;
 

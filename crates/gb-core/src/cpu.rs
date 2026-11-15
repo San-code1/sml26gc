@@ -1,5 +1,6 @@
 //! Sharp SM83 (Game Boy CPU) interpreter.
 use crate::bus::Bus;
+use crate::observer::BusObserver;
 
 const ZF: u8 = 0x80;
 const NF: u8 = 0x40;
@@ -7,25 +8,25 @@ const HF: u8 = 0x20;
 const CF: u8 = 0x10;
 
 #[derive(Clone)]
-pub struct Cpu {
-    pub a: u8,
-    pub f: u8,
-    pub b: u8,
-    pub c: u8,
-    pub d: u8,
-    pub e: u8,
-    pub h: u8,
-    pub l: u8,
-    pub sp: u16,
-    pub pc: u16,
-    pub ime: bool,
+pub(crate) struct Cpu {
+    pub(crate) a: u8,
+    pub(crate) f: u8,
+    pub(crate) b: u8,
+    pub(crate) c: u8,
+    pub(crate) d: u8,
+    pub(crate) e: u8,
+    pub(crate) h: u8,
+    pub(crate) l: u8,
+    pub(crate) sp: u16,
+    pub(crate) pc: u16,
+    pub(crate) ime: bool,
     ei_pending: bool,
-    pub halted: bool,
+    pub(crate) halted: bool,
 }
 
 impl Cpu {
     /// Register state right after the DMG boot ROM hands over to the cartridge.
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Cpu {
             a: 0x01,
             f: 0xB0,
@@ -75,30 +76,30 @@ impl Cpu {
     fn carry(&self) -> bool {
         self.f & CF != 0
     }
-    fn fetch(&mut self, bus: &mut Bus) -> u8 {
+    fn fetch<O: BusObserver>(&mut self, bus: &mut Bus<O>) -> u8 {
         let v = bus.read(self.pc);
         self.pc = self.pc.wrapping_add(1);
         v
     }
-    fn imm16(&mut self, bus: &mut Bus) -> u16 {
+    fn imm16<O: BusObserver>(&mut self, bus: &mut Bus<O>) -> u16 {
         let lo = self.fetch(bus) as u16;
         let hi = self.fetch(bus) as u16;
         (hi << 8) | lo
     }
-    fn push(&mut self, bus: &mut Bus, v: u16) {
+    fn push<O: BusObserver>(&mut self, bus: &mut Bus<O>, v: u16) {
         self.sp = self.sp.wrapping_sub(1);
         bus.write(self.sp, (v >> 8) as u8);
         self.sp = self.sp.wrapping_sub(1);
         bus.write(self.sp, v as u8);
     }
-    fn pop(&mut self, bus: &mut Bus) -> u16 {
+    fn pop<O: BusObserver>(&mut self, bus: &mut Bus<O>) -> u16 {
         let lo = bus.read(self.sp) as u16;
         self.sp = self.sp.wrapping_add(1);
         let hi = bus.read(self.sp) as u16;
         self.sp = self.sp.wrapping_add(1);
         (hi << 8) | lo
     }
-    fn get_r(&mut self, bus: &mut Bus, i: u8) -> u8 {
+    fn get_r<O: BusObserver>(&mut self, bus: &mut Bus<O>, i: u8) -> u8 {
         match i {
             0 => self.b,
             1 => self.c,
@@ -110,7 +111,7 @@ impl Cpu {
             _ => self.a,
         }
     }
-    fn set_r(&mut self, bus: &mut Bus, i: u8, v: u8) {
+    fn set_r<O: BusObserver>(&mut self, bus: &mut Bus<O>, i: u8, v: u8) {
         match i {
             0 => self.b = v,
             1 => self.c = v,
@@ -170,7 +171,7 @@ impl Cpu {
         }
     }
 
-    fn add_sp_e(&mut self, bus: &mut Bus) -> u16 {
+    fn add_sp_e<O: BusObserver>(&mut self, bus: &mut Bus<O>) -> u16 {
         let e = self.fetch(bus);
         let sp = self.sp;
         let r = sp.wrapping_add(e as i8 as i16 as u16);
@@ -180,7 +181,7 @@ impl Cpu {
     }
 
     /// Execute one instruction (or service an interrupt). Returns T-cycles used.
-    pub fn step(&mut self, bus: &mut Bus) -> u32 {
+    pub(crate) fn step<O: BusObserver>(&mut self, bus: &mut Bus<O>) -> u32 {
         let pending = bus.ie & bus.iflag & 0x1F;
         if pending != 0 {
             self.halted = false;
@@ -199,7 +200,9 @@ impl Cpu {
             return 4;
         }
         let enable = self.ei_pending;
-        bus.cur_pc = self.pc;
+        if O::ENABLED {
+            bus.cur_pc = self.pc;
+        }
         let op = self.fetch(bus);
         let cyc = self.exec(bus, op);
         if enable && self.ei_pending {
@@ -209,7 +212,7 @@ impl Cpu {
         cyc
     }
 
-    fn exec(&mut self, bus: &mut Bus, op: u8) -> u32 {
+    fn exec<O: BusObserver>(&mut self, bus: &mut Bus<O>, op: u8) -> u32 {
         match op {
             0x00 => 4,
             0x01 | 0x11 | 0x21 | 0x31 => {
@@ -535,7 +538,7 @@ impl Cpu {
         }
     }
 
-    fn exec_cb(&mut self, bus: &mut Bus) -> u32 {
+    fn exec_cb<O: BusObserver>(&mut self, bus: &mut Bus<O>) -> u32 {
         let op = self.fetch(bus);
         let r = op & 7;
         let n = (op >> 3) & 7;

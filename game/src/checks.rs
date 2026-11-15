@@ -4,7 +4,7 @@
 use crate::{load_gb, GameDriver, PALETTES};
 use cart_model::custom_map::{CustomMap, Point};
 use gb_core::script::{buttons_at, parse_script};
-use host::png_out::{save_png, write_rgba};
+use host::png_out::{write_rgba, write_screen};
 use std::path::Path;
 
 /// The port's own map: write a three-point map next to a temporary copy of the cartridge,
@@ -51,7 +51,7 @@ pub fn custom_check(rom_path: &Path, png: &Path) {
         eprintln!("{e}");
     }
     let ok = entered.map(|l| g.enter_level_anywhere(l)).unwrap_or(false);
-    let rom = g.bus.cart.rom_copy();
+    let rom = g.cart().rom().to_vec();
     let (_, s) = cart_model::levels::map_location(&rom, cart_model::levels::header(&rom, 6));
     let same = cart_model::levels::map_in_memory(&g) == cart_model::levels::decode(&rom, s).0;
     println!("map file read back identical={parsed_same}; walked to point {} ; A asked for level {entered:?}; game loaded it={ok}; level 6 blocks in memory={same}", v.cur);
@@ -63,19 +63,20 @@ pub fn menu_shots(rom: &Path, dir: &Path) {
     let Ok(mut gb) = load_gb(rom, 44100, false) else { return };
     let sc = parse_script("S@400-405;S@600-605;S@800-805;R@960-1000;");
     for f in 0..1010 {
-        gb.bus.set_buttons(buttons_at(&sc, f));
+        gb.set_buttons(buttons_at(&sc, f));
         gb.run_frame();
-        gb.bus.apu.out.clear();
+        gb.clear_audio();
     }
     let _ = std::fs::create_dir_all(dir);
     let mut st = crate::menu::Settings::default();
     for (lang, tag) in ["en", "es", "ja"].iter().enumerate() {
         st.lang = lang;
         for name in ["main", "controls", "wait", "display", "sound", "language", "confirm"] {
-            let saved = gb.bus.ppu.fb;
-            crate::menu::Menu::preview(name).draw(&mut gb.bus.ppu.fb, &st);
-            save_png(&gb, &dir.join(format!("{tag}-{name}.png")));
-            gb.bus.ppu.fb = saved;
+            let mut screen = *gb.screen();
+            crate::menu::Menu::preview(name).draw(&mut screen, &st);
+            if let Err(e) = write_screen(&dir.join(format!("{tag}-{name}.png")), &screen, &PALETTES[0]) {
+                eprintln!("{e}");
+            }
         }
     }
 }

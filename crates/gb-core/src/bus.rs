@@ -1,46 +1,36 @@
 //! Memory map, timer, joypad and interrupt flags.
 use crate::apu::Apu;
 use crate::cart::Cart;
+use crate::input::Buttons;
+use crate::observer::{BusObserver, NoObserver};
 use crate::ppu::Ppu;
 
-pub const BTN_RIGHT: u8 = 0x01;
-pub const BTN_LEFT: u8 = 0x02;
-pub const BTN_UP: u8 = 0x04;
-pub const BTN_DOWN: u8 = 0x08;
-pub const BTN_A: u8 = 0x10;
-pub const BTN_B: u8 = 0x20;
-pub const BTN_SELECT: u8 = 0x40;
-pub const BTN_START: u8 = 0x80;
-
 #[derive(Clone)]
-pub struct Bus {
-    pub cart: Cart,
-    pub ppu: Ppu,
-    pub apu: Apu,
-    pub wram: [u8; 0x2000],
+pub(crate) struct Bus<O: BusObserver = NoObserver> {
+    pub(crate) cart: Cart,
+    pub(crate) ppu: Ppu,
+    pub(crate) apu: Apu,
+    pub(crate) wram: [u8; 0x2000],
     hram: [u8; 0x7F],
-    pub ie: u8,
-    pub iflag: u8,
+    pub(crate) ie: u8,
+    pub(crate) iflag: u8,
     // timer
     div: u16,
     tima: u8,
     tma: u8,
     tac: u8,
     // joypad
-    buttons: u8,
+    buttons: Buttons,
     joy_sel: u8,
     sb: u8,
     sc: u8,
-    // research: log writes to watched addresses with the instruction that made them
-    pub cur_pc: u16,
-    pub watch: Vec<u16>,
-    pub watch_log: Vec<(u16, usize, u16, u8)>, // (pc, bank, addr, value)
-    pub read_watch: Option<(u16, u16, usize)>,
-    pub read_log: Vec<(u16, u16, u8)>, // (pc, addr, bank)
+    /// Address of the instruction being executed (only kept up to date for an observer).
+    pub(crate) cur_pc: u16,
+    pub(crate) observer: O,
 }
 
-impl Bus {
-    pub fn new(cart: Cart, sample_rate: u32) -> Bus {
+impl<O: BusObserver> Bus<O> {
+    pub(crate) fn new(cart: Cart, sample_rate: u32, observer: O) -> Bus<O> {
         Bus {
             cart,
             ppu: Ppu::new(),
@@ -53,31 +43,26 @@ impl Bus {
             tima: 0,
             tma: 0,
             tac: 0xF8,
-            buttons: 0,
+            buttons: Buttons::NONE,
             joy_sel: 0x30,
             sb: 0,
             sc: 0,
             cur_pc: 0,
-            watch: Vec::new(),
-            watch_log: Vec::new(),
-            read_watch: None,
-            read_log: Vec::new(),
+            observer,
         }
     }
 
-    pub fn set_buttons(&mut self, b: u8) {
-        if b & !self.buttons != 0 {
+    pub(crate) fn set_buttons(&mut self, b: Buttons) {
+        if !b.newly_pressed(self.buttons).is_empty() {
             self.iflag |= 0x10;
         }
         self.buttons = b;
     }
 
-    pub fn read(&mut self, addr: u16) -> u8 {
-        if let Some((lo, hi, bank)) = self.read_watch {
-            // research only: data reads (not instruction bytes) from one ROM bank range
-            if addr >= lo && addr <= hi && (bank == 0xFF || self.cart.upper_bank() == bank) && !(addr >= self.cur_pc && addr < self.cur_pc.wrapping_add(3)) && self.read_log.len() < 200_000 {
-                self.read_log.push((self.cur_pc, addr, self.cart.upper_bank() as u8));
-            }
+    pub(crate) fn read(&mut self, addr: u16) -> u8 {
+        if O::ENABLED {
+            let bank = self.cart.upper_bank();
+            self.observer.on_read(self.cur_pc, bank, addr);
         }
         match addr {
             0x0000..=0x7FFF | 0xA000..=0xBFFF => self.cart.read(addr),
@@ -87,12 +72,13 @@ impl Bus {
             0xFE00..=0xFE9F => self.ppu.oam[(addr - 0xFE00) as usize],
             0xFEA0..=0xFEFF => 0xFF,
             0xFF00 => {
+                let pressed = self.buttons.bits();
                 let mut r = 0xC0 | (self.joy_sel & 0x30) | 0x0F;
                 if self.joy_sel & 0x10 == 0 {
-                    r &= !(self.buttons & 0x0F);
+                    r &= !(pressed & 0x0F);
                 }
                 if self.joy_sel & 0x20 == 0 {
-                    r &= !((self.buttons >> 4) & 0x0F);
+                    r &= !((pressed >> 4) & 0x0F);
                 }
                 r
             }
@@ -111,11 +97,11 @@ impl Bus {
         }
     }
 
-    pub fn write(&mut self, addr: u16, v: u8) {
-        if !self.watch.is_empty() && self.watch.contains(&addr) && self.watch_log.len() < 100_000 {
+    pub(crate) fn write(&mut self, addr: u16, v: u8) {
+        if O::ENABLED {
             // the bank mapped at 4000-7FFF when the write happened
             let bank = self.cart.upper_bank();
-            self.watch_log.push((self.cur_pc, bank, addr, v));
+            self.observer.on_write(self.cur_pc, bank, addr, v);
         }
         match addr {
             0x0000..=0x7FFF | 0xA000..=0xBFFF => self.cart.write(addr, v),
@@ -154,7 +140,7 @@ impl Bus {
         }
     }
 
-    pub fn tick(&mut self, cycles: u32) {
+    pub(crate) fn tick(&mut self, cycles: u32) {
         // Timer: TIMA counts on the falling edge of the selected DIV bit.
         let bit = match self.tac & 3 {
             0 => 9,

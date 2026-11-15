@@ -47,32 +47,35 @@ Reglas de dependencia (las flechas sólo van hacia dentro):
 Hoy: `cpu`, `bus`, `ppu`, `apu`, `cart`, con todos los campos públicos
 (`gb.bus.cart.ram`, `gb.bus.ppu.fb`...) y el código de investigación metido dentro del bus.
 
-Propuesta:
+Hecho (fase 1). API pública:
 
 ```rust
 pub struct GameBoy<O: BusObserver = NoObserver> { /* campos privados */ }
+pub type Gb = GameBoy<NoObserver>;
 
-impl GameBoy {
-    pub fn new(cart: Cartridge, sample_rate: u32) -> Self;
-    pub fn run_frame(&mut self);
-    pub fn set_buttons(&mut self, b: Buttons);          // Buttons: bitflags tipado
-    pub fn frame(&self) -> &Frame;                       // 160x144 tonos 0-3
-    pub fn drain_audio(&mut self, out: &mut Vec<f32>);
-    pub fn peek(&mut self, addr: u16) -> u8;             // lectura del bus
-    pub fn poke(&mut self, addr: u16, v: u8);            // escritura del bus
-    pub fn cart(&self) -> &Cartridge;                    // ROM, RAM de batería, flags
-    pub fn cart_mut(&mut self) -> &mut Cartridge;
-    pub fn video(&self) -> VideoState<'_>;               // VRAM, OAM, LCDC, paletas
-}
+Gb::new(rom, sample_rate) / GameBoy::with_observer(rom, sample_rate, observer)
+run_frame() · run_frame_with(Buttons) · set_buttons(Buttons)
+read(addr) · write(addr, v)                  // a través del bus, como el programa
+screen() -> &Screen                           // 160x144 tonos 0-3
+audio() -> &[f32] · clear_audio() · sample_rate()
+video() -> &Ppu        // vram(), oam(), lcdc(), bgp(), obp(n), scx()
+wram() · cart() / cart_mut()  // Cart: rom(), ram(), ram_mut(), take_ram(), set_ram(),
+                              //       has_battery(), needs_saving(), mark_saved(), title()...
+pc() · observer() / observer_mut()
 ```
 
-- **`BusObserver`** (genérico, despacho estático, coste cero con `NoObserver`):
-  `on_execute(pc)`, `on_read(addr)`, `on_write(addr, v)`. Sustituye a `watch`, `watch_log`,
-  `read_watch`... del bus actual y es **la base del sistema de ganchos** para futuros mods.
+`Buttons` es un conjunto tipado (`Buttons::START | Buttons::A`). CPU, bus, APU y sus campos ya
+no son visibles fuera del crate.
+
+- **`BusObserver`** (genérico, despacho estático; `NoObserver` tiene `ENABLED = false` y el
+  compilador elimina las llamadas): `on_read(pc, bank, addr)`, `on_write(pc, bank, addr, v)`.
+  Para los ganchos de mods se añadirá `on_execute(pc)` (fase 7). Sustituye a `watch`, `watch_log`,
+  `read_watch`... que había en el bus (ahora es `Probe`, en `tools/research`) y es **la base del
+  sistema de ganchos** para futuros mods.
 - **Rendimiento**: nada de `dyn Trait` en el bucle de la CPU ni en los accesos a memoria.
   El MBC sigue siendo un `enum` (conjunto cerrado de hardware real): aquí SOLID se aplica
   con criterio, no como dogma.
-- **Punto de extensión gráfico**: `Frame` podrá incluir, además del tono, de qué capa
+- **Punto de extensión gráfico** (fase 7): la pantalla podrá incluir, además del tono, de qué capa
   viene cada píxel (fondo, ventana, sprite con OBP0/OBP1) y qué tile lo pintó. Es un búfer
   paralelo: no cambia el búfer actual, así que la huella dorada no se ve afectada.
   Permite paletas por capa y sustituir gráficos (fase 7).
@@ -202,7 +205,7 @@ Las rutas y nombres viven en `host`, así ambos programas los calculan igual.
 | Fase | Trabajo |
 |---|---|
 | 0 ✅ | Esqueleto del workspace; mover emulador y conocimiento casi tal cual a `gb-core` y `cart-model`; portar el test dorado |
-| 1 | `gb-core`: encapsular campos, `Buttons`, `Frame`, `BusObserver` (sustituye al código de investigación del bus) |
+| 1 ✅ | `gb-core`: encapsular campos, `Buttons`, `Screen`, `BusObserver` (sustituye al código de investigación del bus) |
 | 2 | `cart-model`: `RomImage`, `ram_map`, `GameDriver`, errores tipados, separar ficheros |
 | 3 | `host`: localizar ROM, rutas, ajustes |
 | 4 | `game/`: dominio puro + puertos + adaptadores + raíz de composición |

@@ -1,6 +1,6 @@
 //! Driving this cartridge's program from outside: reading which screen it is on, and the
 //! button sequences and memory writes that take it to the map, into a level or back.
-use gb_core::bus;
+use gb_core::Buttons;
 use gb_core::Gb;
 
 /// The game-specific actions on a running Game Boy with this cartridge.
@@ -27,32 +27,32 @@ pub trait GameDriver {
 
 impl GameDriver for Gb {
     fn mode(&mut self) -> u8 {
-        self.bus.read(0xFF9B)
+        self.read(0xFF9B)
     }
 
     fn back_to_map(&mut self) {
         for (addr, v) in [(0xA45E, 0x02), (0xA224, 0x02), (0xA2C8, 0), (0xA299, 0), (0xA2B4, 0), (0xA50D, 0)] {
-            self.bus.write(addr, v);
+            self.write(addr, v);
         }
-        self.bus.write(0xFF9B, 0x14);
+        self.write(0xFF9B, 0x14);
     }
 
     fn back_to_file_select(&mut self) {
-        let ram = std::mem::take(&mut self.bus.cart.ram);
-        let rom = self.bus.cart.rom_copy();
-        let rate = self.bus.apu.sample_rate();
+        let ram = self.cart_mut().take_ram();
+        let rom = self.cart().rom().to_vec();
+        let rate = self.sample_rate();
         if let Ok(mut g) = Gb::new(rom, rate) {
-            g.bus.cart.ram = ram;
+            g.cart_mut().set_ram(ram);
             for f in 0..1200u32 {
-                g.run_frame_with(if f % 40 < 4 && f > 60 { bus::BTN_START } else { 0 });
+                g.run_frame_with(if f % 40 < 4 && f > 60 { Buttons::START } else { Buttons::NONE });
                 if g.mode() == 0x1A {
                     break;
                 }
             }
-            g.bus.set_buttons(0);
+            g.set_buttons(Buttons::NONE);
             *self = g;
         } else {
-            self.bus.cart.ram = ram;
+            self.cart_mut().set_ram(ram);
         }
     }
 
@@ -62,11 +62,11 @@ impl GameDriver for Gb {
             if m == 0x0C {
                 // let the map finish appearing
                 for _ in 0..90 {
-                    self.run_frame_with(0);
+                    self.run_frame_with(Buttons::NONE);
                 }
                 return true;
             }
-            self.run_frame_with(if f % 50 < 5 && f > 120 { bus::BTN_START } else { 0 });
+            self.run_frame_with(if f % 50 < 5 && f > 120 { Buttons::START } else { Buttons::NONE });
         }
         false
     }
@@ -76,27 +76,27 @@ impl GameDriver for Gb {
         for f in 0..900u32 {
             let m = self.mode();
             if m == 0x0B && !set {
-                self.bus.write(0xA269, level);
+                self.write(0xA269, level);
                 set = true;
             }
             if set && m == 0x04 {
                 for _ in 0..3 {
-                    self.run_frame_with(0);
+                    self.run_frame_with(Buttons::NONE);
                 }
                 return true;
             }
             let press = !set && m == 0x0C && f % 30 < 4;
-            self.run_frame_with(if press { bus::BTN_START } else { 0 });
+            self.run_frame_with(if press { Buttons::START } else { Buttons::NONE });
         }
         false
     }
 
     fn enter_level_anywhere(&mut self, level: u8) -> bool {
-        let rom = self.bus.cart.rom_copy();
+        let rom = self.cart().rom().to_vec();
         let table = crate::world::point_levels(&rom);
         let special = [0x05, 0x09, 0x0E, 0x17, 0x1D, 0x11];
         if let Some(p) = (0..table.len()).find(|&p| table[p] < 32 && !special.contains(&(p as u8))) {
-            self.bus.write(0xA840, p as u8);
+            self.write(0xA840, p as u8);
         }
         self.enter_level(level)
     }

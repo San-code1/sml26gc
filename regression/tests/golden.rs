@@ -13,16 +13,16 @@
 //! written to the golden file except hashes, sizes and offsets.
 use cart_model::custom_map::CustomMap;
 use cart_model::{levels, objects, world, GameDriver};
-use gb_core::bus::*;
+use gb_core::Buttons;
 use gb_core::Gb;
 use std::path::PathBuf;
 
 const SAMPLE_RATE: u32 = 44_100;
 
 /// FNV-1a, 64 bit: tiny, dependency-free and stable across versions.
-fn fnv(data: &[u8]) -> String {
+fn fnv(data: impl AsRef<[u8]>) -> String {
     let mut h: u64 = 0xcbf2_9ce4_8422_2325;
-    for &b in data {
+    for &b in data.as_ref() {
         h ^= b as u64;
         h = h.wrapping_mul(0x0000_0100_0000_01b3);
     }
@@ -55,25 +55,25 @@ impl Out {
 /// Buttons for frame `f` of the scripted run: Start pulses through the title and file
 /// select, then a fixed cycle of walking, running and jumping (whatever the game does with
 /// it is deterministic, which is all a fingerprint needs).
-fn script(f: u32) -> u8 {
+fn script(f: u32) -> Buttons {
     if f < 200 {
-        0
+        Buttons::NONE
     } else if f < 1000 {
-        if f % 50 < 5 { BTN_START } else { 0 }
+        if f % 50 < 5 { Buttons::START } else { Buttons::NONE }
     } else {
-        const CYCLE: [u8; 8] = [
-            BTN_RIGHT,
-            BTN_RIGHT | BTN_B,
-            BTN_RIGHT | BTN_A,
-            BTN_RIGHT | BTN_B | BTN_A,
-            0,
-            BTN_LEFT,
-            BTN_RIGHT,
-            BTN_A,
+        const CYCLE: [Buttons; 8] = [
+            Buttons::RIGHT,
+            Buttons::from_bits(0x21), // Right + B
+            Buttons::from_bits(0x11), // Right + A
+            Buttons::from_bits(0x31), // Right + B + A
+            Buttons::NONE,
+            Buttons::LEFT,
+            Buttons::RIGHT,
+            Buttons::A,
         ];
         let b = CYCLE[((f / 30) % 8) as usize];
         // an occasional Start, to cover the map -> level transition too
-        if f % 600 < 4 { b | BTN_START } else { b }
+        if f % 600 < 4 { b | Buttons::START } else { b }
     }
 }
 
@@ -82,28 +82,28 @@ fn emulation(rom: &[u8], out: &mut Out) {
     let mut gb = Gb::new(rom.to_vec(), SAMPLE_RATE).expect("cartridge");
     let mut audio: Vec<f32> = Vec::new();
     for f in 0..3600u32 {
-        gb.bus.set_buttons(script(f));
+        gb.set_buttons(script(f));
         gb.run_frame();
-        audio.extend_from_slice(&gb.bus.apu.out);
-        gb.bus.apu.out.clear();
+        audio.extend_from_slice(gb.audio());
+        gb.clear_audio();
         if f % 60 == 59 {
-            out.put(format!("emu.f{f:04}.screen"), fnv(&gb.bus.ppu.fb));
+            out.put(format!("emu.f{f:04}.screen"), fnv(&gb.screen()));
             out.put(format!("emu.f{f:04}.sound"), format!("{} {}", audio.len(), fnv_f32(&audio)));
             audio.clear();
         }
     }
     out.put("emu.end.mode", format!("{:02x}", gb.mode()));
-    out.put("emu.end.wram", fnv(&gb.bus.wram));
-    out.put("emu.end.cart_ram", fnv(&gb.bus.cart.ram));
-    out.put("emu.end.vram", fnv(&gb.bus.ppu.vram));
-    out.put("emu.end.oam", fnv(&gb.bus.ppu.oam));
+    out.put("emu.end.wram", fnv(&gb.wram()));
+    out.put("emu.end.cart_ram", fnv(&gb.cart().ram()));
+    out.put("emu.end.vram", fnv(&gb.video().vram()));
+    out.put("emu.end.oam", fnv(&gb.video().oam()));
 }
 
 /// 2. The game-specific use cases: boot to the map and enter each level.
 fn use_cases(rom: &[u8], out: &mut Out) {
     let mut map = Gb::new(rom.to_vec(), SAMPLE_RATE).expect("cartridge");
     out.put("uc.boot_to_map", map.boot_to_map());
-    out.put("uc.map.screen", fnv(&map.bus.ppu.fb));
+    out.put("uc.map.screen", fnv(&map.screen()));
     let art = world::WorldArt::capture(&map);
     out.put("uc.map.world_art", fnv(&[art.vram.as_slice(), &[art.lcdc, art.bgp]].concat()));
 
@@ -112,20 +112,20 @@ fn use_cases(rom: &[u8], out: &mut Out) {
         let ok = g.enter_level_anywhere(level as u8);
         let la = levels::LevelArt::capture(&g);
         out.put(format!("uc.level{level:02}.entered"), format!("{ok} mode={:02x}", g.mode()));
-        out.put(format!("uc.level{level:02}.screen"), fnv(&g.bus.ppu.fb));
+        out.put(format!("uc.level{level:02}.screen"), fnv(&g.screen()));
         out.put(format!("uc.level{level:02}.map_in_memory"), fnv(&levels::map_in_memory(&g)));
         out.put(
             format!("uc.level{level:02}.art"),
             fnv(&[la.metatiles.as_slice(), &la.vram, &[la.lcdc, la.bgp]].concat()),
         );
         for _ in 0..120 {
-            g.run_frame_with(BTN_RIGHT | BTN_B);
+            g.run_frame_with(Buttons::RIGHT | Buttons::B);
         }
-        out.put(format!("uc.level{level:02}.after_run.screen"), fnv(&g.bus.ppu.fb));
+        out.put(format!("uc.level{level:02}.after_run.screen"), fnv(&g.screen()));
         let mut back = g.clone();
         back.back_to_map();
         for _ in 0..240 {
-            back.run_frame_with(0);
+            back.run_frame_with(Buttons::NONE);
         }
         out.put(format!("uc.level{level:02}.back_to_map.mode"), format!("{:02x}", back.mode()));
     }

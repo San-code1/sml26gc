@@ -19,16 +19,16 @@ pub fn dump(rom: Option<&Path>, dir: &Path, script: &str, frames: u32, every: u3
     let _ = std::fs::create_dir_all(dir);
     let sc = parse_script(script);
     for f in 0..frames {
-        gb.bus.set_buttons(buttons_at(&sc, f));
+        gb.set_buttons(buttons_at(&sc, f));
         gb.run_frame();
-        gb.bus.apu.out.clear();
+        gb.clear_audio();
         if every > 0 && f % every == 0 {
             save_png(&gb, &dir.join(format!("f{f:05}.png")));
             let oam: Vec<String> = (0..40)
-                .filter(|i| gb.bus.ppu.oam[i * 4] != 0)
-                .map(|i| format!("{}:{},{},{:02x}", i, gb.bus.ppu.oam[i * 4 + 1], gb.bus.ppu.oam[i * 4], gb.bus.ppu.oam[i * 4 + 2]))
+                .filter(|i| gb.video().oam()[i * 4] != 0)
+                .map(|i| format!("{}:{},{},{:02x}", i, gb.video().oam()[i * 4 + 1], gb.video().oam()[i * 4], gb.video().oam()[i * 4 + 2]))
                 .collect();
-            println!("f{f} pc={:04x} oam=[{}]", gb.cpu.pc, oam.join(" "));
+            println!("f{f} pc={:04x} oam=[{}]", gb.pc(), oam.join(" "));
         }
     }
 }
@@ -50,7 +50,7 @@ pub struct RomRules {
 
 impl RomRules {
     pub fn read(gb: &Gb) -> RomRules {
-        let b = |o: usize| gb.bus.cart.rom_byte(o) as i32;
+        let b = |o: usize| gb.cart().rom_byte(o) as i32;
         RomRules {
             accel: b(0x172A),     // 0:1729 add a,$08  (speed index per frame while the d-pad is held)
             friction: b(0x16ED),  // 0:16EC sub $04    (speed index back toward $80 each frame on the ground)
@@ -61,8 +61,8 @@ impl RomRules {
             jump_cut: b(0x152F),  // 0:152E ld a,$21   (index forced when A is released while rising)
             apex_skip: b(0x153E), // 0:153D cp $30     (long jump skips from here...)
             apex: b(0x1548),      // 0:1547 ld a,$18   (...to the apex index)
-            speed_table: (0..256).map(|i| gb.bus.cart.rom_byte(0x19FF + i) as i8 as i32).collect(),
-            jump_table: (0..0x50).map(|i| gb.bus.cart.rom_byte(0x18AF + i) as i8 as i32).collect(),
+            speed_table: (0..256).map(|i| gb.cart().rom_byte(0x19FF + i) as i8 as i32).collect(),
+            jump_table: (0..0x50).map(|i| gb.cart().rom_byte(0x18AF + i) as i8 as i32).collect(),
         }
     }
     /// Average pixels per frame at a speed index (the game adds frame&7 to the index).
@@ -80,10 +80,10 @@ impl RomRules {
 }
 
 fn world_x(gb: &mut Gb) -> i32 {
-    ((gb.bus.read(0xFFC3) as i32) << 8) | gb.bus.read(0xFFC2) as i32
+    ((gb.read(0xFFC3) as i32) << 8) | gb.read(0xFFC2) as i32
 }
 fn world_y(gb: &mut Gb) -> i32 {
-    ((gb.bus.read(0xFFC1) as i32) << 8) | gb.bus.read(0xFFC0) as i32
+    ((gb.read(0xFFC1) as i32) << 8) | gb.read(0xFFC0) as i32
 }
 
 pub fn run(rom: Option<&Path>) -> String {
@@ -106,7 +106,7 @@ pub fn run(rom: Option<&Path>) -> String {
     let mut run_ground_y = 0;
     let mut run_top_y = i32::MAX;
     let mut run_jump_idx = 0;
-    let hud_rows = |g: &Gb| g.bus.ppu.fb[136 * ppu::W..].to_vec();
+    let hud_rows = |g: &Gb| g.screen()[136 * ppu::W..].to_vec();
 
     let mut hud_a = Vec::new();
     let mut hud_b = Vec::new();
@@ -118,28 +118,28 @@ pub fn run(rom: Option<&Path>) -> String {
     let mut top_y = i32::MAX;
     let mut start_x = 0;
     for f in 0..1560u32 {
-        gb.bus.set_buttons(buttons_at(&script, f));
+        gb.set_buttons(buttons_at(&script, f));
         gb.run_frame();
-        gb.bus.apu.out.clear();
+        gb.clear_audio();
         let x = world_x(&mut gb);
         let y = world_y(&mut gb);
         if (1430..1560).contains(&f) {
             run_top_y = run_top_y.min(y);
         }
         match f {
-            963 => accel_idx = gb.bus.read(0xA200) as i32,
+            963 => accel_idx = gb.read(0xA200) as i32,
             1429 => run_ground_y = y,
-            1430 => run_jump_idx = gb.bus.read(0xA201) as i32 + 1,
+            1430 => run_jump_idx = gb.read(0xA201) as i32 + 1,
             959 => start_x = x,
             992 => walk_x0 = x,
             1056 => {
                 walk_x1 = x;
-                walk_idx = gb.bus.read(0xA200) as i32;
+                walk_idx = gb.read(0xA200) as i32;
             }
             1130 => run_x0 = x,
             1194 => {
                 run_x1 = x;
-                run_idx = gb.bus.read(0xA200) as i32;
+                run_idx = gb.read(0xA200) as i32;
             }
             1259 => ground_y = y,
             _ => {}
@@ -149,11 +149,11 @@ pub fn run(rom: Option<&Path>) -> String {
         }
         if f == 950 {
             hud_a = hud_rows(&gb);
-            field_a = gb.bus.ppu.fb[..136 * ppu::W].to_vec();
+            field_a = gb.screen()[..136 * ppu::W].to_vec();
         }
         if f == 1100 {
             hud_b = hud_rows(&gb);
-            field_b = gb.bus.ppu.fb[..136 * ppu::W].to_vec();
+            field_b = gb.screen()[..136 * ppu::W].to_vec();
         }
     }
     let world_dx = run_x1 - start_x;
