@@ -1,0 +1,19 @@
+[package]
+name = "game"
+description = "Plays the cartridge on the emulated Game Boy, with pause menu, settings and the editor-made world map."
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "game"
+path = "src/main.rs"
+
+[dependencies]
+gb-core.workspace = true
+cart-model.workspace = true
+host.workspace = true
+macroquad.workspace = true
+cpal.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows-sys.workspace = true

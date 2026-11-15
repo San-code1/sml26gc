@@ -201,7 +201,7 @@ Las rutas y nombres viven en `host`, así ambos programas los calculan igual.
 
 | Fase | Trabajo |
 |---|---|
-| 0 | Esqueleto del workspace; mover emulador y conocimiento casi tal cual a `gb-core` y `cart-model`; portar el test dorado |
+| 0 ✅ | Esqueleto del workspace; mover emulador y conocimiento casi tal cual a `gb-core` y `cart-model`; portar el test dorado |
 | 1 | `gb-core`: encapsular campos, `Buttons`, `Frame`, `BusObserver` (sustituye al código de investigación del bus) |
 | 2 | `cart-model`: `RomImage`, `ram_map`, `GameDriver`, errores tipados, separar ficheros |
 | 3 | `host`: localizar ROM, rutas, ajustes |

@@ -1,0 +1,14 @@
+[package]
+name = "research"
+description = "Reverse-engineering command line: disassembler, memory watch/trace, ROM tables, checks."
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "research"
+path = "src/main.rs"
+
+[dependencies]
+gb-core.workspace = true
+cart-model.workspace = true
+host.workspace = true

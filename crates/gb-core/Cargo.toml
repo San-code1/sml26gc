@@ -1,0 +1,7 @@
+[package]
+name = "gb-core"
+description = "The Game Boy: processor, memory bus, picture, sound, timer, buttons and cartridge banks. No I/O."
+version.workspace = true
+edition.workspace = true
+
+[dependencies]

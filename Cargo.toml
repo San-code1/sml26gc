@@ -1,0 +1,33 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/gb-core",
+    "crates/cart-model",
+    "crates/host",
+    "game",
+    "editor",
+    "tools/research",
+    "regression",
+]
+# The untouched reference build has its own lock file and is built on its own.
+exclude = ["legacy/gb_port"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+
+[workspace.dependencies]
+gb-core = { path = "crates/gb-core" }
+cart-model = { path = "crates/cart-model" }
+host = { path = "crates/host" }
+macroquad = "0.4"
+cpal = "0.15"
+png = "0.17"
+windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging"] }
+
+# The emulator is too slow to play unoptimised, so even debug builds are optimised.
+[profile.dev]
+opt-level = 2
+
+[profile.dev.package."*"]
+opt-level = 2

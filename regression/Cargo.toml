@@ -1,0 +1,14 @@
+[package]
+name = "regression"
+description = "Golden fingerprint test: the workspace must behave exactly like legacy/gb_port."
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[lib]
+path = "lib.rs"
+
+[dev-dependencies]
+gb-core.workspace = true
+cart-model.workspace = true
+host.workspace = true

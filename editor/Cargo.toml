@@ -1,0 +1,15 @@
+[package]
+name = "editor"
+description = "Level, object and world map editor writing an edited copy of the cartridge."
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "editor"
+path = "src/main.rs"
+
+[dependencies]
+gb-core.workspace = true
+cart-model.workspace = true
+host.workspace = true
+macroquad.workspace = true

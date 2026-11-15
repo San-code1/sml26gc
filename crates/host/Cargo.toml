@@ -1,0 +1,9 @@
+[package]
+name = "host"
+description = "Shared adapters to the computer: finding the cartridge, file locations, battery saves, PNG export."
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+gb-core.workspace = true
+png.workspace = true

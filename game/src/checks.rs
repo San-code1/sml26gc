@@ -1,0 +1,90 @@
+//! Checks of the game's own additions, run from the command line without a window:
+//!   game --research customcheck OUT.png   the editor-made world map, walked and entered
+//!   game --research menushots DIR         the pause menu's screens in every language
+use crate::{load_gb, GameDriver, PALETTES};
+use cart_model::custom_map::{CustomMap, Point};
+use gb_core::script::{buttons_at, parse_script};
+use host::png_out::{save_png, write_rgba};
+use std::path::Path;
+
+/// The port's own map: write a three-point map next to a temporary copy of the cartridge,
+/// walk right with the d-pad, press A and check the game loads that point's level.
+pub fn custom_check(rom_path: &Path, png: &Path) {
+    let dir = std::env::temp_dir().join("gb_port_custom_check");
+    let _ = std::fs::create_dir_all(&dir);
+    let rom_copy = dir.join("check.gb");
+    let _ = std::fs::copy(rom_path, &rom_copy);
+    let map = CustomMap {
+        points: vec![Point { x: 200, y: 260, level: Some(0) }, Point { x: 280, y: 250, level: Some(6) }, Point { x: 280, y: 330, level: None }],
+        paths: vec![(0, 1), (1, 2)],
+        start: 0,
+    };
+    map.save(&rom_copy).unwrap();
+    let mut v = crate::mapview::MapView::load(&rom_copy).expect("map file");
+    let parsed_same = v.map == map;
+    let Ok(mut g) = load_gb(&rom_copy, 44100, false) else { return };
+    g.boot_to_map();
+    v.prepare(&g);
+    let mut fb = vec![0u8; 160 * 144];
+    let mut entered = None;
+    for f in 0..200 {
+        let right = f < 5;
+        let enter = f == 150;
+        if let Some(l) = v.update(false, right, false, false, enter) {
+            entered = Some(l);
+            break;
+        }
+    }
+    v.draw(&mut fb, 0);
+    // saved 4x bigger so the small marks are easy to see
+    let k = 4;
+    let (w, h) = (160 * k, 144 * k);
+    let mut rgba = vec![0u8; w * h * 4];
+    for y in 0..h {
+        for x in 0..w {
+            let c = PALETTES[0][fb[y / k * 160 + x / k] as usize & 3];
+            let p = (y * w + x) * 4;
+            rgba[p..p + 4].copy_from_slice(&[(c >> 16) as u8, (c >> 8) as u8, c as u8, 255]);
+        }
+    }
+    if let Err(e) = write_rgba(png, w, h, &rgba) {
+        eprintln!("{e}");
+    }
+    let ok = entered.map(|l| g.enter_level_anywhere(l)).unwrap_or(false);
+    let rom = g.bus.cart.rom_copy();
+    let (_, s) = cart_model::levels::map_location(&rom, cart_model::levels::header(&rom, 6));
+    let same = cart_model::levels::map_in_memory(&g) == cart_model::levels::decode(&rom, s).0;
+    println!("map file read back identical={parsed_same}; walked to point {} ; A asked for level {entered:?}; game loaded it={ok}; level 6 blocks in memory={same}", v.cur);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Save the pause menu's screens over a level frame as PNGs into `dir`.
+pub fn menu_shots(rom: &Path, dir: &Path) {
+    let Ok(mut gb) = load_gb(rom, 44100, false) else { return };
+    let sc = parse_script("S@400-405;S@600-605;S@800-805;R@960-1000;");
+    for f in 0..1010 {
+        gb.bus.set_buttons(buttons_at(&sc, f));
+        gb.run_frame();
+        gb.bus.apu.out.clear();
+    }
+    let _ = std::fs::create_dir_all(dir);
+    let mut st = crate::menu::Settings::default();
+    for (lang, tag) in ["en", "es", "ja"].iter().enumerate() {
+        st.lang = lang;
+        for name in ["main", "controls", "wait", "display", "sound", "language", "confirm"] {
+            let saved = gb.bus.ppu.fb;
+            crate::menu::Menu::preview(name).draw(&mut gb.bus.ppu.fb, &st);
+            save_png(&gb, &dir.join(format!("{tag}-{name}.png")));
+            gb.bus.ppu.fb = saved;
+        }
+    }
+}
+
+pub fn research_main(rom: &Path, v: &[String]) {
+    let g = |i: usize| v.get(i).cloned().unwrap_or_default();
+    match g(0).as_str() {
+        "customcheck" => custom_check(rom, Path::new(&g(1))),
+        "menushots" => menu_shots(rom, Path::new(&g(1))),
+        _ => eprintln!("game --research customcheck OUT.png | menushots DIR   (other research commands: research.exe)"),
+    }
+}
