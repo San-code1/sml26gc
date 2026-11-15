@@ -6,7 +6,8 @@ mod menu;
 mod checks;
 mod selftest;
 
-pub use cart_model::GameDriver;
+pub use cart_model::ram_map::LEVEL_NUMBER;
+pub use cart_model::{GameDriver, GameMode};
 pub use gb_core::palette::{fb_to_rgba, PALETTES};
 pub use gb_core::{ppu, Buttons, Gb, FRAME_SECONDS};
 pub use host::{find_rom, load_gb, save_path};
@@ -214,7 +215,7 @@ async fn run(args: Args, rom_path: Option<PathBuf>, title: String) {
     let mut start_tap = 0u32;
     let mut hint_time = if quiet { 0.0 } else { 4.0f32 };
     let mut screen = vec![0u8; ppu::W * ppu::H];
-    let mut prev_mode = 0u8;
+    let mut prev_mode = GameMode::Other(0);
     // The editor-made world map for this cartridge, if there is one (see mapview.rs).
     let mut mapview = if quiet { None } else { rom_path.as_ref().and_then(|p| mapview::MapView::load(p)) };
     // The level being played, to mark it cleared when the map comes back without a lost life.
@@ -234,24 +235,24 @@ async fn run(args: Args, rom_path: Option<PathBuf>, title: String) {
         }
 
         if let Some(g) = gb.as_mut() {
-            // In a level ($FF9B = 4: game mode byte, 1A title, 0C map, 04 level) the Start key
-            // opens this pause menu; elsewhere it is the game's own Start. Esc opens it anywhere.
+            // In a level the Start key opens this pause menu; elsewhere it is the game's own
+            // Start. Esc opens it anywhere.
             let mode = g.mode();
-            let in_level = mode == 0x04;
+            let in_level = mode == GameMode::Playing;
             // Show the "ESC: menu / Enter: pause" tag again each time a level begins.
-            if in_level && prev_mode != 0x04 && prev_mode != 0x08 && !quiet {
+            if in_level && prev_mode != GameMode::Playing && prev_mode != GameMode::Paused && !quiet {
                 hint_time = 3.0;
             }
             prev_mode = mode;
-            // Follow the level being played: modes $09 (losing a life) and $05 (game over)
-            // mean it wasn't cleared; reaching the map ($0C) otherwise means it was.
+            // Follow the level being played: losing a life or game over mean it wasn't
+            // cleared; reaching the map otherwise means it was.
             match mode {
-                0x04 if playing.is_none() => {
-                    playing = Some(g.read(0xA269));
+                GameMode::Playing if playing.is_none() => {
+                    playing = Some(g.read(LEVEL_NUMBER));
                     lost_life = false;
                 }
-                0x09 | 0x05 => lost_life = true,
-                0x0C => {
+                GameMode::LosingLife | GameMode::GameOver => lost_life = true,
+                GameMode::Map => {
                     if let (Some(l), Some(v)) = (playing, mapview.as_mut()) {
                         if !lost_life {
                             v.mark_cleared(l);
@@ -259,12 +260,12 @@ async fn run(args: Args, rom_path: Option<PathBuf>, title: String) {
                     }
                     playing = None;
                 }
-                0x1A => playing = None,
+                GameMode::FileSelect => playing = None,
                 _ => {}
             }
-            map_frames = if mode == 0x0C { map_frames + 1 } else { 0 };
+            map_frames = if mode == GameMode::Map { map_frames + 1 } else { 0 };
             // The editor-made map takes over the world map screen once it has finished appearing.
-            let custom = mode == 0x0C && map_frames > 20 && mapview.as_ref().map(|v| v.enabled).unwrap_or(false);
+            let custom = mode == GameMode::Map && map_frames > 20 && mapview.as_ref().map(|v| v.enabled).unwrap_or(false);
             if pause.is_none() && !quiet {
                 let start_key = is_key_pressed(st.keys[6]) && in_level && !input_lock;
                 if is_key_pressed(KeyCode::Escape) || start_key {

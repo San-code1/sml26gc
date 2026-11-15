@@ -2,11 +2,10 @@
 //! paths between them and which level each point opens. The game uses it instead of the
 //! cartridge's map (whose points and paths are fixed inside its code).
 //!
-//! Saved as plain text next to the cartridge copy (`<name>.points.txt`):
+//! Kept as plain text (`host` saves it next to the cartridge copy as `<name>.points.txt`):
 //!   point <x> <y> <level or ->      one per line, numbered from 0 in order
 //!   path <a> <b>                    two point numbers
 //!   start <n>                       where Mario starts
-use std::path::{Path, PathBuf};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Point {
@@ -24,11 +23,6 @@ pub struct CustomMap {
 }
 
 impl CustomMap {
-    /// The map file that goes with a cartridge file.
-    pub fn file_for(rom: &Path) -> PathBuf {
-        rom.with_extension("points.txt")
-    }
-
     pub fn parse(text: &str) -> CustomMap {
         let mut m = CustomMap::default();
         for line in text.lines() {
@@ -67,20 +61,6 @@ impl CustomMap {
         }
         s += &format!("start {}\n", self.start);
         s
-    }
-
-    pub fn load(rom: &Path) -> Option<CustomMap> {
-        let t = std::fs::read_to_string(Self::file_for(rom)).ok()?;
-        let m = Self::parse(&t);
-        if m.points.is_empty() {
-            None
-        } else {
-            Some(m)
-        }
-    }
-
-    pub fn save(&self, rom: &Path) -> std::io::Result<()> {
-        std::fs::write(Self::file_for(rom), self.to_text())
     }
 
     pub fn linked(&self, a: usize, b: usize) -> bool {
@@ -132,5 +112,20 @@ impl CustomMap {
             }
         }
         best.map(|b| b.0)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn text_round_trip_and_cleanup() {
+        let m = CustomMap::parse("# x\npoint 1 2 3\npoint 4 5 -\npoint 6 7 99\npath 0 1\npath 1 1\npath 0 7\nstart 9\n");
+        assert_eq!(m.points.len(), 3);
+        assert_eq!(m.points[2].level, None, "levels over 31 are dropped");
+        assert_eq!(m.paths, vec![(0, 1)], "self and out-of-range paths are dropped");
+        assert_eq!(m.start, 0, "a start past the points goes back to 0");
+        assert_eq!(CustomMap::parse(&m.to_text()), m);
     }
 }

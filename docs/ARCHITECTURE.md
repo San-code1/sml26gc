@@ -89,19 +89,22 @@ Propuesta (módulos):
 
 | Módulo | Contenido |
 |---|---|
-| `rom` | `RomImage` (newtype sobre `Vec<u8>`), `bank_offset(bank, addr)`, `word(at)` |
+| `rom` | `offset(bank, addr)`, `word`, `set_word`. Las funciones reciben `&[u8]`: un newtype `RomImage` no aportaba nada y obligaba a tocar todo el editor |
 | `ram_map` | Direcciones con nombre: `GAME_MODE = 0xFF9B`, `LEVEL_NUMBER = 0xA269`, `MAP_POINT = 0xA840`... y `enum GameMode { FileSelect, Map, Level, LosingLife, GameOver, ... }` |
-| `level` | `LevelHeader`, `LevelMap` (256x48), `rle::{decode, encode}` (funciones puras) |
+| `levels` | `Header`, `map_location`, `decode`/`encode` (funciones puras), `sharing` |
 | `objects` | `LevelObject`, codec de 3 bytes, lectura/escritura de listas |
 | `world` | Imagen del mapa 64x64, tabla punto→nivel |
 | `patch` | Ampliación a 1 MB, parche de objetos, `can_expand`, `upgrade` |
 | `layout` | Capacidad por banco, empaquetado de mapas y objetos (`store_bank`, `space`) |
 | `custom_map` | Formato de texto del mapa propio (parse/serialize, vecinos, caminos) |
 | `art` | `LevelArt`, `WorldArt`, captura de sprites (`Look`) a partir de una `GameBoy` |
+| `live` | Lo que el juego en marcha tiene cargado: mapa del nivel, objetos, posición del jugador |
+| `error` | `CartError` (`UnknownVersion`, `ZoneFull`, `ObjectsFull`), `BankUsage`, `ObjectsUsage` |
 | `driver` | `GameDriver`: casos de uso sobre la consola. `boot_to_map`, `enter_level`, `enter_level_anywhere`, `back_to_map`, `back_to_file_select`, `mode()` |
 
-- Errores tipados (`enum CartError`) en lugar de `String`.
-- Sin `std::fs`: la búsqueda de la ROM y las rutas pasan a `host`.
+- Errores tipados (`enum CartError`) en lugar de `String`; los textos son los de siempre.
+- Sin `std::fs`: leer/guardar `.points.txt` está en `host` (`load_custom_map`, `save_custom_map`).
+- Hecho (fase 2), con 14 tests unitarios que no necesitan la ROM.
 
 ## 4. `game/`: el juego (hexagonal)
 
@@ -206,7 +209,7 @@ Las rutas y nombres viven en `host`, así ambos programas los calculan igual.
 |---|---|
 | 0 ✅ | Esqueleto del workspace; mover emulador y conocimiento casi tal cual a `gb-core` y `cart-model`; portar el test dorado |
 | 1 ✅ | `gb-core`: encapsular campos, `Buttons`, `Screen`, `BusObserver` (sustituye al código de investigación del bus) |
-| 2 | `cart-model`: `RomImage`, `ram_map`, `GameDriver`, errores tipados, separar ficheros |
+| 2 ✅ | `cart-model`: `RomImage`, `ram_map`, `GameDriver`, errores tipados, separar ficheros |
 | 3 | `host`: localizar ROM, rutas, ajustes |
 | 4 | `game/`: dominio puro + puertos + adaptadores + raíz de composición |
 | 5 | `editor/`: romper el objeto gigante en documento, historial, herramientas, comandos y paneles |

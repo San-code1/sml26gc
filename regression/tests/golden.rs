@@ -45,6 +45,15 @@ fn rom_path() -> Option<PathBuf> {
     host::find_rom(None)
 }
 
+/// A save result as the legacy port printed it (`Ok("...")` / `Err("...")`), so the
+/// fingerprint lines stay comparable now that the results are typed.
+fn shown<T: std::fmt::Display, E: std::fmt::Display>(r: &Result<T, E>) -> String {
+    match r {
+        Ok(v) => format!("Ok({:?})", v.to_string()),
+        Err(e) => format!("Err({:?})", e.to_string()),
+    }
+}
+
 struct Out(Vec<String>);
 impl Out {
     fn put(&mut self, key: impl AsRef<str>, value: impl std::fmt::Display) {
@@ -92,7 +101,7 @@ fn emulation(rom: &[u8], out: &mut Out) {
             audio.clear();
         }
     }
-    out.put("emu.end.mode", format!("{:02x}", gb.mode()));
+    out.put("emu.end.mode", format!("{:02x}", gb.mode().byte()));
     out.put("emu.end.wram", fnv(&gb.wram()));
     out.put("emu.end.cart_ram", fnv(&gb.cart().ram()));
     out.put("emu.end.vram", fnv(&gb.video().vram()));
@@ -104,16 +113,16 @@ fn use_cases(rom: &[u8], out: &mut Out) {
     let mut map = Gb::new(rom.to_vec(), SAMPLE_RATE).expect("cartridge");
     out.put("uc.boot_to_map", map.boot_to_map());
     out.put("uc.map.screen", fnv(&map.screen()));
-    let art = world::WorldArt::capture(&map);
+    let art = cart_model::art::WorldArt::capture(&map);
     out.put("uc.map.world_art", fnv(&[art.vram.as_slice(), &[art.lcdc, art.bgp]].concat()));
 
     for level in 0..levels::LEVELS {
         let mut g = map.clone();
         let ok = g.enter_level_anywhere(level as u8);
-        let la = levels::LevelArt::capture(&g);
-        out.put(format!("uc.level{level:02}.entered"), format!("{ok} mode={:02x}", g.mode()));
+        let la = cart_model::art::LevelArt::capture(&g);
+        out.put(format!("uc.level{level:02}.entered"), format!("{ok} mode={:02x}", g.mode().byte()));
         out.put(format!("uc.level{level:02}.screen"), fnv(&g.screen()));
-        out.put(format!("uc.level{level:02}.map_in_memory"), fnv(&levels::map_in_memory(&g)));
+        out.put(format!("uc.level{level:02}.map_in_memory"), fnv(&cart_model::live::map_in_memory(&g)));
         out.put(
             format!("uc.level{level:02}.art"),
             fnv(&[la.metatiles.as_slice(), &la.vram, &[la.lcdc, la.bgp]].concat()),
@@ -127,14 +136,14 @@ fn use_cases(rom: &[u8], out: &mut Out) {
         for _ in 0..240 {
             back.run_frame_with(Buttons::NONE);
         }
-        out.put(format!("uc.level{level:02}.back_to_map.mode"), format!("{:02x}", back.mode()));
+        out.put(format!("uc.level{level:02}.back_to_map.mode"), format!("{:02x}", back.mode().byte()));
     }
 }
 
 /// 3. The cartridge knowledge: levels, objects, world map, ROM expansion and re-packing.
 fn rom_data(rom: &[u8], out: &mut Out) {
     out.put("rom.size", rom.len());
-    out.put("rom.can_expand", levels::can_expand(rom));
+    out.put("rom.can_expand", cart_model::patch::can_expand(rom));
 
     let mut lists = Vec::new();
     for level in 0..levels::LEVELS {
@@ -170,22 +179,22 @@ fn rom_data(rom: &[u8], out: &mut Out) {
     banks.sort();
     banks.dedup();
     for &b in &banks {
-        out.put(format!("rom.bank{b:02x}.maps"), format!("{:?}", levels::bank_maps(rom, b)));
-        out.put(format!("rom.bank{b:02x}.capacity"), format!("{:?}", levels::bank_capacity(rom, rom, b)));
+        out.put(format!("rom.bank{b:02x}.maps"), format!("{:?}", cart_model::layout::bank_maps(rom, b)));
+        out.put(format!("rom.bank{b:02x}.capacity"), format!("{:?}", cart_model::layout::bank_capacity(rom, rom, b)));
     }
 
-    match levels::expand(rom) {
+    match cart_model::patch::expand(rom) {
         Ok(mut big) => {
             out.put("exp.rom", fnv(&big));
-            out.put("exp.flags", format!("expanded={} objects_patched={}", levels::is_expanded(&big), levels::objects_patched(&big)));
+            out.put("exp.flags", format!("expanded={} objects_patched={}", cart_model::patch::is_expanded(&big), cart_model::patch::objects_patched(&big)));
             out.put("exp.objects.region", format!("{:?}", objects::region_for(&big, rom)));
             out.put("exp.objects.space", format!("{:?}", objects::space(&big, rom, &lists)));
             // Re-pack every bank and the objects unchanged, then edit one level and re-pack.
             for &b in &banks {
-                let r = levels::store_bank(&mut big, rom, b, &[]);
-                out.put(format!("exp.bank{b:02x}.store"), format!("{r:?}"));
+                let r = cart_model::layout::store_bank(&mut big, rom, b, &[]);
+                out.put(format!("exp.bank{b:02x}.store"), shown(&r));
             }
-            out.put("exp.objects.store", format!("{:?}", objects::store(&mut big, rom, &lists)));
+            out.put("exp.objects.store", shown(&objects::store(&mut big, rom, &lists)));
             out.put("exp.after_store.rom", fnv(&big));
 
             let h = levels::header(&big, 0);
@@ -194,8 +203,8 @@ fn rom_data(rom: &[u8], out: &mut Out) {
             for x in 0..levels::COLS {
                 map[x] = (x % 7) as u8; // a recognisable edit in the top row
             }
-            out.put("exp.edit.space", format!("{:?}", levels::bank_space(&big, rom, h.bank, &[(h.map, &map[..])])));
-            out.put("exp.edit.store", format!("{:?}", levels::store_bank(&mut big, rom, h.bank, &[(h.map, &map[..])])));
+            out.put("exp.edit.space", format!("{:?}", cart_model::layout::bank_space(&big, rom, h.bank, &[(h.map, &map[..])])));
+            out.put("exp.edit.store", shown(&cart_model::layout::store_bank(&mut big, rom, h.bank, &[(h.map, &map[..])])));
             let (_, start) = levels::map_location(&big, levels::header(&big, 0));
             out.put("exp.edit.reread_ok", levels::decode(&big, start).0 == map);
 
@@ -209,7 +218,7 @@ fn rom_data(rom: &[u8], out: &mut Out) {
             let mut g = Gb::new(big, SAMPLE_RATE).expect("expanded cartridge");
             let booted = g.boot_to_map();
             let entered = g.enter_level_anywhere(0);
-            out.put("exp.play.level00", format!("boot={booted} entered={entered} {}", fnv(&levels::map_in_memory(&g))));
+            out.put("exp.play.level00", format!("boot={booted} entered={entered} {}", fnv(&cart_model::live::map_in_memory(&g))));
         }
         Err(e) => out.put("exp.error", e),
     }
@@ -232,9 +241,9 @@ fn custom_map(out: &mut Out) {
 
 #[test]
 fn golden() {
-    let Some(path) = rom_path() else {
-        eprintln!("golden: no ROM found (set SML2_ROM); skipped");
-        return;
+    // Without the cartridge nothing is checked, so that is a failure, not a pass.
+    let Some(path) = rom_path().filter(|p| p.is_file()) else {
+        panic!("golden: no cartridge found, nothing was checked. Set SML2_ROM to your .gb file or put it where the game finds it.");
     };
     let rom = std::fs::read(&path).expect("read ROM");
     let mut out = Out(Vec::new());

@@ -603,10 +603,10 @@ impl Menu {
         }
     }
 
-    /// `mode` is the game's mode byte: $04 in a level, $0C on the map.
-    pub fn new(mode: u8, world: Option<bool>) -> Menu {
-        let in_level = mode == 0x04;
-        let on_map = mode == 0x0C;
+    /// `mode` is the screen the game is on (a level, the map...).
+    pub fn new(mode: cart_model::GameMode, world: Option<bool>) -> Menu {
+        let in_level = mode == cart_model::GameMode::Playing;
+        let on_map = mode == cart_model::GameMode::Map;
         // No "continue" item: Esc (or B) closes the menu. In a level the game's own pause comes first.
         let mut items = Vec::new();
         if in_level {
@@ -641,7 +641,7 @@ impl Menu {
             "confirm" => Screen::Confirm(IT_MAP),
             _ => Screen::Main,
         };
-        let mut m = Menu::new(0x04, Some(true));
+        let mut m = Menu::new(cart_model::GameMode::Playing, Some(true));
         m.screen = screen;
         m
     }

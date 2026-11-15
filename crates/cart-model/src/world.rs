@@ -6,12 +6,13 @@
 //!   graphics come from bank $0D $4000-$57FF.
 //! * Which level each map point opens: byte table at 0F:4218 indexed by the point number
 //!   ($A840); $FE = a point that opens no level. 0F:41A6-0F:41B5 copies the entry to $A269.
-use gb_core::Gb;
+use crate::patch::TWIN;
+use crate::rom::offset;
 
 pub const W: usize = 64;
 pub const H: usize = 64;
-const PICTURE: usize = 0x0D * 0x4000 + 0x3000;
-const POINTS: usize = 0x0F * 0x4000 + 0x0218;
+const PICTURE: usize = offset(0x0D, 0x7000);
+const POINTS: usize = offset(0x0F, 0x4218);
 pub const POINT_COUNT: usize = 0x82;
 pub const NO_LEVEL: u8 = 0xFE;
 
@@ -26,12 +27,12 @@ pub fn read(rom: &[u8]) -> Vec<u8> {
 
 /// Write the picture back (same size, same place; the twin bank of an expanded copy too).
 pub fn write(rom: &mut [u8], tiles: &[u8]) {
-    let twin = rom.len() >= 0x10_0000;
+    let twin = rom.len() >= 2 * TWIN;
     for (i, &t) in tiles.iter().enumerate() {
         let a = at(i % W, i / W);
         rom[a] = t;
         if twin {
-            rom[a + 0x8_0000] = t;
+            rom[a + TWIN] = t;
         }
     }
 }
@@ -41,32 +42,27 @@ pub fn point_levels(rom: &[u8]) -> Vec<u8> {
 }
 
 pub fn write_point_levels(rom: &mut [u8], v: &[u8]) {
-    let twin = rom.len() >= 0x10_0000;
+    let twin = rom.len() >= 2 * TWIN;
     for (i, &l) in v.iter().enumerate().take(POINT_COUNT) {
         rom[POINTS + i] = l;
         if twin {
-            rom[POINTS + i + 0x8_0000] = l;
+            rom[POINTS + i + TWIN] = l;
         }
     }
 }
 
-/// The tile graphics the game shows the map with (captured from the running game).
-#[derive(Clone)]
-pub struct WorldArt {
-    pub vram: Vec<u8>,
-    pub lcdc: u8,
-    pub bgp: u8,
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-impl WorldArt {
-    pub fn capture(gb: &Gb) -> WorldArt {
-        WorldArt { vram: gb.video().vram().to_vec(), lcdc: gb.video().lcdc(), bgp: gb.video().bgp() }
-    }
-    pub fn pixel(&self, tile: u8, x: usize, y: usize) -> u8 {
-        let base = if self.lcdc & 0x10 != 0 { tile as usize * 16 } else { (0x1000 + (tile as i8 as i32) * 16) as usize };
-        let a = base + y * 2;
-        let bit = 7 - x;
-        let c = ((self.vram[a + 1] >> bit) & 1) << 1 | ((self.vram[a] >> bit) & 1);
-        (self.bgp >> (c * 2)) & 3
+    #[test]
+    fn picture_quadrants_round_trip_and_reach_the_twin() {
+        let mut rom = vec![0u8; 2 * TWIN];
+        let tiles: Vec<u8> = (0..W * H).map(|i| (i * 7 % 251) as u8).collect();
+        write(&mut rom, &tiles);
+        assert_eq!(read(&rom), tiles);
+        assert_eq!(&rom[PICTURE + TWIN..PICTURE + TWIN + W * H], &rom[PICTURE..PICTURE + W * H]);
+        // the top-right quadrant starts 1024 bytes after the top-left one
+        assert_eq!(rom[PICTURE + 1024], tiles[32]);
     }
 }

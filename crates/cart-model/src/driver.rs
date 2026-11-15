@@ -1,12 +1,13 @@
 //! Driving this cartridge's program from outside: reading which screen it is on, and the
 //! button sequences and memory writes that take it to the map, into a level or back.
-use gb_core::Buttons;
-use gb_core::Gb;
+use crate::ram_map::{GameMode, GAME_MODE, LEAVE_LEVEL_WRITES, LEVEL_NUMBER, MAP_POINT, SPECIAL_MAP_POINTS};
+use crate::world::point_levels;
+use gb_core::{Buttons, Gb};
 
 /// The game-specific actions on a running Game Boy with this cartridge.
 pub trait GameDriver {
-    /// Game mode byte ($FF9B): $1A file select, $0C map, $04 playing a level.
-    fn mode(&mut self) -> u8;
+    /// Which screen the program is on (game mode byte, $FF9B).
+    fn mode(&mut self) -> GameMode;
     /// Leave the level for the map exactly as the game's own pause menu does when a cleared
     /// level is exited with Select (0:2774-0:278B): no life is lost.
     fn back_to_map(&mut self);
@@ -25,16 +26,24 @@ pub trait GameDriver {
     fn enter_level_anywhere(&mut self, level: u8) -> bool;
 }
 
+fn start_if(pressed: bool) -> Buttons {
+    if pressed {
+        Buttons::START
+    } else {
+        Buttons::NONE
+    }
+}
+
 impl GameDriver for Gb {
-    fn mode(&mut self) -> u8 {
-        self.read(0xFF9B)
+    fn mode(&mut self) -> GameMode {
+        GameMode::from_byte(self.read(GAME_MODE))
     }
 
     fn back_to_map(&mut self) {
-        for (addr, v) in [(0xA45E, 0x02), (0xA224, 0x02), (0xA2C8, 0), (0xA299, 0), (0xA2B4, 0), (0xA50D, 0)] {
+        for (addr, v) in LEAVE_LEVEL_WRITES {
             self.write(addr, v);
         }
-        self.write(0xFF9B, 0x14);
+        self.write(GAME_MODE, GameMode::ToMap.byte());
     }
 
     fn back_to_file_select(&mut self) {
@@ -44,8 +53,8 @@ impl GameDriver for Gb {
         if let Ok(mut g) = Gb::new(rom, rate) {
             g.cart_mut().set_ram(ram);
             for f in 0..1200u32 {
-                g.run_frame_with(if f % 40 < 4 && f > 60 { Buttons::START } else { Buttons::NONE });
-                if g.mode() == 0x1A {
+                g.run_frame_with(start_if(f % 40 < 4 && f > 60));
+                if g.mode() == GameMode::FileSelect {
                     break;
                 }
             }
@@ -58,15 +67,14 @@ impl GameDriver for Gb {
 
     fn boot_to_map(&mut self) -> bool {
         for f in 0..3000u32 {
-            let m = self.mode();
-            if m == 0x0C {
+            if self.mode() == GameMode::Map {
                 // let the map finish appearing
                 for _ in 0..90 {
                     self.run_frame_with(Buttons::NONE);
                 }
                 return true;
             }
-            self.run_frame_with(if f % 50 < 5 && f > 120 { Buttons::START } else { Buttons::NONE });
+            self.run_frame_with(start_if(f % 50 < 5 && f > 120));
         }
         false
     }
@@ -75,28 +83,25 @@ impl GameDriver for Gb {
         let mut set = false;
         for f in 0..900u32 {
             let m = self.mode();
-            if m == 0x0B && !set {
-                self.write(0xA269, level);
+            if m == GameMode::LevelHeader && !set {
+                self.write(LEVEL_NUMBER, level);
                 set = true;
             }
-            if set && m == 0x04 {
+            if set && m == GameMode::Playing {
                 for _ in 0..3 {
                     self.run_frame_with(Buttons::NONE);
                 }
                 return true;
             }
-            let press = !set && m == 0x0C && f % 30 < 4;
-            self.run_frame_with(if press { Buttons::START } else { Buttons::NONE });
+            self.run_frame_with(start_if(!set && m == GameMode::Map && f % 30 < 4));
         }
         false
     }
 
     fn enter_level_anywhere(&mut self, level: u8) -> bool {
-        let rom = self.cart().rom().to_vec();
-        let table = crate::world::point_levels(&rom);
-        let special = [0x05, 0x09, 0x0E, 0x17, 0x1D, 0x11];
-        if let Some(p) = (0..table.len()).find(|&p| table[p] < 32 && !special.contains(&(p as u8))) {
-            self.write(0xA840, p as u8);
+        let table = point_levels(self.cart().rom());
+        if let Some(p) = (0..table.len()).find(|&p| table[p] < 32 && !SPECIAL_MAP_POINTS.contains(&(p as u8))) {
+            self.write(MAP_POINT, p as u8);
         }
         self.enter_level(level)
     }

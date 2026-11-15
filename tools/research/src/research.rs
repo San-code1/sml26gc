@@ -244,11 +244,11 @@ pub fn leave(rom: &Path, script: &str, at: u32, kind: &str, until: u32, png: &Pa
             } else {
                 gb.back_to_map();
             }
-            println!("after: mode={:02x}", gb.mode());
+            println!("after: mode={:02x}", gb.mode().byte());
         }
         run_script(&mut gb, &sc, f);
         if f >= at && (f - at) % 20 == 0 {
-            println!("f{f} mode={:02x} lives={:02x}", gb.mode(), gb.read(0xA22C));
+            println!("f{f} mode={:02x} lives={:02x}", gb.mode().byte(), gb.read(0xA22C));
         }
     }
     save_png(&gb, png);
@@ -281,7 +281,8 @@ pub fn cmp_map(rom: &Path, sa: &str, fa: u32, sb: &str, at: u32, fb: u32) {
 /// the same blocks the game itself puts in memory when the level loads, and whether
 /// re-compressing gives the same blocks back.
 pub fn levels_check(rom_path: &Path) {
-    use crate::levels::*;
+    use cart_model::levels::*;
+    use cart_model::live::*;
     let Ok(mut gb) = load_gb(rom_path, 44100, false) else { return };
     let rom = gb.cart().rom().to_vec();
     if !gb.boot_to_map() {
@@ -314,7 +315,9 @@ pub fn levels_check(rom_path: &Path) {
 /// Edit a level two ways (a small change that fits in place, and a big one that must move
 /// to free space), store it, then let the game load it from the edited ROM and compare.
 pub fn store_check(rom_path: &Path) {
-    use crate::levels::*;
+    use cart_model::levels::*;
+    use cart_model::live::*;
+    use cart_model::{layout::*, patch::*};
     let Ok(gb) = load_gb(rom_path, 44100, false) else { return };
     let original = gb.cart().rom().to_vec();
     // 1) an expanded copy must play every level exactly like the original
@@ -365,7 +368,7 @@ pub fn store_check(rom_path: &Path) {
                 }
             }
         }
-        println!("expanded big edit: level {level} ({old} bytes, {rows} rows of checkerboard) -> {res:?}; game loaded={ok}; matches {same}/{MAP_BYTES}; other levels of the zone unchanged={others_ok}");
+        println!("expanded big edit: level {level} ({old} bytes, {rows} rows of checkerboard) -> {}; game loaded={ok}; matches {same}/{MAP_BYTES}; other levels of the zone unchanged={others_ok}", shown(&res));
     }
     for (name, level, big) in [("small edit", 0usize, false), ("too big edit", 25usize, true), ("grow one, simplify another", 26usize, false)] {
         let mut rom = original.clone();
@@ -404,7 +407,7 @@ pub fn store_check(rom_path: &Path) {
         let ok = g.boot_to_map() && g.enter_level(level as u8);
         let mem = map_in_memory(&g);
         let same = mem.iter().zip(&map).filter(|(a, b)| a == b).count();
-        println!("{name}: level {level} old {old} bytes -> {:?}; game loaded={ok}; game memory matches edit {same}/{MAP_BYTES}", res);
+        println!("{name}: level {level} old {old} bytes -> {}; game loaded={ok}; game memory matches edit {same}/{MAP_BYTES}", shown(&res));
         // nothing else in the ROM changed except the map data and (if moved) its table entry
         let changed = rom.iter().zip(&original).filter(|(a, b)| a != b).count();
         println!("   bytes changed in the ROM: {changed}");
@@ -512,7 +515,7 @@ pub fn objects_check(rom_path: &Path) {
         let (_, _) = (objs.len(), len);
         let mut g = gb.clone();
         g.enter_level(l as u8);
-        let mem = objects::in_memory(&g.cart().ram(), objs.len());
+        let mem = cart_model::live::objects_in_memory(&g, objs.len());
         let same = mem.iter().zip(&objs).filter(|(a, b)| a == b).count();
         if same == objs.len() {
             good += 1;
@@ -543,17 +546,18 @@ pub fn objects_check(rom_path: &Path) {
     g0.enter_level(0);
     let mut want = lists[0].clone();
     want.sort_by_key(|o| o.x / 256);
-    let mem = objects::in_memory(&g0.cart().ram(), want.len());
+    let mem = cart_model::live::objects_in_memory(&g0, want.len());
     let mut g1 = g.clone();
     g1.enter_level(1);
-    let mem1 = objects::in_memory(&g1.cart().ram(), lists[1].len());
+    let mem1 = cart_model::live::objects_in_memory(&g1, lists[1].len());
     println!(
-        "edit: {res:?}; level 0 game records match edit: {}; level 1 (one removed: {removed:?}) match: {}",
+        "edit: {}; level 0 game records match edit: {}; level 1 (one removed: {removed:?}) match: {}",
+        shown(&res),
         mem == want,
         mem1 == lists[1]
     );
     // expanded copy: everything still the same, then 40 more objects in level 0
-    let exp = crate::levels::expand(&original).unwrap();
+    let exp = cart_model::patch::expand(&original).unwrap();
     let mut gx = crate::Gb::new(exp.clone(), 44100).unwrap();
     gx.boot_to_map();
     let mut same = 0;
@@ -561,7 +565,7 @@ pub fn objects_check(rom_path: &Path) {
         let (objs, _) = objects::read(&original, l);
         let mut g = gx.clone();
         g.enter_level(l as u8);
-        if objects::in_memory(&g.cart().ram(), objs.len()) == objs && objects::read(&exp, l).0 == objs {
+        if cart_model::live::objects_in_memory(&g, objs.len()) == objs && objects::read(&exp, l).0 == objs {
             same += 1;
         }
     }
@@ -580,7 +584,7 @@ pub fn objects_check(rom_path: &Path) {
         gl.enter_level(l as u8);
         let mut want = lists[l].clone();
         want.sort_by_key(|o| o.x / 256);
-        let mem = objects::in_memory(&gl.cart().ram(), want.len());
+        let mem = cart_model::live::objects_in_memory(&gl, want.len());
         if mem == want {
             ok += 1;
         } else {
@@ -588,7 +592,7 @@ pub fn objects_check(rom_path: &Path) {
             println!("  level {l}: {} objects, first difference at {first:?}: game {:?} / stored {:?}", want.len(), first.map(|i| mem[i]), first.map(|i| want[i]));
         }
     }
-    println!("expanded: {same}/32 levels' objects unchanged; +40 objects in level 0 -> {res:?}; levels 0,5,17,31 load as stored: {ok}/4");
+    println!("expanded: {same}/32 levels' objects unchanged; +40 objects in level 0 -> {}; levels 0,5,17,31 load as stored: {ok}/4", shown(&res));
 }
 
 /// Draw ROM bytes at `off` as an 8x8-tile map `width` tiles wide, with the tiles the game
@@ -676,7 +680,7 @@ pub fn world_check(rom_path: &Path) {
         .unwrap_or(0);
     println!("original: VRAM window found at {pos:?}; best match {best}/1024 tiles");
     // edit: change every tile in the picture's top-left quadrant row 10 and point 0 -> level 6
-    let mut rom = crate::levels::expand(&original).unwrap();
+    let mut rom = cart_model::patch::expand(&original).unwrap();
     let mut p2 = pic.clone();
     for x in 0..world::W {
         for y in 0..world::H {
@@ -717,7 +721,7 @@ pub fn world_check(rom_path: &Path) {
     let mut level = None;
     for f in 0..300u32 {
         let m = g.mode();
-        if m == 0x0B {
+        if m == cart_model::GameMode::LevelHeader {
             level = Some(g.read(0xA269));
             break;
         }
@@ -739,7 +743,7 @@ pub fn looks(rom_path: &Path, level: usize, png: &Path) {
     let w = cell * kinds.len().max(1);
     let mut rgba = vec![255u8; w * cell * 4];
     for (i, &k) in kinds.iter().enumerate() {
-        let look = objects::capture_look(&gb, &rom, &rom, level, k);
+        let look = cart_model::art::capture_look(&gb, &rom, &rom, level, k);
         println!("type {k:02X}: {}", match &look { Some(l) => format!("{}x{} offset {},{}", l.w, l.h, l.dx, l.dy), None => "nothing drawn".into() });
         if let Some(l) = look {
             for y in 0..l.h.min(cell) {
@@ -930,4 +934,12 @@ impl BusObserver for Probe {
 fn probed(rom: &Path) -> Option<GameBoy<Probe>> {
     let data = std::fs::read(rom).map_err(|e| eprintln!("{e}")).ok()?;
     GameBoy::with_observer(data, 44100, Probe::default()).map_err(|e| eprintln!("{e}")).ok()
+}
+
+/// A save result printed the way the tools always printed it: `Ok("...")` / `Err("...")`.
+fn shown<T: std::fmt::Display, E: std::fmt::Display>(r: &Result<T, E>) -> String {
+    match r {
+        Ok(v) => format!("Ok({:?})", v.to_string()),
+        Err(e) => format!("Err({:?})", e.to_string()),
+    }
 }

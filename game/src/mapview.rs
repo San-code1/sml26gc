@@ -25,7 +25,7 @@ const PH: usize = world::H * 8;
 
 impl MapView {
     pub fn load(rom: &Path) -> Option<MapView> {
-        let map = CustomMap::load(rom)?;
+        let map = host::load_custom_map(rom)?;
         let progress_file = host::save_path(rom).with_extension("progress.txt");
         let cleared = std::fs::read_to_string(&progress_file)
             .map(|t| t.split_whitespace().filter_map(|w| w.parse().ok()).collect())
@@ -52,7 +52,7 @@ impl MapView {
         }
         let rom = gb.cart().rom().to_vec();
         let tiles = world::read(&rom);
-        let art = world::WorldArt::capture(gb);
+        let art = cart_model::art::WorldArt::capture(gb);
         self.picture = vec![0; PW * PH];
         for ty in 0..world::H {
             for tx in 0..world::W {

@@ -19,7 +19,7 @@ pub fn custom_check(rom_path: &Path, png: &Path) {
         paths: vec![(0, 1), (1, 2)],
         start: 0,
     };
-    map.save(&rom_copy).unwrap();
+    host::save_custom_map(&map, &rom_copy).unwrap();
     let mut v = crate::mapview::MapView::load(&rom_copy).expect("map file");
     let parsed_same = v.map == map;
     let Ok(mut g) = load_gb(&rom_copy, 44100, false) else { return };
@@ -53,7 +53,7 @@ pub fn custom_check(rom_path: &Path, png: &Path) {
     let ok = entered.map(|l| g.enter_level_anywhere(l)).unwrap_or(false);
     let rom = g.cart().rom().to_vec();
     let (_, s) = cart_model::levels::map_location(&rom, cart_model::levels::header(&rom, 6));
-    let same = cart_model::levels::map_in_memory(&g) == cart_model::levels::decode(&rom, s).0;
+    let same = cart_model::live::map_in_memory(&g) == cart_model::levels::decode(&rom, s).0;
     println!("map file read back identical={parsed_same}; walked to point {} ; A asked for level {entered:?}; game loaded it={ok}; level 6 blocks in memory={same}", v.cur);
     let _ = std::fs::remove_dir_all(&dir);
 }

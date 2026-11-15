@@ -2,9 +2,10 @@
 //! 32 levels with the game's own blocks and graphics, lets them paint blocks and saves
 //! the result into an edited copy of the cartridge. The original file is never written.
 use cart_model::custom_map::{CustomMap, Point};
-use cart_model::levels::{self, LevelArt, COLS, LEVELS, ROWS};
+use cart_model::art::{LevelArt, WorldArt};
+use cart_model::levels::{self, COLS, LEVELS, ROWS};
 use cart_model::objects::{self, Obj};
-use cart_model::world::{self, WorldArt};
+use cart_model::world;
 use cart_model::GameDriver;
 use gb_core::Gb;
 use host::find_rom;
@@ -98,7 +99,7 @@ struct Editor {
     drag_point: bool,
 }
 
-fn look_texture(l: &objects::Look) -> Texture2D {
+fn look_texture(l: &cart_model::art::Look) -> Texture2D {
     let mut img = Image::gen_image_color(l.w as u16, l.h as u16, Color::new(0.0, 0.0, 0.0, 0.0));
     for y in 0..l.h {
         for x in 0..l.w {
@@ -173,12 +174,12 @@ impl Editor {
         let stem = original_path.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| "game".into());
         let edit_path = exe_dir().join("edits").join(format!("{stem} (edit).gb"));
         // Work on the edited copy if there is one; otherwise start a new copy, made 1 MB so
-        // every zone has room for bigger levels (levels::expand).
+        // every zone has room for bigger levels (cart_model::patch::expand).
         let mut rom = std::fs::read(&edit_path)
             .ok()
-            .filter(|r| r.len() == original.len() || levels::is_expanded(r))
-            .unwrap_or_else(|| levels::expand(&original).unwrap_or_else(|_| original.clone()));
-        levels::upgrade(&mut rom); // copies made before the object patch get it now
+            .filter(|r| r.len() == original.len() || cart_model::patch::is_expanded(r))
+            .unwrap_or_else(|| cart_model::patch::expand(&original).unwrap_or_else(|_| original.clone()));
+        cart_model::patch::upgrade(&mut rom); // copies made before the object patch get it now
         let levels = (0..LEVELS)
             .map(|l| {
                 let (_, start) = levels::map_location(&rom, levels::header(&rom, l));
@@ -242,7 +243,7 @@ impl Editor {
             world_cam: Vec2::ZERO,
             level_cam: Vec2::ZERO,
             looks: Default::default(),
-            custom: CustomMap::load(&edit_path_for_map).unwrap_or_default(),
+            custom: host::load_custom_map(&edit_path_for_map).unwrap_or_default(),
             custom_dirty: false,
             sel_point: None,
             link_from: None,
@@ -940,7 +941,7 @@ impl Editor {
     /// Bytes this level's zone needs and has.
     fn space(&self) -> (usize, usize) {
         let bank = levels::header(&self.rom, self.cur).bank;
-        levels::bank_space(&self.rom, &self.original, bank, &self.bank_edits(bank))
+        cart_model::layout::bank_space(&self.rom, &self.original, bank, &self.bank_edits(bank))
     }
 
     fn save(&mut self) -> bool {
@@ -952,9 +953,9 @@ impl Editor {
             let edits: Vec<(u8, Vec<u8>)> = self.bank_edits(bank).into_iter().map(|(m, d)| (m, d.to_vec())).collect();
             let refs: Vec<(u8, &[u8])> = edits.iter().map(|(m, d)| (*m, d.as_slice())).collect();
             let mut rom = self.rom.clone();
-            match levels::store_bank(&mut rom, &self.original, bank, &refs) {
+            match cart_model::layout::store_bank(&mut rom, &self.original, bank, &refs) {
                 Ok(n) => {
-                    notes.push(n);
+                    notes.push(n.to_string());
                     self.rom = rom;
                 }
                 Err(e) => {
@@ -989,7 +990,7 @@ impl Editor {
             let mut rom = self.rom.clone();
             match objects::store(&mut rom, &self.original, &lists) {
                 Ok(n) => {
-                    notes.push(n);
+                    notes.push(n.to_string());
                     self.rom = rom;
                     for l in 0..LEVELS {
                         // what the game will read: page by page, as stored
@@ -1008,13 +1009,8 @@ impl Editor {
             let _ = std::fs::create_dir_all(d);
         }
         if self.custom_dirty {
-            let res = if self.custom.points.is_empty() {
-                // no points: no custom map, the game uses its own
-                std::fs::remove_file(CustomMap::file_for(&self.edit_path)).or(Ok(()))
-            } else {
-                self.custom.save(&self.edit_path)
-            };
-            match res {
+            // no points: no custom map file, the game uses its own
+            match host::save_custom_map(&self.custom, &self.edit_path) {
                 Ok(_) => {
                     self.custom_dirty = false;
                     notes.push(tr(self.es, "your world map", "tu mapa de mundos").to_string());
@@ -1233,7 +1229,7 @@ impl Editor {
         want.push(self.kind);
         want.extend(0..128u8);
         let Some(k) = want.into_iter().find(|k| !self.looks.contains_key(&(l, *k))) else { return };
-        let look = objects::capture_look(boot, &self.rom, &self.original, l, k);
+        let look = cart_model::art::capture_look(boot, &self.rom, &self.original, l, k);
         let v = look.map(|lk| (look_texture(&lk), lk.dx as f32, lk.dy as f32));
         self.looks.insert((l, k), v);
     }

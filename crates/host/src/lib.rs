@@ -2,6 +2,7 @@
 //! where saves go, loading a cartridge with its battery save, writing PNG pictures.
 pub mod png_out;
 
+use cart_model::custom_map::CustomMap;
 use gb_core::Gb;
 use std::path::{Path, PathBuf};
 
@@ -81,4 +82,30 @@ pub fn load_gb(rom_path: &Path, sample_rate: u32, load_save: bool) -> Result<Gb,
         }
     }
     Ok(gb)
+}
+
+/// The editor-made world map file that goes with a cartridge file (`<name>.points.txt`).
+pub fn custom_map_path(rom: &Path) -> PathBuf {
+    rom.with_extension("points.txt")
+}
+
+/// The editor-made world map for this cartridge file, if it has one with points.
+pub fn load_custom_map(rom: &Path) -> Option<CustomMap> {
+    let t = std::fs::read_to_string(custom_map_path(rom)).ok()?;
+    let m = CustomMap::parse(&t);
+    if m.points.is_empty() {
+        None
+    } else {
+        Some(m)
+    }
+}
+
+/// Save the map next to the cartridge file; a map with no points removes the file (the
+/// game then uses its own map).
+pub fn save_custom_map(map: &CustomMap, rom: &Path) -> std::io::Result<()> {
+    let path = custom_map_path(rom);
+    if map.points.is_empty() {
+        return std::fs::remove_file(path).or(Ok(()));
+    }
+    std::fs::write(path, map.to_text())
 }
