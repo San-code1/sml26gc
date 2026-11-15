@@ -35,7 +35,7 @@ The editor SHALL provide these shortcuts:
 | Delete level (new levels only) | Ctrl+Delete |
 | World map editor / Back to the levels | F2 |
 | Picture / Points tab | Tab |
-| Original | Ctrl+Shift+O |
+| Restore | Ctrl+Shift+R |
 
 #### Scenario: New level from the keyboard
 - **WHEN** the level editor is shown and the user presses Ctrl+N
@@ -44,6 +44,10 @@ The editor SHALL provide these shortcuts:
 #### Scenario: Next map
 - **WHEN** the world map editor is shown and the user presses PageDown
 - **THEN** the next map is shown as with the > button
+
+#### Scenario: Restore from the keyboard
+- **WHEN** the Pumpkin Zone is shown and the user presses Ctrl+Shift+R
+- **THEN** the Pumpkin Zone is restored as with the Restore button
 
 ### Requirement: Tool, palette and clipboard shortcuts
 The editor SHALL provide these shortcuts in Blocks mode and the Picture tab:
@@ -67,8 +71,9 @@ The editor SHALL provide these shortcuts in the Points tab:
 |---|---|
 | Previous / next point | , / . |
 | Level the point opens: previous / next | J / K |
-| Door or Exit to: previous / next | U / I |
+| Door or Exit to: choose on the map | U |
 | Make it the exit (first / second exit of the zone) | T / Shift+T |
+| Make it the entry (new zones) | H |
 | Delete the path right, left, up, down | Shift+Right, Shift+Left, Shift+Up, Shift+Down |
 | New path / New point / Delete point | P / N / Delete |
 
@@ -116,3 +121,24 @@ keys in both editors.
 #### Scenario: Project from the world map editor
 - **WHEN** the world map editor is shown and the user presses Ctrl+Shift+E
 - **THEN** the Save dialog for a project file opens
+
+### Requirement: New zone and zone file shortcuts
+The world map editor SHALL run the new zone and zone file actions from the keyboard while a
+zone map is shown, with the same keys as their level counterparts, and their buttons and File
+menu entries SHALL show the keys.
+
+| Action | Keys |
+|---|---|
+| New zone (copy of the zone shown) | Ctrl+N |
+| Delete the new zone shown | Ctrl+Delete |
+| Export zone | Ctrl+E |
+| Import zone as a new zone | Ctrl+Shift+N |
+| Replace this new zone from a file | Ctrl+I |
+
+#### Scenario: New zone from the keyboard
+- **WHEN** the Macro Zone is shown in the world map editor and the user presses Ctrl+N
+- **THEN** a new zone made from the Macro Zone is added and shown
+
+#### Scenario: On the world map
+- **WHEN** the world map is shown and the user presses Ctrl+E
+- **THEN** nothing is exported and the status bar says zones are exported from a zone map
