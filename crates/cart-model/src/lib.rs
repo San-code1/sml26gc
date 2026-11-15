@@ -5,6 +5,7 @@
 //! |---|---|
 //! | `rom` | Banks and words in the ROM file |
 //! | `levels` | Level headers, map locations, the map compression (decode/encode) |
+//! | `extra_levels` | Levels beyond the 32, played in place of a base level |
 //! | `objects` | Object lists per level: 3-byte format, reading, re-packing |
 //! | `world` | World map picture and which level each map point opens |
 //! | `zone_maps` | The zones' own one-screen maps (pictures) |
@@ -21,6 +22,7 @@ pub mod art;
 pub mod custom_map;
 pub mod driver;
 pub mod error;
+pub mod extra_levels;
 pub mod layout;
 pub mod levels;
 pub mod live;

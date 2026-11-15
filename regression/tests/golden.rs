@@ -224,9 +224,10 @@ fn rom_data(rom: &[u8], out: &mut Out) {
     }
 }
 
-/// 4. The editor's own world map file format.
+/// 4. The editor's own world map file format. (Level 200 is no level; the new levels
+/// made numbers up to 95 valid, so the sample's out-of-range level moved there from 40.)
 fn custom_map(out: &mut Out) {
-    let text = "# sample\npoint 10 20 0\npoint 100 20 -\npoint 100 200 31\npoint 300 40 40\n\
+    let text = "# sample\npoint 10 20 0\npoint 100 20 -\npoint 100 200 31\npoint 300 40 200\n\
                 path 0 1\npath 1 2\npath 2 2\npath 1 9\npath 1 3\nstart 1\n";
     let mut m = CustomMap::parse(text);
     out.put("cmap.parse", fnv(m.to_text().as_bytes()));

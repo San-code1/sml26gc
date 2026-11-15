@@ -176,10 +176,11 @@ impl Editor {
                 change = 1;
             }
             if change != 0 {
-                // cycle: nothing, 0, 1, ... 31, nothing
-                let idx = cur.map(|l| l as i32).unwrap_or(32);
-                let n = (idx + change).rem_euclid(33);
-                self.doc.custom.points[i].level = if n == 32 { None } else { Some(n as u8) };
+                // cycle: nothing, 0, 1, ... the last level (new ones too), nothing
+                let count = self.doc.levels.len() as i32;
+                let idx = cur.map(|l| l as i32).unwrap_or(count);
+                let n = (idx + change).rem_euclid(count + 1);
+                self.doc.custom.points[i].level = if n == count { None } else { Some(n as u8) };
                 self.doc.custom_dirty = true;
             }
             y += 32.0;

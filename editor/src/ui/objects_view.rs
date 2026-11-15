@@ -17,7 +17,7 @@ impl Editor {
         want.push(self.kind);
         want.extend(0..128u8);
         let Some(k) = want.into_iter().find(|k| !self.looks.contains_key(&(l, *k))) else { return };
-        let look = self.art.look(&self.doc.rom, &self.doc.original, l, k).flatten();
+        let look = self.art.look(&self.doc.rom, &self.doc.original, self.doc.base_of(l), k).flatten();
         let v = look.map(|lk| (look_texture(&lk), lk.dx as f32, lk.dy as f32));
         self.looks.insert((l, k), v);
     }

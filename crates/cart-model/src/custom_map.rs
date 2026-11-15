@@ -43,7 +43,7 @@ impl CustomMap {
                 ["point", x, y, l, rest @ ..] if rest.len() <= 1 => m.points.push(Point {
                     x: x.parse().unwrap_or(0),
                     y: y.parse().unwrap_or(0),
-                    level: l.parse::<u8>().ok().filter(|&n| n < 32),
+                    level: l.parse::<u8>().ok().filter(|&n| (n as usize) < crate::extra_levels::FIRST + crate::extra_levels::MAX),
                     map: OnMap::from_number(rest.first().and_then(|v| v.parse().ok()).unwrap_or(0)),
                 }),
                 ["path", a, b] => {

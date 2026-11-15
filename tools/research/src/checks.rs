@@ -319,3 +319,60 @@ fn best_window_match(win: &[u8], pic: &[u8]) -> usize {
         .max()
         .unwrap_or(0)
 }
+
+/// New levels (beyond the 32): store two in an expanded copy, play each in place of its
+/// base level and compare what the game loaded; then the base level must load as before.
+pub fn extra_check(rom_path: &Path) {
+    use cart_model::extra_levels::{apply, based_on, read, store, writes_for};
+    use cart_model::levels::{decode, header, map_location, COLS};
+    use cart_model::live::{map_in_memory, objects_in_memory};
+    use cart_model::objects::Obj;
+    let Some(gb) = load(rom_path) else { return };
+    let Ok(mut rom) = cart_model::patch::expand(gb.cart().rom()) else { return };
+    let mut a = based_on(&rom, 0);
+    for r in 20..30 {
+        for c in 10..120 {
+            a.map[r * COLS + c] = if (r + c) % 3 == 0 { 0x01 } else { 0x00 };
+        }
+    }
+    a.objs.truncate(3);
+    a.objs.push(Obj { x: 200, y: 296, kind: 5, flag: false });
+    a.objs.sort_by_key(|o| o.x); // stored left to right, as the game keeps them
+    let mut b = based_on(&rom, 25);
+    b.map.iter_mut().take(COLS * 4).for_each(|v| *v = 0);
+    b.objs.clear();
+    println!("store: {}", shown(&store(&mut rom, &[a.clone(), b.clone()]).map(|n| format!("{n} bytes"))));
+    println!("read back the same: {}", read(&rom) == vec![a.clone(), b.clone()]);
+    if let Ok(out) = std::env::var("EXTRA_OUT") {
+        let _ = std::fs::write(out, &rom); // the copy with the two new levels, to look at
+    }
+    let Ok(mut g0) = Gb::new(rom.clone(), 44100) else { return };
+    println!("boots: {}", g0.boot_to_map());
+    for (n, e) in [(32, &a), (33, &b)] {
+        let mut g = g0.clone();
+        let undo = apply(g.cart_mut().rom_mut(), &writes_for(&rom, e));
+        let entered = g.enter_level(e.base);
+        let mut want = e.objs.clone();
+        want.sort_by_key(|o| o.x);
+        let map_ok = map_in_memory(&g) == e.map;
+        let objs_ok = objects_in_memory(&g, want.len()) == want;
+        println!("level {n} (base {}): entered={entered} map={map_ok} objects={objs_ok}", e.base);
+        if !objs_ok {
+            println!("  want {want:?}
+  got  {:?}", objects_in_memory(&g, want.len() + 1));
+        }
+        // back to the map: the base level is itself again
+        g.back_to_map();
+        for _ in 0..600 {
+            g.run_frame_with(Buttons::NONE);
+            if g.mode() == cart_model::GameMode::Map {
+                break;
+            }
+        }
+        apply(g.cart_mut().rom_mut(), &undo);
+        let same_rom = g.cart().rom() == &rom[..];
+        let (_, s) = map_location(&rom, header(&rom, e.base as usize));
+        let again = g.enter_level_anywhere(e.base) && map_in_memory(&g) == decode(&rom, s).0;
+        println!("  then base level {} loads as before: {again} (ROM restored: {same_rom})", e.base);
+    }
+}

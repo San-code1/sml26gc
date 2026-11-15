@@ -96,10 +96,11 @@ Propuesta (módulos):
 | `world` | Imagen del mapa 64x64, tabla punto→nivel |
 | `patch` | Ampliación a 1 MB, parche de objetos, `can_expand`, `upgrade` |
 | `layout` | Capacidad por banco, empaquetado de mapas y objetos (`store_bank`, `space`) |
+| `extra_levels` | Niveles nuevos (32 en adelante): guardados en bancos libres de la copia de 1 MB y jugados en lugar de un nivel base (`writes_for`, `apply`) |
 | `custom_map` | Formato de texto del mapa propio (parse/serialize, vecinos, caminos) |
 | `art` | `LevelArt`, `WorldArt`, captura de sprites (`Look`) a partir de una `GameBoy` |
 | `live` | Lo que el juego en marcha tiene cargado: mapa del nivel, objetos, posición del jugador |
-| `error` | `CartError` (`UnknownVersion`, `ZoneFull`, `ObjectsFull`), `BankUsage`, `ObjectsUsage` |
+| `error` | `CartError` (`UnknownVersion`, `ZoneFull`, `ObjectsFull`, `TooManyLevels`, `LevelTooBig`, `LevelsFull`), `BankUsage`, `ObjectsUsage` |
 | `driver` | `GameDriver`: casos de uso sobre la consola. `boot_to_map`, `enter_level`, `enter_level_anywhere`, `back_to_map`, `back_to_file_select`, `mode()` |
 
 - Errores tipados (`enum CartError`) en lugar de `String`; los textos son los de siempre.

@@ -32,7 +32,8 @@ struct Args {
     script: String,
     frames: u32,
     every: u32,
-    /// Start straight in this level (0..=31), as the level editor's Play button asks.
+    /// Start straight in this level (32 and up: the editor's new levels), as the level
+    /// editor's Play button asks.
     level: Option<u8>,
 }
 

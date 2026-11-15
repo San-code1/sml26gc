@@ -257,8 +257,10 @@ impl Editor {
         (space, view, max)
     }
 
-    /// Let the game load the level (from the world map) and keep its graphics.
+    /// Let the game load the level (from the world map) and keep its graphics (a new
+    /// level's are its base level's).
     fn ensure_art(&mut self, l: usize) {
+        let l = self.doc.base_of(l);
         match self.art.ensure_level(&self.doc.rom, l) {
             Capture::Ready => return,
             Capture::Failed(e) => {
@@ -340,6 +342,37 @@ impl Editor {
         self.in_world = on;
     }
 
+    pub fn level_count(&self) -> usize {
+        self.doc.levels.len()
+    }
+
+    /// A new level, a copy of the one shown, and show it.
+    fn new_level(&mut self) {
+        match self.doc.add_level(self.cur) {
+            Some(n) => {
+                let base = self.doc.base_of(n);
+                self.select_level(n);
+                self.status = format!(
+                    "{} {n:02}: {} {base:02} ({}). {}",
+                    tr(self.es, "New level", "Nivel nuevo"),
+                    tr(self.es, "plays as level", "se juega como el nivel"),
+                    tr(self.es, "its graphics, music and time", "sus graficos, musica y tiempo"),
+                    tr(self.es, "Put it on a point of Your map to reach it in the game.", "Ponlo en un punto de Mapa propio para llegar a el en el juego.")
+                );
+            }
+            None => self.status = tr(self.es, "There can't be more levels.", "No caben mas niveles.").into(),
+        }
+    }
+
+    /// Delete the new level shown (the 32 of the game stay).
+    fn delete_level(&mut self) {
+        let l = self.cur;
+        if self.doc.remove_level(l) {
+            self.select_level(l.min(self.doc.levels.len() - 1));
+            self.status = format!("{} {l:02} {}", tr(self.es, "Level", "Nivel"), tr(self.es, "deleted (save to keep it); the ones after it moved down a number.", "borrado (guarda para conservarlo); los siguientes bajan un numero."));
+        }
+    }
+
     fn undo(&mut self) {
         if self.doc.undo(self.cur) {
             self.sel_obj = None;
@@ -377,6 +410,7 @@ impl Editor {
                         Saved::WorldMap => tr(es, "world map", "mapa de mundos").to_string(),
                         Saved::LevelPoints => tr(es, "level points", "puntos de nivel").to_string(),
                         Saved::CustomMap => tr(es, "your world map", "tu mapa de mundos").to_string(),
+                        Saved::NewLevels(n, used) => format!("{n} {} {used} bytes", tr(es, "new levels", "niveles nuevos")),
                     })
                     .collect();
                 self.status = format!(
@@ -408,6 +442,7 @@ impl Editor {
             return;
         }
         self.status = match self.launcher.launch(self.store.path(), Some(self.cur)) {
+            Ok(()) if self.cur >= LEVELS => format!("{} {:02} ({} {:02})", tr(self.es, "Playing level", "Jugando el nivel"), self.cur, tr(self.es, "as", "como"), self.doc.base_of(self.cur)),
             Ok(()) => format!("{} {:02}", tr(self.es, "Playing level", "Jugando el nivel"), self.cur),
             Err(e) => format!("{} {e}", tr(self.es, "Could not start", "No se pudo abrir")),
         };

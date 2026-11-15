@@ -1,10 +1,12 @@
 //! Everything being edited: the cartridge being built (the edited copy), the untouched
-//! original it is checked against, the 32 levels (blocks and objects) with their undo
-//! history, the world map picture and level points, and the editor-made world map. What
-//! has changed since the last save is tracked here; the files are not.
+//! original it is checked against, the 32 levels (blocks and objects) and the new ones
+//! after them (`extra_levels`) with their undo history, the world map picture and level
+//! points, and the editor-made world map. What has changed since the last save is tracked
+//! here; the files are not.
 use super::history::History;
 use cart_model::custom_map::CustomMap;
 use cart_model::error::{BankUsage, ObjectsUsage};
+use cart_model::extra_levels::{self, Extra};
 use cart_model::levels::{self, COLS, LEVELS, ROWS};
 use cart_model::objects::{self, Obj};
 use cart_model::original_points::OnMap;
@@ -36,13 +38,20 @@ pub enum Saved {
     WorldMap,
     LevelPoints,
     Objects(ObjectsUsage),
+    /// The new levels: how many, bytes used.
+    NewLevels(usize, usize),
     CustomMap,
 }
 
 pub struct EditorDocument {
     pub original: Vec<u8>,
     pub rom: Vec<u8>,
+    /// The 32 levels, then the new ones (number 32 and up).
     pub levels: Vec<LevelDoc>,
+    /// Per new level: the level it is played in place of, and its header.
+    pub extras: Vec<(u8, [u8; 20])>,
+    /// A new level was added or removed.
+    pub extras_dirty: bool,
     /// The world map picture (64 x 64 tiles) and the zone maps' (20 x 18 each).
     pub world: Vec<u8>,
     pub zones: Vec<Vec<u8>>,
@@ -69,10 +78,13 @@ impl EditorDocument {
             .filter(|r| r.len() == original.len() || patch::is_expanded(r))
             .unwrap_or_else(|| patch::expand(&original).unwrap_or_else(|_| original.clone()));
         patch::upgrade(&mut rom); // copies made before the object patch get it now
-        let levels = (0..LEVELS)
-            .map(|l| LevelDoc { content: level_from(&rom, l), blocks_dirty: false, objects_dirty: false, history: History::default() })
-            .collect();
+        let doc = |content| LevelDoc { content, blocks_dirty: false, objects_dirty: false, history: History::default() };
+        let mut levels: Vec<LevelDoc> = (0..LEVELS).map(|l| doc(level_from(&rom, l))).collect();
+        let stored = extra_levels::read(&rom);
+        levels.extend(stored.iter().map(|e| doc(LevelContent { map: e.map.clone(), objs: e.objs.clone() })));
         EditorDocument {
+            extras: stored.iter().map(|e| (e.base, e.header)).collect(),
+            extras_dirty: false,
             world: world::read(&rom),
             zones: zone_maps::ZONES.iter().enumerate().map(|(z, _)| zone_maps::read(&rom, z)).collect(),
             world_dirty: false,
@@ -131,18 +143,75 @@ impl EditorDocument {
         self.levels[l].content.map[r as usize * COLS + c as usize]
     }
 
-    /// The level as the original cartridge has it (undoable).
+    /// The level as the original cartridge has it (undoable); a new level, as its base level
+    /// is there.
     pub fn restore_level(&mut self, l: usize) {
         self.snapshot(l);
+        let content = level_from(&self.original, self.base_of(l));
         let lv = &mut self.levels[l];
-        lv.content = level_from(&self.original, l);
+        lv.content = content;
         lv.blocks_dirty = true;
         lv.objects_dirty = true;
     }
 
-    /// Levels whose map is the same one as level `l`'s.
+    /// Levels whose map is the same one as level `l`'s (a new level has its own).
     pub fn sharing(&self, l: usize) -> Vec<usize> {
+        if l >= LEVELS {
+            return Vec::new();
+        }
         levels::sharing(&self.rom, l)
+    }
+
+    // ------------------------------------------------------------ new levels
+
+    /// The level of the 32 that level `l` is played as (itself for those): its graphics,
+    /// blocks, music and time.
+    pub fn base_of(&self, l: usize) -> usize {
+        if l < LEVELS {
+            l
+        } else {
+            self.extras.get(l - LEVELS).map(|e| e.0 as usize).unwrap_or(0)
+        }
+    }
+
+    /// A new level after the others, starting as a copy of level `from` as it is being
+    /// edited (a new level copies its base). Returns its number, or None when there are as
+    /// many as there can be.
+    pub fn add_level(&mut self, from: usize) -> Option<usize> {
+        if self.extras.len() >= extra_levels::MAX {
+            return None;
+        }
+        let base = self.base_of(from);
+        let header = if from < LEVELS { extra_levels::based_on(&self.rom, base as u8).header } else { self.extras[from - LEVELS].1 };
+        self.extras.push((base as u8, header));
+        let content = self.levels[from].content.clone();
+        self.levels.push(LevelDoc { content, blocks_dirty: true, objects_dirty: true, history: History::default() });
+        self.extras_dirty = true;
+        Some(self.levels.len() - 1)
+    }
+
+    /// Delete new level `l`; the ones after it move down a number, and the points of the
+    /// editor-made map follow (those that opened it open nothing).
+    pub fn remove_level(&mut self, l: usize) -> bool {
+        if l < LEVELS || l >= self.levels.len() {
+            return false;
+        }
+        self.levels.remove(l);
+        self.extras.remove(l - LEVELS);
+        self.extras_dirty = true;
+        for p in &mut self.custom.points {
+            match p.level.map(|v| v as usize) {
+                Some(v) if v == l => p.level = None,
+                Some(v) if v > l => p.level = Some(v as u8 - 1),
+                _ => {}
+            }
+        }
+        self.custom_dirty = true;
+        true
+    }
+
+    fn extras_now(&self) -> Vec<Extra> {
+        self.extras.iter().zip(&self.levels[LEVELS..]).map(|(&(base, header), lv)| Extra { base, header, map: lv.content.map.clone(), objs: lv.content.objs.clone() }).collect()
     }
 
     /// Where a level's view should start: the first column that isn't background filler
@@ -323,18 +392,25 @@ impl EditorDocument {
         v
     }
 
-    /// Bytes level `l`'s zone needs and has.
+    /// Bytes level `l`'s zone needs and has (a new level: its own map and the room it gets).
     pub fn zone_space(&self, l: usize) -> (usize, usize) {
+        if l >= LEVELS {
+            return (levels::encode(&self.levels[l].content.map).len(), extra_levels::MAP_ROOM);
+        }
         let bank = levels::header(&self.rom, l).bank;
         layout::bank_space(&self.rom, &self.original, bank, &self.bank_edits(bank))
     }
 
     fn object_lists(&self) -> Vec<Vec<Obj>> {
-        self.levels.iter().map(|l| l.content.objs.clone()).collect()
+        self.levels[..LEVELS].iter().map(|l| l.content.objs.clone()).collect()
     }
 
-    /// Bytes all the object lists need and have.
-    pub fn object_space(&self) -> (usize, usize) {
+    /// Bytes the object lists need and have: all those of the 32 levels together, or a new
+    /// level's own (`l`).
+    pub fn object_space(&self, l: usize) -> (usize, usize) {
+        if l >= LEVELS {
+            return (self.levels[l].content.objs.len() * 3 + 1, extra_levels::OBJECTS_ROOM);
+        }
         objects::space(&self.rom, &self.original, &self.object_lists())
     }
 
@@ -376,7 +452,7 @@ impl EditorDocument {
             self.points_dirty = false;
             notes.push(Saved::LevelPoints);
         }
-        if self.levels.iter().any(|l| l.objects_dirty) {
+        if self.levels[..LEVELS].iter().any(|l| l.objects_dirty) {
             let mut rom = self.rom.clone();
             notes.push(Saved::Objects(objects::store(&mut rom, &self.original, &self.object_lists())?));
             self.rom = rom;
@@ -385,6 +461,19 @@ impl EditorDocument {
                 self.levels[l].content.objs = objects::read(&self.rom, l).0;
                 self.levels[l].objects_dirty = false;
             }
+        }
+        if self.extras_dirty || self.levels[LEVELS..].iter().any(|l| l.dirty()) {
+            let mut rom = self.rom.clone();
+            let used = extra_levels::store(&mut rom, &self.extras_now())?;
+            self.rom = rom;
+            for (k, e) in extra_levels::read(&self.rom).into_iter().enumerate() {
+                let lv = &mut self.levels[LEVELS + k];
+                lv.content.objs = e.objs; // stored left to right, as the game keeps them
+                lv.blocks_dirty = false;
+                lv.objects_dirty = false;
+            }
+            self.extras_dirty = false;
+            notes.push(Saved::NewLevels(self.extras.len(), used));
         }
         Ok(notes)
     }
@@ -473,5 +562,30 @@ mod tests {
         assert_eq!(doc.custom.paths.len(), paths, "the paths come too");
         assert_eq!(doc.add_original_points(), 0, "points already there are not added twice");
         assert_eq!(doc.custom.paths.len(), paths);
+    }
+
+    #[test]
+    fn new_levels_are_added_saved_and_removed() {
+        let Some(mut doc) = open() else {
+            eprintln!("no cartridge found: document test skipped");
+            return;
+        };
+        doc.set_block(5, 10, 5, 3);
+        let n = doc.add_level(5).unwrap();
+        assert_eq!((n, doc.base_of(n)), (LEVELS, 5));
+        assert_eq!(doc.block(n, 10, 5), 3, "a copy of the level as it is being edited");
+        let m = doc.add_level(n).unwrap();
+        assert_eq!(doc.base_of(m), 5, "a copy of a new level has the same base");
+        doc.set_block(m, 20, 5, 4);
+        doc.add_object(m, Obj { x: 80, y: 40, kind: 5, flag: false });
+        doc.custom.points.push(cart_model::custom_map::Point::new(10, 10, Some(m as u8)));
+        doc.commit().unwrap();
+        let again = EditorDocument::open(doc.original.clone(), Some(doc.rom.clone()), CustomMap::default());
+        assert_eq!(again.levels.len(), LEVELS + 2);
+        assert_eq!(again.levels[m].content, doc.levels[m].content);
+        assert_eq!(again.base_of(m), 5);
+        assert!(doc.remove_level(n) && !doc.remove_level(3));
+        assert_eq!(doc.custom.points.last().unwrap().level, Some(n as u8), "the point follows its level");
+        assert_eq!(doc.levels[n].content, again.levels[m].content);
     }
 }
