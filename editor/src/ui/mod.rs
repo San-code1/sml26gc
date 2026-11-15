@@ -2,8 +2,10 @@
 //! level shown, camera, zoom, tool, selection, textures); what is being edited lives in
 //! `EditorDocument`, and saving / graphics / starting the game go through the application
 //! layer and the ports.
+mod files_view;
 mod grid_edit;
 mod level_view;
+mod menu;
 mod objects_view;
 mod palette;
 mod shortcuts;
@@ -19,7 +21,7 @@ use crate::domain::document::{EditorDocument, Grid, Saved};
 use crate::domain::prefs::{Prefs, PALETTE_ZOOMS};
 use crate::domain::stamp::Stamp;
 use crate::domain::tools::{self, GridCanvas, Pointer, Tool, ToolKind};
-use crate::ports::{EditedCopyStore, GameLauncher, PrefsStore};
+use crate::ports::{EditedCopyStore, FileDialogs, GameLauncher, MenuBar, PrefsStore, TextFiles};
 use grid_edit::Brush;
 use palette::PaletteView;
 use shortcuts::{Action, Ctx};
@@ -96,6 +98,23 @@ pub struct Editor {
     route_draw: Option<Vec<(i32, i32)>>,
     /// The next click on the world map puts a new point there.
     placing_point: bool,
+    dialogs: Box<dyn FileDialogs>,
+    text_files: Box<dyn TextFiles>,
+    /// A file action waiting for the keys and buttons to be let go (see `run_pending_file`).
+    pending_file: Option<Action>,
+    menu: Box<dyn MenuBar>,
+    /// Each File menu entry's state as last set (None: not set yet).
+    menu_enabled: [Option<bool>; menu::FILE_MENU_LEN],
+}
+
+/// What the editor works through, besides the document.
+pub struct Ports {
+    pub store: Box<dyn EditedCopyStore>,
+    pub launcher: Box<dyn GameLauncher>,
+    pub prefs: Box<dyn PrefsStore>,
+    pub dialogs: Box<dyn FileDialogs>,
+    pub text_files: Box<dyn TextFiles>,
+    pub menu: Box<dyn MenuBar>,
 }
 
 /// Painting into the level or map picture shown.
@@ -125,13 +144,14 @@ fn left_button() -> Pointer {
 }
 
 impl Editor {
-    pub fn new(doc: EditorDocument, store: Box<dyn EditedCopyStore>, launcher: Box<dyn GameLauncher>, prefs_store: Box<dyn PrefsStore>, had_copy: bool, es: bool) -> Editor {
+    pub fn new(doc: EditorDocument, ports: Ports, had_copy: bool, es: bool) -> Editor {
+        let Ports { store, launcher, prefs: prefs_store, dialogs, text_files, menu } = ports;
         let status = if !had_copy {
             tr(es, "Original cartridge opened. Saving makes an edited copy; the original is never changed.", "Cartucho original abierto. Al guardar se crea una copia editada; el original no se toca.").to_string()
         } else {
             format!("{} {}", tr(es, "Edited copy opened:", "Copia editada abierta:"), store.path().display())
         };
-        Editor {
+        let mut ed = Editor {
             es,
             doc,
             store,
@@ -177,14 +197,23 @@ impl Editor {
             route_draw: None,
             placing_point: false,
             level_cam: Vec2::ZERO,
-        }
+            dialogs,
+            text_files,
+            pending_file: None,
+            menu,
+            menu_enabled: [None; menu::FILE_MENU_LEN],
+        };
+        ed.build_menu();
+        ed
     }
 
-    /// One frame: shortcuts, input, then drawing.
+    /// One frame: the menu, shortcuts, input, then drawing.
     pub fn frame(&mut self) {
+        self.update_menu();
         for a in shortcuts::pressed(self.ctx()) {
             self.run(a);
         }
+        self.run_pending_file();
         self.panel = self.fitted_panel();
         if self.in_world {
             self.update_world();
@@ -255,6 +284,7 @@ impl Editor {
             Action::ClearSelection => self.clear_selection_cells(),
             Action::Escape => self.escape_grid(),
             Action::DeleteObject => self.delete_selected_object(),
+            a if a.uses_files() => self.queue_file(a),
             _ => self.run_points(a),
         }
     }
@@ -457,16 +487,28 @@ impl Editor {
     }
 
     fn undo(&mut self) {
+        let base = self.doc.base_of(self.cur);
         if self.doc.undo(self.cur) {
-            self.sel_obj = None;
-            self.overview_stale = true;
+            self.level_changed(base);
         }
     }
 
     fn redo(&mut self) {
+        let base = self.doc.base_of(self.cur);
         if self.doc.redo(self.cur) {
-            self.sel_obj = None;
-            self.overview_stale = true;
+            self.level_changed(base);
+        }
+    }
+
+    /// After the shown level changed under the view; `base` is what it played as before (a
+    /// replaced new level can play as another and look different).
+    fn level_changed(&mut self, base: usize) {
+        self.sel_obj = None;
+        self.overview_stale = true;
+        if self.doc.base_of(self.cur) != base {
+            let l = self.cur;
+            self.looks.retain(|k, _| k.0 != l);
+            self.ensure_art(l);
         }
     }
 

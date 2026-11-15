@@ -253,6 +253,7 @@ dependencies = [
  "gb-core",
  "host",
  "macroquad",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]

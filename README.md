@@ -42,6 +42,12 @@ select, language. F11: full screen. Hold Ctrl: fast-forward.
 - Palettes zoom with their - + buttons or Ctrl - / Ctrl +; the side panel widens or narrows to
   fit (at most half the window). A cut palette scrolls with the wheel or a right-drag. The zoom
   is kept in `editor.cfg`.
+- Files, from the File menu or the keys (Windows Save and Open dialogs, starting in
+  `exports\`): Ctrl+E exports the level
+  shown; Ctrl+Shift+N imports a level file as a new level, Ctrl+I replaces the new level shown
+  with one (the game's 32 levels are never replaced, only edited). Ctrl+Shift+E / Ctrl+Shift+I
+  export and import the whole project (every level, the world and zone maps, points, paths and
+  doors) over the same cartridge; nothing is written until you save.
 - Every button shows its shortcut. Ctrl+Z / Ctrl+Y undo and redo, Ctrl+S saves
   `edits\<game> (edit).gb` (the original is never changed), F5 saves and plays it.
 

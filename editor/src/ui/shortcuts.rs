@@ -59,6 +59,18 @@ pub enum Action {
     NewPath,
     NewPoint,
     DeletePoint,
+    ExportLevel,
+    ImportLevel,
+    ReplaceLevel,
+    ExportProject,
+    ImportProject,
+}
+
+impl Action {
+    /// Actions that open a file dialog.
+    pub fn uses_files(self) -> bool {
+        matches!(self, ExportLevel | ImportLevel | ReplaceLevel | ExportProject | ImportProject)
+    }
 }
 
 pub struct Shortcut {
@@ -103,12 +115,17 @@ pub const TABLE: &[Shortcut] = &[
     s(Escape, PAINT, false, false, &[K::Escape], "Esc"),
     s(ZoomOut, PALETTES, true, false, &[K::Minus, K::Slash, K::KpSubtract], "Ctrl+-"),
     s(ZoomIn, PALETTES, true, false, &[K::Equal, K::RightBracket, K::KpAdd], "Ctrl++"),
+    s(ExportProject, ALL, true, true, &[K::E], "Ctrl+Shift+E"),
+    s(ImportProject, ALL, true, true, &[K::I], "Ctrl+Shift+I"),
     s(Overview, LEVEL, false, false, &[K::M], "M"),
     s(BlocksObjects, LEVEL, false, false, &[K::Tab, K::O], "Tab"),
     s(PrevLevel, LEVEL, false, false, &[K::PageUp], "PgUp"),
     s(NextLevel, LEVEL, false, false, &[K::PageDown], "PgDn"),
     s(NewLevel, LEVEL, true, false, &[K::N], "Ctrl+N"),
     s(DeleteLevel, LEVEL, true, false, &[K::Delete], "Ctrl+Del"),
+    s(ExportLevel, LEVEL, true, false, &[K::E], "Ctrl+E"),
+    s(ImportLevel, LEVEL, true, true, &[K::N], "Ctrl+Shift+N"),
+    s(ReplaceLevel, LEVEL, true, false, &[K::I], "Ctrl+I"),
     s(DeleteObject, &[Objects], false, false, &[K::Delete, K::Backspace], "Del"),
     s(PrevMap, WORLD, false, false, &[K::PageUp], "PgUp"),
     s(NextMap, WORLD, false, false, &[K::PageDown], "PgDn"),
