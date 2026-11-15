@@ -1,7 +1,7 @@
 //! Levels beyond the cartridge's 32 (numbers 32 and up), kept in the 1 MB edited copy.
 //!
 //! The game has room for 32 levels only: its level number ($A269) indexes about ten tables
-//! of 32 entries (header, objects, music, graphics, time...; see MECHANICS.md). A new level
+//! of 32 entries (header, objects, music, graphics, time...; see `legacy/gb_port/MECHANICS.md`). A new level
 //! therefore is played as a stand-in: it is based on one of the 32 (`base`), whose number
 //! the game sees and whose music, graphics and other table values it uses, and it brings
 //! its own header, map and objects. Entering it, the port writes those over the base

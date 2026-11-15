@@ -353,7 +353,7 @@ impl Editor {
                     tr(self.es, "New level", "Nivel nuevo"),
                     tr(self.es, "plays as level", "se juega como el nivel"),
                     tr(self.es, "its graphics, music and time", "sus graficos, musica y tiempo"),
-                    tr(self.es, "Put it on a point of Your map to reach it in the game.", "Ponlo en un punto de Mapa propio para llegar a el en el juego.")
+                    tr(self.es, "Give it to a map point to reach it in the game.", "Asignalo a un punto del mapa para llegar a el en el juego.")
                 );
             }
             None => self.status = tr(self.es, "There can't be more levels.", "No caben mas niveles.").into(),

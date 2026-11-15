@@ -146,8 +146,6 @@ pub fn text_width(t: &str) -> i32 {
     t.chars().map(advance).sum()
 }
 
-// ---------------------------------------------------------------- drawing
-
 pub struct Canvas<'a> {
     pub px: &'a mut [u8],
 }
