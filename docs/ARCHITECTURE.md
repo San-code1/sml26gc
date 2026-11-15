@@ -192,7 +192,10 @@ para que partidas y ediciones existentes sigan sirviendo):
 | Progreso | `saves/<nombre>.progress.txt` |
 | Ajustes (idioma lo lee también el editor) | `settings.cfg` |
 
-Las rutas y nombres viven en `host`, así ambos programas los calculan igual.
+Las rutas y nombres viven en `host::paths` (`save_path`, `progress_path`, `edited_copy_path`,
+`custom_map_path`, `settings_path`, `game_exe`), así ambos programas los calculan igual. El
+resto de `host`: `rom_locator` (`find_rom`, `require_rom` con un mensaje claro si falta el
+cartucho), `battery`, `progress`, `settings_file`, `custom_map_file` y `png_out`.
 
 ## 7. Estrategia de pruebas
 
@@ -210,7 +213,7 @@ Las rutas y nombres viven en `host`, así ambos programas los calculan igual.
 | 0 ✅ | Esqueleto del workspace; mover emulador y conocimiento casi tal cual a `gb-core` y `cart-model`; portar el test dorado |
 | 1 ✅ | `gb-core`: encapsular campos, `Buttons`, `Screen`, `BusObserver` (sustituye al código de investigación del bus) |
 | 2 ✅ | `cart-model`: `RomImage`, `ram_map`, `GameDriver`, errores tipados, separar ficheros |
-| 3 | `host`: localizar ROM, rutas, ajustes |
+| 3 ✅ | `host`: localizar ROM, rutas, ajustes |
 | 4 | `game/`: dominio puro + puertos + adaptadores + raíz de composición |
 | 5 | `editor/`: romper el objeto gigante en documento, historial, herramientas, comandos y paneles |
 | 6 | `tools/research/` |

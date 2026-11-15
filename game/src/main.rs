@@ -10,7 +10,7 @@ pub use cart_model::ram_map::LEVEL_NUMBER;
 pub use cart_model::{GameDriver, GameMode};
 pub use gb_core::palette::{fb_to_rgba, PALETTES};
 pub use gb_core::{ppu, Buttons, Gb, FRAME_SECONDS};
-pub use host::{find_rom, load_gb, save_path};
+pub use host::load_gb;
 use macroquad::prelude::*;
 use std::path::{Path, PathBuf};
 
@@ -75,15 +75,8 @@ fn parse_args() -> Args {
 }
 
 fn write_save(gb: &mut Gb, rom_path: &Path) {
-    if !gb.cart().has_battery() || !gb.cart().needs_saving() {
-        return;
-    }
-    let p = save_path(rom_path);
-    if let Some(d) = p.parent() {
-        let _ = std::fs::create_dir_all(d);
-    }
-    if std::fs::write(&p, gb.cart().ram()).is_ok() {
-        gb.cart_mut().mark_saved();
+    if let Err(e) = host::write_battery_save(gb, rom_path) {
+        eprintln!("could not write the save file: {e}");
     }
 }
 
@@ -135,12 +128,17 @@ mod win {
 fn main() {
     let raw: Vec<String> = std::env::args().skip(1).collect();
     if raw.first().map(|s| s == "--research").unwrap_or(false) {
-        let rom = find_rom(None).expect("no cartridge");
+        let rom = host::require_rom(None).unwrap_or_else(|e| {
+            eprintln!("{e}");
+            std::process::exit(1)
+        });
         checks::research_main(&rom, &raw[1..]);
         return;
     }
     let args = parse_args();
-    let rom = find_rom(args.rom.clone());
+    let found = host::require_rom(args.rom.clone());
+    let rom = found.as_ref().ok().cloned();
+    let rom_error = found.err();
 
     if let Some(out) = &args.self_test {
         let res = selftest::run(rom.as_deref());
@@ -169,10 +167,10 @@ fn main() {
         window_resizable: true,
         ..Default::default()
     };
-    macroquad::Window::from_config(conf, run(args, rom, title));
+    macroquad::Window::from_config(conf, run(args, rom, rom_error, title));
 }
 
-async fn run(args: Args, rom_path: Option<PathBuf>, title: String) {
+async fn run(args: Args, rom_path: Option<PathBuf>, rom_error: Option<String>, title: String) {
     let quiet = args.screenshot.is_some();
     prevent_quit();
     let audio =if quiet { audio::Audio::silent() } else { audio::Audio::new() };
@@ -186,7 +184,7 @@ async fn run(args: Args, rom_path: Option<PathBuf>, title: String) {
             }
         },
         None => {
-            error = "No Game Boy cartridge file (.gb) was found.\nPut it in a 'rom' folder next to this program\nor pass its path on the command line.".into();
+            error = rom_error.unwrap_or_else(|| host::NO_CARTRIDGE.into());
             None
         }
     };

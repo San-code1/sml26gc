@@ -3,7 +3,6 @@
 //! the game's own pause, quit. Texts in English (default), Spanish and Japanese.
 use crate::ppu::{H, W};
 use macroquad::prelude::*;
-use std::path::PathBuf;
 
 pub const DEFAULT_KEYS: [KeyCode; 8] = [
     KeyCode::Up,
@@ -184,17 +183,10 @@ impl Default for Settings {
     }
 }
 
-fn settings_path() -> PathBuf {
-    std::env::current_exe()
-        .ok()
-        .and_then(|e| e.parent().map(|p| p.join("settings.cfg")))
-        .unwrap_or_else(|| PathBuf::from("settings.cfg"))
-}
-
 impl Settings {
     pub fn load() -> Settings {
         let mut s = Settings::default();
-        let Ok(text) = std::fs::read_to_string(settings_path()) else { return s };
+        let Some(text) = host::settings_file::read() else { return s };
         for line in text.lines() {
             let Some((k, v)) = line.split_once('=') else { continue };
             let (k, v) = (k.trim(), v.trim());
@@ -230,7 +222,7 @@ impl Settings {
             self.integer_scale as u8,
             LANG_IDS[self.lang.min(2)]
         );
-        let _ = std::fs::write(settings_path(), out);
+        let _ = host::settings_file::write(&out);
     }
 }
 

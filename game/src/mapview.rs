@@ -26,22 +26,14 @@ const PH: usize = world::H * 8;
 impl MapView {
     pub fn load(rom: &Path) -> Option<MapView> {
         let map = host::load_custom_map(rom)?;
-        let progress_file = host::save_path(rom).with_extension("progress.txt");
-        let cleared = std::fs::read_to_string(&progress_file)
-            .map(|t| t.split_whitespace().filter_map(|w| w.parse().ok()).collect())
-            .unwrap_or_default();
+        let progress_file = host::progress_path(rom);
+        let cleared = host::progress::load(&progress_file);
         Some(MapView { cur: map.start, map, walk: None, picture: Vec::new(), cleared, progress_file, blink: 0, enabled: true })
     }
 
     pub fn mark_cleared(&mut self, level: u8) {
         if self.cleared.insert(level) {
-            let mut v: Vec<u8> = self.cleared.iter().copied().collect();
-            v.sort();
-            let t: Vec<String> = v.iter().map(|l| l.to_string()).collect();
-            if let Some(d) = self.progress_file.parent() {
-                let _ = std::fs::create_dir_all(d);
-            }
-            let _ = std::fs::write(&self.progress_file, t.join(" "));
+            let _ = host::progress::save(&self.progress_file, &self.cleared);
         }
     }
 

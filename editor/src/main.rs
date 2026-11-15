@@ -8,7 +8,6 @@ use cart_model::objects::{self, Obj};
 use cart_model::world;
 use cart_model::GameDriver;
 use gb_core::Gb;
-use host::find_rom;
 use macroquad::prelude::*;
 use std::path::{Path, PathBuf};
 
@@ -142,15 +141,9 @@ fn tr(es: bool, en: &'static str, es_text: &'static str) -> &'static str {
     }
 }
 
-fn exe_dir() -> PathBuf {
-    std::env::current_exe().ok().and_then(|e| e.parent().map(|p| p.to_path_buf())).unwrap_or_else(|| PathBuf::from("."))
-}
-
 /// Language from the game's settings file (English unless Spanish was chosen).
 fn spanish() -> bool {
-    std::fs::read_to_string(exe_dir().join("settings.cfg"))
-        .map(|t| t.lines().any(|l| l.trim() == "language=es"))
-        .unwrap_or(false)
+    host::settings_file::language().as_deref() == Some("es")
 }
 
 fn make_atlas(art: &LevelArt) -> Texture2D {
@@ -171,8 +164,7 @@ fn make_atlas(art: &LevelArt) -> Texture2D {
 impl Editor {
     fn new(original_path: &Path) -> Result<Editor, String> {
         let original = std::fs::read(original_path).map_err(|e| e.to_string())?;
-        let stem = original_path.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| "game".into());
-        let edit_path = exe_dir().join("edits").join(format!("{stem} (edit).gb"));
+        let edit_path = host::edited_copy_path(original_path);
         // Work on the edited copy if there is one; otherwise start a new copy, made 1 MB so
         // every zone has room for bigger levels (cart_model::patch::expand).
         let mut rom = std::fs::read(&edit_path)
@@ -809,7 +801,7 @@ impl Editor {
             }
             6 => {
                 if self.save() {
-                    let game = exe_dir().join(if cfg!(windows) { "game.exe" } else { "game" });
+                    let game = host::game_exe();
                     match std::process::Command::new(&game).arg(&self.edit_path).spawn() {
                         Ok(_) => self.status = tr(self.es, "Game started with your map.", "Juego abierto con tu mapa.").into(),
                         Err(e) => self.status = format!("{}: {e}", game.display()),
@@ -1042,7 +1034,7 @@ impl Editor {
         if !self.save() {
             return;
         }
-        let game = exe_dir().join(if cfg!(windows) { "game.exe" } else { "game" });
+        let game = host::game_exe();
         match std::process::Command::new(&game)
             .arg(&self.edit_path)
             .arg("--level")
@@ -1668,12 +1660,15 @@ async fn main() {
     draw_text("Loading...", 40.0, 60.0, 30.0, col(0));
     next_frame().await;
 
-    let Some(rom_path) = find_rom(rom_arg) else {
-        loop {
+    let rom_path = match host::require_rom(rom_arg) {
+        Ok(p) => p,
+        Err(e) => loop {
             clear_background(col(3));
-            draw_text("No Game Boy cartridge (.gb) was found.", 40.0, 60.0, 30.0, col(0));
+            for (i, line) in e.lines().enumerate() {
+                draw_text(line, 40.0, 60.0 + i as f32 * 34.0, 30.0, col(0));
+            }
             next_frame().await;
-        }
+        },
     };
     let mut ed = match Editor::new(&rom_path) {
         Ok(e) => e,

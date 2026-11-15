@@ -13,7 +13,10 @@ use std::path::Path;
 
 fn main() {
     let v: Vec<String> = std::env::args().skip(1).collect();
-    let rom = host::find_rom(None).expect("no cartridge");
+    let rom = host::require_rom(None).unwrap_or_else(|e| {
+        eprintln!("{e}");
+        std::process::exit(1)
+    });
     let hex = |s: &str| u16::from_str_radix(s.trim_start_matches("0x"), 16).unwrap_or(0);
     let list = |s: &str| {
         s.split(',')
