@@ -1,10 +1,8 @@
 //! Everything being edited: the cartridge being built (the edited copy), the untouched
 //! original it is checked against, the 32 levels (blocks and objects) and the new ones
 //! after them (`extra_levels`) with their undo history, the world map picture and level
-//! points, and the editor-made world map. What has changed since the last save is tracked
-//! here; the files are not.
+//! points. What has changed since the last save is tracked here; the files are not.
 use super::history::History;
-use cart_model::custom_map::CustomMap;
 use cart_model::error::{BankUsage, ObjectsUsage};
 use cart_model::extra_levels::{self, Extra};
 use cart_model::levels::{self, COLS, LEVELS, ROWS};
@@ -40,7 +38,6 @@ pub enum Saved {
     Objects(ObjectsUsage),
     /// The new levels: how many, bytes used.
     NewLevels(usize, usize),
-    CustomMap,
 }
 
 pub struct EditorDocument {
@@ -61,9 +58,6 @@ pub struct EditorDocument {
     /// Which level each of the game's own map points opens.
     pub points: Vec<u8>,
     pub points_dirty: bool,
-    pub custom: CustomMap,
-    pub custom_dirty: bool,
-    custom_history: History<CustomMap>,
     points_history: History<Vec<u8>>,
 }
 
@@ -75,7 +69,7 @@ fn level_from(rom: &[u8], l: usize) -> LevelContent {
 impl EditorDocument {
     /// Start from the edited copy if there is a usable one; otherwise from a new copy of the
     /// original, made 1 MB so every zone has room for bigger levels (`patch::expand`).
-    pub fn open(original: Vec<u8>, edited: Option<Vec<u8>>, custom: CustomMap) -> EditorDocument {
+    pub fn open(original: Vec<u8>, edited: Option<Vec<u8>>) -> EditorDocument {
         let mut rom = edited
             .filter(|r| r.len() == original.len() || patch::is_expanded(r))
             .unwrap_or_else(|| patch::expand(&original).unwrap_or_else(|_| original.clone()));
@@ -93,9 +87,6 @@ impl EditorDocument {
             world_history: History::default(),
             points: world::point_levels(&rom),
             points_dirty: false,
-            custom,
-            custom_dirty: false,
-            custom_history: History::default(),
             points_history: History::default(),
             original,
             rom,
@@ -194,8 +185,8 @@ impl EditorDocument {
         Some(self.levels.len() - 1)
     }
 
-    /// Delete new level `l`; the ones after it move down a number, and the points of the
-    /// editor-made map follow (those that opened it open nothing).
+    /// Delete new level `l`; the ones after it move down a number, and the map points follow
+    /// (those that opened it open nothing).
     pub fn remove_level(&mut self, l: usize) -> bool {
         if l < LEVELS || l >= self.levels.len() {
             return false;
@@ -203,14 +194,14 @@ impl EditorDocument {
         self.levels.remove(l);
         self.extras.remove(l - LEVELS);
         self.extras_dirty = true;
-        for p in &mut self.custom.points {
-            match p.level.map(|v| v as usize) {
-                Some(v) if v == l => p.level = None,
-                Some(v) if v > l => p.level = Some(v as u8 - 1),
+        for p in &mut self.points {
+            match *p as usize {
+                v if v == l => *p = world::NO_LEVEL,
+                v if v > l && *p != world::NO_LEVEL => *p -= 1,
                 _ => {}
             }
         }
-        self.custom_dirty = true;
+        self.points_dirty = true;
         true
     }
 
@@ -339,16 +330,25 @@ impl EditorDocument {
         self.points_dirty = true;
     }
 
-    /// Step the level a game map point opens: no level, 0, 1, ... 31, no level (undoable).
+    /// Does map point `point` open a level (one of the 32 or a new one)?
+    pub fn point_level(&self, point: usize) -> Option<usize> {
+        let l = self.points[point] as usize;
+        (l < self.levels.len()).then_some(l)
+    }
+
+    /// Step the level a game map point opens: no level, 0, 1, ... the last level (the new
+    /// ones too), no level (undoable). Points the game uses for something else ($FF...) are
+    /// left alone.
     pub fn step_point_level(&mut self, point: usize, step: i32) {
         let cur = self.points[point];
-        if step == 0 || !(cur < 32 || cur == world::NO_LEVEL) {
+        let count = self.levels.len() as i32;
+        if step == 0 || !((cur as i32) < count || cur == world::NO_LEVEL) {
             return;
         }
         self.points_history.record(self.points.clone());
-        let i = if cur == world::NO_LEVEL { 32 } else { cur as i32 };
-        let n = (i + step).rem_euclid(33);
-        self.points[point] = if n == 32 { world::NO_LEVEL } else { n as u8 };
+        let i = if cur == world::NO_LEVEL { count } else { cur as i32 };
+        let n = (i + step).rem_euclid(count + 1);
+        self.points[point] = if n == count { world::NO_LEVEL } else { n as u8 };
         self.points_dirty = true;
     }
 
@@ -362,77 +362,6 @@ impl EditorDocument {
         let done = self.points_history.redo(&mut self.points);
         self.points_dirty |= done;
         done
-    }
-
-    // ------------------------------------------------------------ the editor-made map
-
-    /// Remember the editor-made map before a change, for undo.
-    pub fn custom_snapshot(&mut self) {
-        self.custom_history.record(self.custom.clone());
-    }
-
-    /// Remember the editor-made map as it was before a change already made (a drag that
-    /// moved a point).
-    pub fn custom_record(&mut self, before: CustomMap) {
-        self.custom_history.record(before);
-    }
-
-    pub fn custom_undo(&mut self) -> bool {
-        let done = self.custom_history.undo(&mut self.custom);
-        self.custom_dirty |= done;
-        done
-    }
-
-    pub fn custom_redo(&mut self) -> bool {
-        let done = self.custom_history.redo(&mut self.custom);
-        self.custom_dirty |= done;
-        done
-    }
-
-    /// Remove every point and path of the editor-made map (undoable).
-    pub fn clear_custom(&mut self) {
-        self.custom_snapshot();
-        self.custom = CustomMap::default();
-        self.custom_dirty = true;
-    }
-
-    /// Make the editor-made map the game's own map again, as `original_points` has it with
-    /// the levels the points open now; whatever was there goes (undoable).
-    pub fn restore_original_map(&mut self) {
-        self.custom_snapshot();
-        self.custom = CustomMap::from_original(&self.points);
-        self.custom_dirty = true;
-    }
-
-    /// Add the game's own map (its points where it draws them, with the levels they open now,
-    /// and its paths and doors) to the editor-made map; points already there (same map and
-    /// place) are reused. Returns how many points were added.
-    pub fn add_original_points(&mut self) -> usize {
-        let original = CustomMap::from_original(&self.points);
-        let was_empty = self.custom.points.is_empty();
-        let mut added = 0;
-        let mut index = Vec::new();
-        for p in &original.points {
-            match self.custom.points.iter().position(|q| (q.map, q.x, q.y) == (p.map, p.x, p.y)) {
-                Some(i) => index.push(i),
-                None => {
-                    self.custom.points.push(*p);
-                    index.push(self.custom.points.len() - 1);
-                    added += 1;
-                }
-            }
-        }
-        for &(a, b) in &original.paths {
-            if !self.custom.linked(index[a], index[b]) {
-                self.custom.paths.push((index[a], index[b]));
-                self.custom_dirty = true;
-            }
-        }
-        if was_empty {
-            self.custom.start = index[original.start];
-        }
-        self.custom_dirty |= added > 0;
-        added
     }
 
     // ------------------------------------------------------------ space and saving
@@ -542,7 +471,7 @@ mod tests {
 
     fn open() -> Option<EditorDocument> {
         let rom = host::find_rom(None)?;
-        Some(EditorDocument::open(std::fs::read(rom).ok()?, None, CustomMap::default()))
+        Some(EditorDocument::open(std::fs::read(rom).ok()?, None))
     }
 
     #[test]
@@ -611,37 +540,14 @@ mod tests {
         doc.restore_world();
         assert_eq!(doc.points, world::point_levels(&doc.original));
         assert_eq!(doc.tile(zone, 3, 3), before);
-
-        let n = doc.add_original_points();
-        assert!(n > 30 && doc.custom_dirty);
-        assert_eq!(doc.custom.points[doc.custom.start].level, Some(0), "Mario starts on the first level");
-        let paths = CustomMap::from_original(&doc.points).paths.len();
-        assert_eq!(doc.custom.paths.len(), paths, "the paths come too");
-        assert_eq!(doc.add_original_points(), 0, "points already there are not added twice");
-        assert_eq!(doc.custom.paths.len(), paths);
     }
 
     #[test]
-    fn your_map_and_the_point_levels_undo() {
+    fn point_levels_undo() {
         let Some(mut doc) = open() else {
             eprintln!("no cartridge found: document test skipped");
             return;
         };
-        doc.restore_original_map();
-        let original = doc.custom.clone();
-        assert!(original.points.len() > 60 && !original.paths.is_empty());
-        doc.custom.points[0].x += 8; // a change made through the snapshot of a drag
-        doc.custom_record(original.clone());
-        doc.clear_custom();
-        assert!(doc.custom.points.is_empty() && doc.custom.paths.is_empty());
-        assert!(doc.custom_undo());
-        assert_eq!(doc.custom.points[0].x, original.points[0].x + 8);
-        assert!(doc.custom_undo());
-        assert_eq!(doc.custom, original);
-        assert!(doc.custom_redo() && doc.custom_redo() && doc.custom.points.is_empty());
-        doc.restore_original_map();
-        assert_eq!(doc.custom, original, "the game's map comes back however it was changed");
-
         let before = doc.points.clone();
         doc.step_point_level(0, 2);
         assert_eq!(doc.points[0], before[0] + 2);
@@ -664,14 +570,17 @@ mod tests {
         assert_eq!(doc.base_of(m), 5, "a copy of a new level has the same base");
         doc.set_block(m, 20, 5, 4);
         doc.add_object(m, Obj { x: 80, y: 40, kind: 5, flag: false });
-        doc.custom.points.push(cart_model::custom_map::Point::new(10, 10, Some(m as u8)));
+        doc.points[0] = m as u8; // the game's first point opens the second new level
+        doc.points[1] = n as u8;
         doc.commit().unwrap();
-        let again = EditorDocument::open(doc.original.clone(), Some(doc.rom.clone()), CustomMap::default());
+        let again = EditorDocument::open(doc.original.clone(), Some(doc.rom.clone()));
+        assert_eq!((again.points[0], again.point_level(1)), (m as u8, Some(n)));
         assert_eq!(again.levels.len(), LEVELS + 2);
         assert_eq!(again.levels[m].content, doc.levels[m].content);
         assert_eq!(again.base_of(m), 5);
         assert!(doc.remove_level(n) && !doc.remove_level(3));
-        assert_eq!(doc.custom.points.last().unwrap().level, Some(n as u8), "the point follows its level");
+        assert_eq!(doc.points[0], n as u8, "the point follows its level");
+        assert_eq!(doc.points[1], world::NO_LEVEL, "a point to a deleted level opens nothing");
         assert_eq!(doc.levels[n].content, again.levels[m].content);
     }
 }

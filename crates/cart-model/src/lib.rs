@@ -16,10 +16,8 @@
 //! | `live` | Reading what the running game has loaded |
 //! | `art` | Pictures captured from the running game (blocks, map tiles, object looks) |
 //! | `driver` | `GameDriver`: boot to the map, enter a level, back to the map... |
-//! | `custom_map` | The editor-made world map (points, paths) as text |
 //! | `error` | `CartError` and what a save used |
 pub mod art;
-pub mod custom_map;
 pub mod driver;
 pub mod error;
 pub mod extra_levels;

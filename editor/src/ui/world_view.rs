@@ -1,9 +1,8 @@
 //! The world map editor: the world map and the zone maps, each picture painted tile by tile
 //! (Picture tab), and the game's own points drawn where the game shows them with the level
-//! each one opens (Orig. points tab). The third tab, the editor-made map, is in
-//! `custom_view`.
+//! each one opens, which can be changed (Points tab).
 use super::widgets::*;
-use super::{left_button, Editor, WorldCanvas, TAB_CUSTOM, TAB_PICTURE, TAB_POINTS};
+use super::{left_button, Editor, WorldCanvas, TAB_PICTURE, TAB_POINTS};
 use crate::domain::document::EditorDocument;
 use crate::domain::tools::ToolKind;
 use cart_model::original_points::{self, OnMap, Spot};
@@ -83,13 +82,12 @@ impl Editor {
         if ctrl && is_key_pressed(KeyCode::S) {
             self.save();
         }
+        if is_key_pressed(KeyCode::F5) {
+            self.play_map();
+        }
         self.tool_keys(ctrl);
         let (space, _, _) = self.navigate(m, ctrl, self.map_px());
         if self.pan.is_some() || space {
-            return;
-        }
-        if self.world_tab == TAB_CUSTOM {
-            self.update_custom(m);
             return;
         }
         if self.world_tab == TAB_POINTS {
@@ -150,9 +148,7 @@ impl Editor {
                 }
             }
             let m: Vec2 = mouse_position().into();
-            if self.world_tab == TAB_CUSTOM {
-                self.draw_custom();
-            } else if self.world_tab == TAB_POINTS {
+            if self.world_tab == TAB_POINTS {
                 self.draw_original_points();
             } else if let Some((x, y)) = self.world_cell(m) {
                 let p = self.on_screen(x as i32 * 8, y as i32 * 8);
@@ -178,7 +174,6 @@ impl Editor {
                 self.tile_palette(y);
                 act
             }
-            TAB_CUSTOM => self.custom_panel(y).unwrap_or(act),
             _ => {
                 self.points_panel(y);
                 act
@@ -206,8 +201,7 @@ impl Editor {
                 self.doc.world_undo();
                 true
             }
-            TAB_POINTS => self.doc.points_undo(),
-            _ => self.custom_undone(true),
+            _ => self.doc.points_undo(),
         };
         if !done {
             self.status = tr(self.es, "Nothing to undo.", "Nada que deshacer.").into();
@@ -220,8 +214,7 @@ impl Editor {
                 self.doc.world_redo();
                 true
             }
-            TAB_POINTS => self.doc.points_redo(),
-            _ => self.custom_undone(false),
+            _ => self.doc.points_redo(),
         };
         if !done {
             self.status = tr(self.es, "Nothing to redo.", "Nada que rehacer.").into();
@@ -256,11 +249,11 @@ impl Editor {
         if button(Rect::new(10.0, y, 88.0, 26.0), tr(self.es, "Picture", "Dibujo"), self.world_tab == TAB_PICTURE, 15.0) {
             self.world_tab = TAB_PICTURE;
         }
-        if button(Rect::new(102.0, y, 88.0, 26.0), tr(self.es, "Orig. points", "Puntos orig."), self.world_tab == TAB_POINTS, 15.0) {
+        if button(Rect::new(102.0, y, 88.0, 26.0), tr(self.es, "Points", "Puntos"), self.world_tab == TAB_POINTS, 15.0) {
             self.world_tab = TAB_POINTS;
         }
-        if button(Rect::new(194.0, y, 92.0, 26.0), tr(self.es, "Your map", "Mapa propio"), self.world_tab == TAB_CUSTOM, 15.0) {
-            self.world_tab = TAB_CUSTOM;
+        if button(Rect::new(194.0, y, 92.0, 26.0), tr(self.es, "Play (F5)", "Jugar (F5)"), false, 15.0) {
+            act = 6;
         }
         y += 30.0;
         if button(Rect::new(10.0, y, 92.0, 26.0), tr(self.es, "Pencil (B)", "Lapiz (B)"), self.tool.kind() == ToolKind::Pencil, 16.0) {
@@ -378,7 +371,12 @@ impl Editor {
         draw_text(drawn.unwrap_or(tr(self.es, "(not drawn)", "(no se dibuja)")), 162.0, y + 18.0, 15.0, col(2));
         y += 30.0;
         let cur = self.doc.points[self.point];
-        let label = if cur == world::NO_LEVEL { tr(self.es, "no level", "sin nivel").to_string() } else { format!("{} {:02}", tr(self.es, "level", "nivel"), cur) };
+        let label = match self.doc.point_level(self.point) {
+            Some(l) if l >= cart_model::levels::LEVELS => format!("{} {l:02} ({} {:02})", tr(self.es, "level", "nivel"), tr(self.es, "new, as", "nuevo, como"), self.doc.base_of(l)),
+            Some(l) => format!("{} {l:02}", tr(self.es, "level", "nivel")),
+            None if cur == world::NO_LEVEL => tr(self.es, "no level", "sin nivel").to_string(),
+            None => format!("{} ${cur:02X}", tr(self.es, "special", "especial")),
+        };
         draw_text(tr(self.es, "Opens", "Abre"), 10.0, y + 18.0, 18.0, col(3));
         let mut change: i32 = 0;
         if button(Rect::new(70.0, y, 26.0, 26.0), "-", false, 18.0) {
@@ -397,7 +395,7 @@ impl Editor {
         for (k, &p) in list.iter().enumerate() {
             let r = Rect::new(10.0 + (k % 3) as f32 * 92.0, y + (k / 3) as f32 * 24.0, 88.0, 22.0);
             let l = self.doc.points[p];
-            let text = if l < 32 { format!("{p:02X} > {l:02}") } else { format!("{p:02X} > -") };
+            let text = if (l as usize) < self.doc.levels.len() { format!("{p:02X} > {l:02}") } else { format!("{p:02X} > -") };
             if button(r, &text, p == self.point, 15.0) {
                 self.point = p;
             }
@@ -405,8 +403,8 @@ impl Editor {
         let yy = y + list.len().div_ceil(3) as f32 * 24.0 + 16.0;
         let note = tr(
             self.es,
-            "Click a point on the map to choose it. Where the points sit and the paths between them are fixed in the game's code (measured from the game and drawn here); to move points, add new ones or change paths, use Your map: 'Add the game's own points' copies this map there.",
-            "Haz clic en un punto del mapa para elegirlo. Donde estan los puntos y sus caminos esta fijo en el codigo del juego (medidos en el juego y dibujados aqui); para moverlos, anadir nuevos o cambiar caminos, usa Mapa propio: 'Anadir los puntos originales' copia alli este mapa.",
+            "Click a point on the map to choose it, and with - + choose the level it opens: one of the 32, a new level (made in the level editor) or none. Saved into the edited copy; Play (F5) tries it in the game. Where the points sit and the paths between them are in the game's code (measured and drawn here); changing them is not possible yet.",
+            "Haz clic en un punto del mapa para elegirlo y con - + elige el nivel que abre: uno de los 32, un nivel nuevo (creado en el editor de niveles) o ninguno. Se guarda en la copia editada; Jugar (F5) lo prueba en el juego. Donde estan los puntos y sus caminos esta en el codigo del juego (medido y dibujado aqui); cambiarlos aun no es posible.",
         );
         for (i, line) in wrap(note, 36).iter().enumerate() {
             draw_text(line, 10.0, yy + i as f32 * 16.0, 15.0, col(2));

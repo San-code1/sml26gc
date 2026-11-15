@@ -82,7 +82,7 @@ no son visibles fuera del crate.
 
 ## 3. `cart-model`: el conocimiento del cartucho
 
-Hoy: `levels`, `objects`, `world`, `custom_map`, y parte de `machine.rs`
+Hoy: `levels`, `objects`, `world`, y parte de `machine.rs`
 (`boot_to_map`, `enter_level`, `back_to_map`...), con direcciones mágicas repartidas.
 
 Propuesta (módulos):
@@ -97,14 +97,14 @@ Propuesta (módulos):
 | `patch` | Ampliación a 1 MB, parche de objetos, `can_expand`, `upgrade` |
 | `layout` | Capacidad por banco, empaquetado de mapas y objetos (`store_bank`, `space`) |
 | `extra_levels` | Niveles nuevos (32 en adelante): guardados en bancos libres de la copia de 1 MB y jugados en lugar de un nivel base (`writes_for`, `apply`) |
-| `custom_map` | Formato de texto del mapa propio (parse/serialize, vecinos, caminos) |
+| `original_points` | Dónde dibuja el juego sus puntos y sus caminos (medidos), para el editor |
 | `art` | `LevelArt`, `WorldArt`, captura de sprites (`Look`) a partir de una `GameBoy` |
 | `live` | Lo que el juego en marcha tiene cargado: mapa del nivel, objetos, posición del jugador |
 | `error` | `CartError` (`UnknownVersion`, `ZoneFull`, `ObjectsFull`, `TooManyLevels`, `LevelTooBig`, `LevelsFull`), `BankUsage`, `ObjectsUsage` |
 | `driver` | `GameDriver`: casos de uso sobre la consola. `boot_to_map`, `enter_level`, `enter_level_anywhere`, `back_to_map`, `back_to_file_select`, `mode()` |
 
 - Errores tipados (`enum CartError`) en lugar de `String`; los textos son los de siempre.
-- Sin `std::fs`: leer/guardar `.points.txt` está en `host` (`load_custom_map`, `save_custom_map`).
+- Sin `std::fs`: los ficheros están en `host`.
 - Hecho (fase 2), con 14 tests unitarios que no necesitan la ROM.
 
 ## 4. `game/`: el juego (hexagonal) ✅
@@ -117,19 +117,19 @@ game/src/
 │  ├─ settings.rs     Settings y su texto key=value (from_text / to_text)
 │  ├─ i18n.rs         Textos EN/ES/JA
 │  ├─ overlay.rs      Fuente bitmap, Canvas y la etiqueta "ESC: MENU"
-│  ├─ menu.rs         Menú de pausa → Action; edita Settings, no guarda ni toca la ventana
-│  ├─ map_view.rs     Mapa propio (recibe mapa y niveles superados; no lee ficheros)
-│  └─ progress.rs     LevelTracker: nivel superado (vida perdida / volver al mapa)
+│  └─ menu.rs         Menú de pausa → Action; edita Settings, no guarda ni toca la ventana
 ├─ application/
 │  ├─ preferences.rs  Settings + guardar + seguir la pantalla completa
-│  └─ session.rs      GameSession::frame(dt, &dyn Keyboard, &dyn AudioOut) → Flow
-├─ ports.rs           Keyboard, AudioOut, Window, SettingsStore, SaveStore, ProgressStore
+│  └─ session.rs      GameSession::frame(dt, &dyn Keyboard, &dyn AudioOut) → Flow; niveles
+│                     nuevos (32+) puestos en lugar de su nivel base cuando el juego los pide
+├─ ports.rs           Keyboard, AudioOut, Window, SettingsStore, SaveStore
 ├─ adapters/
 │  ├─ macroquad_keyboard.rs  Key ↔ KeyCode
 │  ├─ macroquad_display.rs   Paleta → textura, escalado, error en pantalla, Window
 │  ├─ cpal_audio.rs          AudioOut con cpal
-│  ├─ fs_stores.rs           settings.cfg, saves/*.sav, progress.txt (vía host) y DefaultSettings
-│  └─ win32.rs               Ventana al fondo en modo comprobación
+│  ├─ fs_stores.rs           settings.cfg, saves/*.sav (vía host) y DefaultSettings
+│  ├─ macroquad_picker.rs    Pantalla de inicio: elegir el cartucho (se recuerda)
+│  └─ win32.rs               Ventana al fondo en modo comprobación; diálogo Abrir
 ├─ checks.rs, selftest.rs    Comprobaciones sin ventana (--research, --self-test, --dump)
 └─ main.rs            Raíz de composición: argumentos, adaptadores, bucle de la ventana
 ```
@@ -155,14 +155,14 @@ interfaz, lógica de edición, deshacer, guardado, captura de gráficos y lanzam
 ```
 editor/src/
 ├─ domain/            Sin ventana ni ficheros
-│  ├─ document.rs     EditorDocument: original + copia en construcción, 32 niveles
-│  │                  (bloques + objetos + historial), mapa del mundo, puntos, mapa propio,
+│  ├─ document.rs     EditorDocument: original + copia en construcción, 32 niveles y los
+│  │                  nuevos (bloques + objetos + historial), mapa del mundo, puntos,
 │  │                  marcas de "sin guardar", espacio libre y commit() a la imagen del cartucho
 │  ├─ history.rs      History<T>: deshacer/rehacer genérico (niveles y mapa del mundo)
 │  └─ tools.rs        trait Tool + GridCanvas → Pencil, BoxFill
 │                     (nueva herramienta = nueva impl; sirve en niveles y en el mapa)
 ├─ application/
-│  ├─ save.rs         commit + mapa propio + escribir la copia (vía puerto); errores tipados
+│  ├─ save.rs         commit + escribir la copia (vía puerto); errores tipados
 │  └─ art_service.rs  Gráficos del juego: consola arrancada al mapa, niveles, tiles, objetos
 ├─ ports.rs           EditedCopyStore, GameLauncher
 ├─ adapters/
@@ -204,24 +204,23 @@ para que partidas y ediciones existentes sigan sirviendo):
 
 | Elemento | Formato |
 |---|---|
-| Lanzar el juego | `game.exe <rom> --level <0-31>` |
+| Lanzar el juego | `game.exe <rom> --level <N>` (sin rom: pantalla para elegirlo) |
 | Copia editada | `edits/<nombre> (edit).gb` |
-| Mapa propio | `edits/<nombre> (edit).points.txt` |
 | Partidas | `saves/<nombre>.sav` |
-| Progreso | `saves/<nombre>.progress.txt` |
+| Último cartucho elegido | `last_cartridge.txt` |
 | Ajustes (idioma lo lee también el editor) | `settings.cfg` |
 
-Las rutas y nombres viven en `host::paths` (`save_path`, `progress_path`, `edited_copy_path`,
-`custom_map_path`, `settings_path`, `game_exe`), así ambos programas los calculan igual. El
+Las rutas y nombres viven en `host::paths` (`save_path`, `edited_copy_path`,
+`last_cartridge_path`, `settings_path`, `game_exe`), así ambos programas los calculan igual. El
 resto de `host`: `rom_locator` (`find_rom`, `require_rom` con un mensaje claro si falta el
-cartucho), `battery`, `progress`, `settings_file`, `custom_map_file` y `png_out`.
+cartucho, `last_rom`, `remember_rom`), `battery`, `settings_file` y `png_out`.
 
 ## 7. Estrategia de pruebas
 
 1. **Huella dorada** (`regression/`): el test se porta a la API nueva y debe dar
    `golden.txt` idéntico. Se ejecuta en cada fase.
 2. **Tests unitarios** del dominio puro: codecs RLE y de objetos, `History`, herramientas,
-   máquina de estados del menú, navegación del mapa propio, progreso.
+   máquina de estados del menú, niveles nuevos desde el mapa original.
 3. **Rendimiento**: frames por segundo del emulador nuevo vs. legacy (no debe empeorar).
 4. **Manual / capturas**: menú y editor, comparando capturas con las del legacy.
 

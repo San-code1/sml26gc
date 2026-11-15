@@ -12,8 +12,6 @@ pub struct Texts {
     pub main: [&'static str; 9],
     pub sure: &'static str,
     pub hint2: &'static str,
-    pub map_custom: &'static str,
-    pub map_original: &'static str,
     pub footer_main: &'static str,
     pub controls: &'static str,
     pub buttons: [&'static str; 8],
@@ -38,8 +36,6 @@ pub struct Texts {
     pub language: &'static str,
     pub footer_language: &'static str,
     pub hint: &'static str,
-    /// Shown over the point Mario stands on in the editor-made world map.
-    pub level: &'static str,
 }
 
 const EN: Texts = Texts {
@@ -47,8 +43,6 @@ const EN: Texts = Texts {
     main: ["CONTINUE", "CONTROLS", "DISPLAY", "SOUND", "LANGUAGE", "ORIGINAL PAUSE", "QUIT GAME", "BACK TO MAP", "FILE SELECT"],
     sure: "ARE YOU SURE?",
     hint2: "ENTER: PAUSE",
-    map_custom: "MAP: YOURS",
-    map_original: "MAP: ORIGINAL",
     footer_main: "ENTER:OK  ESC:RESUME",
     controls: "CONTROLS",
     buttons: ["UP", "DOWN", "LEFT", "RIGHT", "A BUTTON", "B BUTTON", "START", "SELECT"],
@@ -73,7 +67,6 @@ const EN: Texts = Texts {
     language: "LANGUAGE",
     footer_language: "ENTER:OK ESC:BACK",
     hint: "ESC: MENU",
-    level: "LEVEL",
 };
 
 const ES: Texts = Texts {
@@ -81,8 +74,6 @@ const ES: Texts = Texts {
     main: ["CONTINUAR", "CONTROLES", "PANTALLA", "SONIDO", "IDIOMA", "PAUSA ORIGINAL", "SALIR DEL JUEGO", "VOLVER AL MAPA", "ELEGIR PARTIDA"],
     sure: "SEGURO?",
     hint2: "INTRO: PAUSA",
-    map_custom: "MAPA: PROPIO",
-    map_original: "MAPA: ORIGINAL",
     footer_main: "INTRO:OK  ESC:SEGUIR",
     controls: "CONTROLES",
     buttons: ["ARRIBA", "ABAJO", "IZQUIERDA", "DERECHA", "BOTON A", "BOTON B", "START", "SELECT"],
@@ -107,7 +98,6 @@ const ES: Texts = Texts {
     language: "IDIOMA",
     footer_language: "INTRO:OK ESC:VOLVER",
     hint: "ESC: MENU",
-    level: "NIVEL",
 };
 
 const JA: Texts = Texts {
@@ -115,8 +105,6 @@ const JA: Texts = Texts {
     main: ["ツヅケル", "キーセッテイ", "ガメン", "サウンド", "ゲンゴ", "モトノポーズ", "ゲームヲヤメル", "チズニモドル", "データセンタク"],
     sure: "ホントニ?",
     hint2: "ENTER:ポーズ",
-    map_custom: "チズ:ジブン",
-    map_original: "チズ:オリジナル",
     footer_main: "ENTER:OK ESC:ツヅケル",
     controls: "キーセッテイ",
     buttons: ["ウエ", "シタ", "ヒダリ", "ミギ", "Aボタン", "Bボタン", "START", "SELECT"],
@@ -141,7 +129,6 @@ const JA: Texts = Texts {
     language: "ゲンゴ",
     footer_language: "ENTER:OK ESC:モドル",
     hint: "ESC:メニュー",
-    level: "コース",
 };
 
 pub fn texts(lang: usize) -> &'static Texts {

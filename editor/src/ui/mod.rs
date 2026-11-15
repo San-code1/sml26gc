@@ -2,7 +2,6 @@
 //! level shown, camera, zoom, tool, selection, textures); what is being edited lives in
 //! `EditorDocument`, and saving / graphics / starting the game go through the application
 //! layer and the ports.
-mod custom_view;
 mod level_view;
 mod objects_view;
 mod palette;
@@ -33,7 +32,6 @@ pub enum Mode {
 /// Tabs of the world map editor.
 pub const TAB_PICTURE: usize = 0;
 pub const TAB_POINTS: usize = 1;
-pub const TAB_CUSTOM: usize = 2;
 
 pub struct Editor {
     es: bool,
@@ -74,11 +72,6 @@ pub struct Editor {
     world_cam: Vec2,
     level_cam: Vec2,
     // the editor-made world map
-    pub(crate) sel_point: Option<usize>,
-    link_from: Option<usize>,
-    drag_point: bool,
-    /// Your map as it was when a drag started (recorded for undo once the point moves).
-    drag_before: Option<cart_model::custom_map::CustomMap>,
 }
 
 /// Painting blocks into the level shown.
@@ -166,10 +159,6 @@ impl Editor {
             point: 0,
             world_cam: Vec2::ZERO,
             level_cam: Vec2::ZERO,
-            sel_point: None,
-            link_from: None,
-            drag_point: false,
-            drag_before: None,
         }
     }
 
@@ -307,7 +296,6 @@ impl Editor {
         }
         self.world_map = map;
         self.cam = Vec2::ZERO;
-        self.sel_point = None;
         self.ensure_world_art();
     }
 
@@ -412,7 +400,6 @@ impl Editor {
                         Saved::Objects(n) => n.to_string(),
                         Saved::WorldMap => tr(es, "world map", "mapa de mundos").to_string(),
                         Saved::LevelPoints => tr(es, "level points", "puntos de nivel").to_string(),
-                        Saved::CustomMap => tr(es, "your world map", "tu mapa de mundos").to_string(),
                         Saved::NewLevels(n, used) => format!("{n} {} {used} bytes", tr(es, "new levels", "niveles nuevos")),
                     })
                     .collect();
@@ -426,10 +413,6 @@ impl Editor {
             }
             Err(SaveError::Layout(e)) => {
                 self.status = format!("{}: {e}", tr(es, "Not saved", "No guardado"));
-                false
-            }
-            Err(SaveError::CustomMap(e)) => {
-                self.status = format!("{}: {e}", tr(es, "Could not save the map", "No se pudo guardar el mapa"));
                 false
             }
             Err(SaveError::Write(e)) => {
@@ -451,13 +434,13 @@ impl Editor {
         };
     }
 
-    /// Save, then start the game on its world map (to try the editor-made map).
+    /// Save, then start the game on the edited copy (its world map, to try the points).
     fn play_map(&mut self) {
         if !self.save() {
             return;
         }
         self.status = match self.launcher.launch(self.store.path(), None) {
-            Ok(()) => tr(self.es, "Game started with your map.", "Juego abierto con tu mapa.").into(),
+            Ok(()) => tr(self.es, "Game started with the edited copy.", "Juego abierto con la copia editada.").into(),
             Err(e) => e,
         };
     }
@@ -469,20 +452,6 @@ impl Editor {
         }
     }
 
-    /// For the check picture of the editor-made map: a sample route (not saved).
-    pub fn sample_custom_map(&mut self) {
-        use cart_model::custom_map::Point;
-        if !self.doc.custom.points.is_empty() {
-            return;
-        }
-        for (i, (x, y, l)) in [(120, 120, Some(0u8)), (180, 140, None), (240, 150, Some(1)), (300, 200, Some(2))].iter().enumerate() {
-            self.doc.custom.points.push(Point::new(*x, *y, *l));
-            if i > 0 {
-                self.doc.custom.paths.push((i - 1, i));
-            }
-        }
-        self.sel_point = Some(2);
-    }
 }
 
 // The level's size in pixels.
