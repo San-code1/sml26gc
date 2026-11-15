@@ -14,6 +14,25 @@ pub enum OnMap {
     Zone(usize),
 }
 
+impl OnMap {
+    /// 0 = the world map, 1.. = zone map 1.. (as kept in text files).
+    pub fn number(self) -> usize {
+        match self {
+            OnMap::World => 0,
+            OnMap::Zone(z) => z + 1,
+        }
+    }
+
+    /// Back from `number`; numbers past the last zone are the world map.
+    pub fn from_number(n: usize) -> OnMap {
+        if n == 0 || n > crate::zone_maps::ZONES.len() {
+            OnMap::World
+        } else {
+            OnMap::Zone(n - 1)
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Spot {
     pub point: u8,

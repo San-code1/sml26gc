@@ -278,6 +278,25 @@ impl EditorDocument {
         self.points_dirty = true;
     }
 
+    /// Add the game's own points (where it draws them, with the levels they open now) to the
+    /// editor-made map, leaving out any already there. Returns how many were added.
+    pub fn add_original_points(&mut self) -> usize {
+        let original = CustomMap::from_original(&self.points);
+        let was_empty = self.custom.points.is_empty();
+        let mut added = 0;
+        for p in original.points {
+            if !self.custom.points.iter().any(|q| (q.map, q.x, q.y) == (p.map, p.x, p.y)) {
+                self.custom.points.push(p);
+                added += 1;
+            }
+        }
+        if was_empty {
+            self.custom.start = original.start;
+        }
+        self.custom_dirty |= added > 0;
+        added
+    }
+
     // ------------------------------------------------------------ space and saving
 
     /// The edited maps of one bank: (map number, blocks), one per map.
@@ -434,5 +453,10 @@ mod tests {
         doc.restore_world();
         assert_eq!(doc.points, world::point_levels(&doc.original));
         assert_eq!(doc.tile(zone, 3, 3), before);
+
+        let n = doc.add_original_points();
+        assert!(n > 30 && doc.custom_dirty);
+        assert_eq!(doc.custom.points[doc.custom.start].level, Some(0), "Mario starts on the first level");
+        assert_eq!(doc.add_original_points(), 0, "points already there are not added twice");
     }
 }

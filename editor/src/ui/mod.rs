@@ -303,7 +303,6 @@ impl Editor {
         self.world_map = map;
         self.cam = Vec2::ZERO;
         self.sel_point = None;
-        self.link_from = None;
         self.ensure_world_art();
     }
 
@@ -439,7 +438,7 @@ impl Editor {
             return;
         }
         for (i, (x, y, l)) in [(120, 120, Some(0u8)), (180, 140, None), (240, 150, Some(1)), (300, 200, Some(2))].iter().enumerate() {
-            self.doc.custom.points.push(Point { x: *x, y: *y, level: *l });
+            self.doc.custom.points.push(Point::new(*x, *y, *l));
             if i > 0 {
                 self.doc.custom.paths.push((i - 1, i));
             }

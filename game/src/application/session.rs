@@ -230,6 +230,7 @@ impl GameSession {
                 self.acc = 0.0;
                 self.input_lock = true;
             }
+            v.prepare(g); // through a door: the new picture is drawn this frame already
             b = Buttons::NONE;
         }
         g.set_buttons(b);

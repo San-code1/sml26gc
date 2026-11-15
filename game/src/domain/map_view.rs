@@ -1,31 +1,39 @@
 //! The port's own world map screen (used when the editor made a map for this cartridge):
-//! the cartridge's world picture with the person's points and paths, Mario walking between
-//! them, and Start / A entering the level of the point he stands on. Where the map and the
-//! cleared levels are kept is the caller's business.
+//! the cartridge's world picture and zone map pictures with the person's points and paths,
+//! Mario walking between them, Start / A entering the level of the point he stands on, and
+//! on a door (a point joined to one on another picture) taking him to that picture. Where
+//! the map and the cleared levels are kept is the caller's business.
 use super::i18n::texts;
 use super::overlay::{text_width, Canvas};
 use cart_model::custom_map::CustomMap;
-use cart_model::world;
+use cart_model::original_points::OnMap;
+use cart_model::zone_maps::{self, ZONES};
+use cart_model::{world, GameDriver};
 use gb_core::ppu::{H, W};
 use gb_core::Gb;
 use std::collections::HashSet;
+
+/// A map picture in shades, `w` x `h` pixels.
+struct Picture {
+    w: usize,
+    h: usize,
+    px: Vec<u8>,
+}
 
 pub struct MapView {
     pub map: CustomMap,
     pub cur: usize,
     walk: Option<(usize, usize, f32)>, // from, to, progress 0..1
-    picture: Vec<u8>,                  // 512 x 512 shades
+    /// One per picture (`OnMap::number`), drawn when first needed.
+    pictures: Vec<Option<Picture>>,
     pub cleared: HashSet<u8>,
     blink: u32,
     pub enabled: bool,
 }
 
-const PW: usize = world::W * 8;
-const PH: usize = world::H * 8;
-
 impl MapView {
     pub fn new(map: CustomMap, cleared: HashSet<u8>) -> MapView {
-        MapView { cur: map.start, map, walk: None, picture: Vec::new(), cleared, blink: 0, enabled: true }
+        MapView { cur: map.start, map, walk: None, pictures: (0..=ZONES.len()).map(|_| None).collect(), cleared, blink: 0, enabled: true }
     }
 
     /// Returns true when the level was not cleared before (so the progress needs saving).
@@ -33,25 +41,40 @@ impl MapView {
         self.cleared.insert(level)
     }
 
-    /// Draw the world picture once with the map tiles the game has just loaded.
+    /// The picture Mario is on.
+    fn here(&self) -> OnMap {
+        self.map.points.get(self.cur).map(|p| p.map).unwrap_or(OnMap::World)
+    }
+
+    /// Draw the picture Mario is on, once: the world map with the map tiles the game has
+    /// just loaded; a zone map with tiles captured by letting a copy of the console show it.
     pub fn prepare(&mut self, gb: &Gb) {
-        if !self.picture.is_empty() {
+        let on = self.here();
+        if self.pictures[on.number()].is_some() {
             return;
         }
         let rom = gb.cart().rom().to_vec();
-        let tiles = world::read(&rom);
-        let art = cart_model::art::WorldArt::capture(gb);
-        self.picture = vec![0; PW * PH];
-        for ty in 0..world::H {
-            for tx in 0..world::W {
-                let t = tiles[ty * world::W + tx];
+        let (tiles, tw, th, art) = match on {
+            OnMap::World => (world::read(&rom), world::W, world::H, cart_model::art::WorldArt::capture(gb)),
+            OnMap::Zone(z) => {
+                let mut copy = gb.clone();
+                copy.show_map_at(ZONES[z].point);
+                (zone_maps::read(&rom, z), zone_maps::W, zone_maps::H, cart_model::art::WorldArt::capture(&copy))
+            }
+        };
+        let (w, h) = (tw * 8, th * 8);
+        let mut px = vec![0; w * h];
+        for ty in 0..th {
+            for tx in 0..tw {
+                let t = tiles[ty * tw + tx];
                 for y in 0..8 {
                     for x in 0..8 {
-                        self.picture[(ty * 8 + y) * PW + tx * 8 + x] = art.pixel(t, x, y);
+                        px[(ty * 8 + y) * w + tx * 8 + x] = art.pixel(t, x, y);
                     }
                 }
             }
         }
+        self.pictures[on.number()] = Some(Picture { w, h, px });
     }
 
     fn pos(&self) -> (f32, f32) {
@@ -65,7 +88,8 @@ impl MapView {
         }
     }
 
-    /// One frame of input: d-pad walks along a path, A or Start returns the level to enter.
+    /// One frame of input: d-pad walks along a path, A or Start returns the level to enter
+    /// (or, on a door with no level, goes through it).
     pub fn update(&mut self, left: bool, right: bool, up: bool, down: bool, enter: bool) -> Option<u8> {
         self.blink = self.blink.wrapping_add(1);
         if let Some((a, b, t)) = self.walk {
@@ -99,27 +123,37 @@ impl MapView {
             return None;
         }
         if enter {
-            return self.map.points.get(self.cur).and_then(|p| p.level);
+            let level = self.map.points.get(self.cur).and_then(|p| p.level);
+            if level.is_none() {
+                if let Some(to) = self.map.door(self.cur) {
+                    self.cur = to;
+                }
+            }
+            return level;
         }
         None
     }
 
     pub fn draw(&self, out: &mut [u8], lang: usize) {
+        let on = self.here();
+        let Some(pic) = &self.pictures[on.number()] else { return };
         let (mx, my) = self.pos();
-        let cam_x = (mx as i32 - W as i32 / 2).clamp(0, (PW - W) as i32);
-        let cam_y = (my as i32 - H as i32 / 2).clamp(0, (PH - H) as i32);
-        if !self.picture.is_empty() {
-            for y in 0..H {
-                let row = (cam_y as usize + y) * PW + cam_x as usize;
-                out[y * W..y * W + W].copy_from_slice(&self.picture[row..row + W]);
-            }
+        let cam_x = (mx as i32 - W as i32 / 2).clamp(0, pic.w.saturating_sub(W) as i32);
+        let cam_y = (my as i32 - H as i32 / 2).clamp(0, pic.h.saturating_sub(H) as i32);
+        for y in 0..H.min(pic.h) {
+            let row = (cam_y as usize + y) * pic.w + cam_x as usize;
+            let n = W.min(pic.w);
+            out[y * W..y * W + n].copy_from_slice(&pic.px[row..row + n]);
         }
         let mut c = Canvas { px: out };
         let sx = |x: i32| x - cam_x;
         let sy = |y: i32| y - cam_y;
-        // paths: dotted
+        // paths on this picture: dotted
         for &(a, b) in &self.map.paths {
             let (pa, pb) = (self.map.points[a], self.map.points[b]);
+            if pa.map != on || pb.map != on {
+                continue;
+            }
             let len = ((((pb.x - pa.x).pow(2) + (pb.y - pa.y).pow(2)) as f32).sqrt() as i32).max(1);
             let mut d = 0;
             while d <= len {
@@ -129,8 +163,11 @@ impl MapView {
                 d += 4;
             }
         }
-        // points
-        for p in &self.map.points {
+        // points on this picture
+        for (i, p) in self.map.points.iter().enumerate() {
+            if p.map != on {
+                continue;
+            }
             let (x, y) = (sx(p.x), sy(p.y));
             match p.level {
                 Some(l) => {
@@ -138,6 +175,11 @@ impl MapView {
                     let fill = if self.cleared.contains(&l) { 2 } else { 0 };
                     c.rect(x - 4, y - 4, 8, 8, fill);
                     c.rect(x - 1, y - 1, 2, 2, 3);
+                }
+                None if self.map.door(i).is_some() => {
+                    // a door: a hollow ring
+                    c.rect(x - 4, y - 4, 8, 8, 3);
+                    c.rect(x - 2, y - 2, 4, 4, 0);
                 }
                 None => c.rect(x - 2, y - 2, 4, 4, 3),
             }

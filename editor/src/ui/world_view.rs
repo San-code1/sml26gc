@@ -23,7 +23,7 @@ impl Editor {
         vec2(w as f32 * 8.0, h as f32 * 8.0)
     }
 
-    fn map_name(&self, map: OnMap) -> &'static str {
+    pub(super) fn map_name(&self, map: OnMap) -> &'static str {
         match map {
             OnMap::World => tr(self.es, "World map", "Mapa del mundo"),
             OnMap::Zone(z) => {
@@ -209,17 +209,16 @@ impl Editor {
             act = 9;
         }
         y += 30.0;
-        // which map: the world map or a zone map (your own map is drawn on the world map)
+        // which map: the world map or a zone map
         let maps = all_maps();
         let i = maps.iter().position(|&m| m == self.world_map).unwrap_or(0);
-        let fixed = self.world_tab == TAB_CUSTOM;
-        if button(Rect::new(10.0, y, 30.0, 26.0), "<", false, 18.0) && !fixed {
+        if button(Rect::new(10.0, y, 30.0, 26.0), "<", false, 18.0) {
             self.show_map(maps[(i + maps.len() - 1) % maps.len()]);
         }
         let name = self.map_name(self.world_map);
         let d = measure_text(name, None, 18, 1.0);
         draw_text(name, 148.0 - d.width / 2.0, y + 18.0, 18.0, col(3));
-        if button(Rect::new(256.0, y, 30.0, 26.0), ">", false, 18.0) && !fixed {
+        if button(Rect::new(256.0, y, 30.0, 26.0), ">", false, 18.0) {
             self.show_map(maps[(i + 1) % maps.len()]);
         }
         y += 30.0;
@@ -231,7 +230,6 @@ impl Editor {
         }
         if button(Rect::new(194.0, y, 92.0, 26.0), tr(self.es, "Your map", "Mapa propio"), self.world_tab == TAB_CUSTOM, 15.0) {
             self.world_tab = TAB_CUSTOM;
-            self.show_map(OnMap::World);
         }
         y += 30.0;
         if button(Rect::new(10.0, y, 92.0, 26.0), tr(self.es, "Pencil (B)", "Lapiz (B)"), self.tool.kind() == ToolKind::Pencil, 16.0) {

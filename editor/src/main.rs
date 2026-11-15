@@ -74,7 +74,11 @@ async fn main() {
         }
         if flag("--custom") {
             ed.world_tab = TAB_CUSTOM;
-            ed.sample_custom_map();
+            if flag("--original-points") {
+                ed.doc.add_original_points();
+            } else {
+                ed.sample_custom_map();
+            }
         }
     }
     if shot.is_some() && ed.mode == Mode::Objects {

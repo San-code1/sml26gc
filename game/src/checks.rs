@@ -1,5 +1,6 @@
 //! Checks of the game's own additions, run from the command line without a window:
-//!   game --research customcheck OUT.png   the editor-made world map, walked and entered
+//!   game --research customcheck OUT.png   the editor-made world map, walked and entered (and a door
+//!                                         to a zone map, drawn into OUT_zone.png)
 //!   game --research menushots DIR         the pause menu's screens in every language
 use crate::domain::map_view::MapView;
 use crate::domain::menu::Menu;
@@ -20,7 +21,7 @@ pub fn custom_check(rom_path: &Path, png: &Path) {
     let rom_copy = dir.join("check.gb");
     let _ = std::fs::copy(rom_path, &rom_copy);
     let map = CustomMap {
-        points: vec![Point { x: 200, y: 260, level: Some(0) }, Point { x: 280, y: 250, level: Some(6) }, Point { x: 280, y: 330, level: None }],
+        points: vec![Point::new(200, 260, Some(0)), Point::new(280, 250, Some(6)), Point::new(280, 330, None)],
         paths: vec![(0, 1), (1, 2)],
         start: 0,
     };
@@ -30,6 +31,7 @@ pub fn custom_check(rom_path: &Path, png: &Path) {
     let parsed_same = v.map == map;
     let Ok(mut g) = load_gb(&rom_copy, 44100, false) else { return };
     g.boot_to_map();
+    let on_map = g.clone();
     v.prepare(&g);
     let mut fb = vec![0u8; 160 * 144];
     let mut entered = None;
@@ -62,6 +64,23 @@ pub fn custom_check(rom_path: &Path, png: &Path) {
     let same = cart_model::live::map_in_memory(&g) == cart_model::levels::decode(&rom, s).0;
     println!("map file read back identical={parsed_same}; walked to point {} ; A asked for level {entered:?}; game loaded it={ok}; level 6 blocks in memory={same}", v.cur);
     let _ = std::fs::remove_dir_all(&dir);
+
+    // a door from the world map to the Tree Zone's map, and a level entered there
+    let tree = cart_model::original_points::OnMap::Zone(0);
+    let door = CustomMap { points: vec![Point::new(200, 260, None), Point { x: 76, y: 30, level: Some(5), map: tree }], paths: vec![(0, 1)], start: 0 };
+    let mut z = MapView::new(door, Default::default());
+    z.prepare(&on_map);
+    let through = z.update(false, false, false, false, true).is_none() && z.cur == 1;
+    z.prepare(&on_map);
+    let level = z.update(false, false, false, false, true);
+    let mut zf = vec![0u8; 160 * 144];
+    z.draw(&mut zf, 0);
+    let drawn = zf.iter().any(|&p| p != zf[0]);
+    let zone_png = png.with_file_name(format!("{}_zone.png", png.file_stem().unwrap_or_default().to_string_lossy()));
+    if let Err(e) = write_screen(&zone_png, &zf, &PALETTES[0]) {
+        eprintln!("{e}");
+    }
+    println!("door: went through={through}; zone map drawn={drawn}; A there asked for level {level:?}");
 }
 
 /// Save the pause menu's screens over a level frame as PNGs into `dir`.
