@@ -95,3 +95,24 @@ button SHALL be drawn smaller so it fits inside it.
 #### Scenario: Point row
 - **WHEN** the Points tab is shown
 - **THEN** the Point row shows ", ." next to its - and + buttons
+
+### Requirement: Level and project file shortcuts
+The editor SHALL run the level and project file actions from the keyboard, and their File
+menu entries SHALL show the keys. Level file keys SHALL work in the level editor, project file
+keys in both editors.
+
+| Action | Keys |
+|---|---|
+| Export level | Ctrl+E |
+| Import level as a new level | Ctrl+Shift+N |
+| Replace this new level from a file | Ctrl+I |
+| Export project | Ctrl+Shift+E |
+| Import project | Ctrl+Shift+I |
+
+#### Scenario: Export a level from the keyboard
+- **WHEN** the level editor is shown and the user presses Ctrl+E
+- **THEN** the Save dialog for a level file opens
+
+#### Scenario: Project from the world map editor
+- **WHEN** the world map editor is shown and the user presses Ctrl+Shift+E
+- **THEN** the Save dialog for a project file opens
