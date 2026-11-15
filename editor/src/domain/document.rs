@@ -4,6 +4,7 @@
 //! each map point opens and the paths between points (`map_routes`). What has changed since
 //! the last save is tracked here; the files are not.
 use super::history::History;
+use super::stamp::{Area, Stamp};
 use cart_model::error::{BankUsage, ObjectsUsage};
 use cart_model::extra_levels::{self, Extra};
 use cart_model::levels::{self, COLS, LEVELS, ROWS};
@@ -12,6 +13,13 @@ use cart_model::map_routes::{self, MapRoutes, Place, Way};
 use cart_model::objects::{self, Obj};
 use cart_model::original_points::OnMap;
 use cart_model::{layout, patch, world, zone_maps, CartError};
+
+/// What a painting tool works on: a level's blocks or a map picture's tiles.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Grid {
+    Level(usize),
+    Map(OnMap),
+}
 
 /// A level as it can be undone: its blocks and its objects.
 #[derive(Clone, PartialEq, Debug)]
@@ -230,11 +238,7 @@ impl EditorDocument {
     /// and the rows used near it. Returns (column, first row, last row).
     pub fn content_area(&self, l: usize) -> (usize, usize, usize) {
         let map = &self.levels[l].content.map;
-        let mut count = [0usize; 128];
-        for &b in map {
-            count[b as usize & 0x7F] += 1;
-        }
-        let bg = (0..128).max_by_key(|&i| count[i]).unwrap_or(0) as u8;
+        let bg = self.background(Grid::Level(l));
         let c0 = (0..COLS).find(|&c| (0..ROWS).any(|r| map[r * COLS + c] != bg)).unwrap_or(0);
         let near: Vec<usize> = (0..ROWS).filter(|&r| (c0..(c0 + 30).min(COLS)).any(|c| map[r * COLS + c] != bg)).collect();
         (c0, near.first().copied().unwrap_or(0), near.last().copied().unwrap_or(12))
@@ -330,6 +334,83 @@ impl EditorDocument {
 
     pub fn tile(&self, map: OnMap, x: usize, y: usize) -> u8 {
         self.picture(map)[y * Self::map_size(map).0 + x]
+    }
+
+    pub fn grid_size(&self, g: Grid) -> (usize, usize) {
+        match g {
+            Grid::Level(_) => (COLS, ROWS),
+            Grid::Map(m) => Self::map_size(m),
+        }
+    }
+
+    fn inside(&self, g: Grid, x: i32, y: i32) -> bool {
+        let (w, h) = self.grid_size(g);
+        x >= 0 && y >= 0 && (x as usize) < w && (y as usize) < h
+    }
+
+    /// The block or tile at `(x, y)`, if it is inside.
+    pub fn cell(&self, g: Grid, x: i32, y: i32) -> Option<u8> {
+        self.inside(g, x, y).then(|| match g {
+            Grid::Level(l) => self.block(l, x, y),
+            Grid::Map(m) => self.tile(m, x as usize, y as usize),
+        })
+    }
+
+    /// Put a block or tile; outside the grid nothing happens. True if something changed.
+    pub fn set_cell(&mut self, g: Grid, x: i32, y: i32, v: u8) -> bool {
+        if !self.inside(g, x, y) {
+            return false;
+        }
+        match g {
+            Grid::Level(l) => self.set_block(l, x, y, v),
+            Grid::Map(m) => {
+                let changed = self.tile(m, x as usize, y as usize) != v;
+                self.set_tile(m, x as usize, y as usize, v);
+                changed
+            }
+        }
+    }
+
+    /// Remember the grid before a change, for undo.
+    pub fn grid_snapshot(&mut self, g: Grid) {
+        match g {
+            Grid::Level(l) => self.snapshot(l),
+            Grid::Map(_) => self.world_snapshot(),
+        }
+    }
+
+    /// The block the level uses most, or the tile the map uses most.
+    pub fn background(&self, g: Grid) -> u8 {
+        let mut count = [0usize; 256];
+        match g {
+            Grid::Level(l) => self.levels[l].content.map.iter().for_each(|&b| count[b as usize & 0x7F] += 1),
+            Grid::Map(m) => self.picture(m).iter().for_each(|&t| count[t as usize] += 1),
+        }
+        (0..256).max_by_key(|&i| count[i]).unwrap_or(0) as u8
+    }
+
+    /// The part of `a` inside the grid, if any.
+    pub fn clip(&self, g: Grid, a: Area) -> Option<Area> {
+        let (w, h) = self.grid_size(g);
+        let c = Area { x0: a.x0.max(0), y0: a.y0.max(0), x1: a.x1.min(w as i32 - 1), y1: a.y1.min(h as i32 - 1) };
+        (c.x0 <= c.x1 && c.y0 <= c.y1).then_some(c)
+    }
+
+    /// The cells of `a` (the part inside the grid).
+    pub fn copy_rect(&self, g: Grid, a: Area) -> Option<Stamp> {
+        let a = self.clip(g, a)?;
+        let cells = a.cells().map(|(x, y)| self.cell(g, x, y).unwrap_or(0)).collect();
+        Some(Stamp { w: a.w(), h: a.h(), cells })
+    }
+
+    /// Fill `a` with the background, undoable.
+    pub fn clear_rect(&mut self, g: Grid, a: Area) {
+        let Some(a) = self.clip(g, a) else { return };
+        let bg = self.background(g);
+        self.grid_snapshot(g);
+        for (x, y) in a.cells() {
+            self.set_cell(g, x, y, bg);
+        }
     }
 
     /// Every map picture and the level points as the original has them (the pictures
@@ -613,6 +694,32 @@ mod tests {
     fn open() -> Option<EditorDocument> {
         let rom = host::find_rom(None)?;
         Some(EditorDocument::open(std::fs::read(rom).ok()?, None))
+    }
+
+    #[test]
+    fn copy_cut_and_undo_on_levels_and_maps() {
+        let Some(mut doc) = open() else {
+            eprintln!("no cartridge found: document test skipped");
+            return;
+        };
+        for g in [Grid::Level(3), Grid::Map(OnMap::World), Grid::Map(OnMap::Zone(1))] {
+            let a = Area::between((2, 3), (5, 4));
+            let before = doc.copy_rect(g, a).unwrap();
+            assert_eq!((before.w, before.h, before.at(1, 0)), (4, 2, doc.cell(g, 3, 3).unwrap()));
+            let bg = doc.background(g);
+            doc.clear_rect(g, a);
+            assert!(a.cells().all(|(x, y)| doc.cell(g, x, y) == Some(bg)));
+            match g {
+                Grid::Level(l) => assert!(doc.undo(l)),
+                Grid::Map(_) => doc.world_undo(),
+            }
+            assert_eq!(doc.copy_rect(g, a), Some(before));
+            let (w, h) = doc.grid_size(g);
+            let edge = doc.copy_rect(g, Area::between((w as i32 - 2, h as i32 - 1), (w as i32 + 3, h as i32 + 3))).unwrap();
+            assert_eq!((edge.w, edge.h), (2, 1), "clipped to the grid");
+            assert_eq!(doc.copy_rect(g, Area::between((-5, -5), (-1, -1))), None);
+            assert!(!doc.set_cell(g, -1, 0, 1) && doc.cell(g, w as i32, 0).is_none());
+        }
     }
 
     #[test]

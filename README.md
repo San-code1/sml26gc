@@ -32,11 +32,18 @@ select, language. F11: full screen. Hold Ctrl: fast-forward.
 
 ## Editor
 
-- Levels: paint blocks (Pencil B, Box R, Grid G), place and move objects (Tab), add new levels.
+- Levels: paint blocks, place and move objects (Tab), add new levels (Ctrl+N). PgUp / PgDn
+  change level, F2 opens the world map editor.
 - World map: paint the world and zone maps (Picture tab); choose each point's level, draw
   paths, add points and set doors between the world and the zones (Points tab).
-- Ctrl+Z / Ctrl+Y undo and redo, Ctrl+S saves `edits\<game> (edit).gb` (the original is never
-  changed), F5 saves and plays it.
+- Painting: Pencil (B) and Box (R) paint the palette selection; drag over the palette, or
+  right-drag on the map, to take several cells at once. Select (E), then Ctrl+C / Ctrl+X /
+  Del, and Ctrl+V to paste where it was copied (Esc stops).
+- Palettes zoom with their - + buttons or Ctrl - / Ctrl +; the side panel widens or narrows to
+  fit (at most half the window). A cut palette scrolls with the wheel or a right-drag. The zoom
+  is kept in `editor.cfg`.
+- Every button shows its shortcut. Ctrl+Z / Ctrl+Y undo and redo, Ctrl+S saves
+  `edits\<game> (edit).gb` (the original is never changed), F5 saves and plays it.
 
 ## Checks
 

@@ -3,6 +3,7 @@
 //!
 //! Next to the executables:
 //!   settings.cfg                      the game's settings (the editor reads the language)
+//!   editor.cfg                        the editor's own settings
 //!   last_cartridge.txt                the cartridge file chosen last at the game's start
 //!   saves\<cartridge>.sav             battery save
 //!   edits\<cartridge> (edit).gb       the editor's copy of the cartridge
@@ -24,6 +25,10 @@ pub fn last_cartridge_path() -> PathBuf {
 
 pub fn settings_path() -> PathBuf {
     exe_dir().join("settings.cfg")
+}
+
+pub fn editor_settings_path() -> PathBuf {
+    exe_dir().join("editor.cfg")
 }
 
 /// Battery save of a cartridge file.
