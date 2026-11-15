@@ -5,9 +5,17 @@ use gb_core::script::buttons_at;
 use gb_core::{BusObserver, Buttons, GameBoy, Gb};
 use std::path::Path;
 
-/// The cartridge on a Game Boy (no battery save), or None if it can't be loaded.
+static WITH_SAVE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// `--with-save`: start from the player's battery save (read only; nothing is written back).
+pub fn use_battery_save(on: bool) {
+    WITH_SAVE.store(on, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// The cartridge on a Game Boy (with the player's save only under `--with-save`), or None
+/// if it can't be loaded.
 pub fn load(rom: &Path) -> Option<Gb> {
-    host::load_gb(rom, 44100, false).ok()
+    host::load_gb(rom, 44100, WITH_SAVE.load(std::sync::atomic::Ordering::Relaxed)).ok()
 }
 
 /// Play frame `f` of a button script (sound dropped).

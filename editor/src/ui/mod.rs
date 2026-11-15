@@ -18,6 +18,8 @@ use crate::domain::document::{EditorDocument, Saved};
 use crate::domain::tools::{self, GridCanvas, Pointer, Tool, ToolKind};
 use crate::ports::{EditedCopyStore, GameLauncher};
 use cart_model::levels::{COLS, LEVELS, ROWS};
+use cart_model::original_points::OnMap;
+use cart_model::zone_maps::ZONES;
 use macroquad::prelude::*;
 use std::collections::HashMap;
 use widgets::*;
@@ -41,6 +43,7 @@ pub struct Editor {
     art: ArtService,
     atlases: Vec<Option<Texture2D>>,
     world_atlas: Option<Texture2D>,
+    zone_atlases: Vec<Option<Texture2D>>,
     /// What each object type looks like in each level: texture and where its top-left sits
     /// relative to the object's position. None = draws nothing.
     looks: HashMap<(usize, u8), Option<(Texture2D, f32, f32)>>,
@@ -65,6 +68,8 @@ pub struct Editor {
     in_world: bool,
     tile: u8,
     pub(crate) world_tab: usize,
+    /// Which map picture the world map editor shows: the world map or a zone map.
+    pub(crate) world_map: OnMap,
     point: usize,
     world_cam: Vec2,
     level_cam: Vec2,
@@ -93,9 +98,10 @@ impl GridCanvas for LevelCanvas<'_> {
     }
 }
 
-/// Painting tiles into the world map picture.
+/// Painting tiles into a map picture (the world map or a zone map).
 struct WorldCanvas<'a> {
     doc: &'a mut EditorDocument,
+    map: OnMap,
     tile: u8,
 }
 
@@ -104,7 +110,7 @@ impl GridCanvas for WorldCanvas<'_> {
         self.doc.world_snapshot();
     }
     fn paint(&mut self, x: i32, y: i32) {
-        self.doc.set_tile(x as usize, y as usize, self.tile);
+        self.doc.set_tile(self.map, x as usize, y as usize, self.tile);
     }
 }
 
@@ -131,6 +137,7 @@ impl Editor {
             art: ArtService::new(),
             atlases: (0..LEVELS).map(|_| None).collect(),
             world_atlas: None,
+            zone_atlases: ZONES.iter().map(|_| None).collect(),
             looks: HashMap::new(),
             cur: 0,
             block: 0,
@@ -153,6 +160,7 @@ impl Editor {
             in_world: false,
             tile: 0,
             world_tab: TAB_PICTURE,
+            world_map: OnMap::World,
             point: 0,
             world_cam: Vec2::ZERO,
             level_cam: Vec2::ZERO,
@@ -249,8 +257,10 @@ impl Editor {
         (space, view, max)
     }
 
-    /// Let the game load the level (from the world map) and keep its graphics.
+    /// Let the game load the level (from the world map) and keep its graphics (a new
+    /// level's are its base level's).
     fn ensure_art(&mut self, l: usize) {
+        let l = self.doc.base_of(l);
         match self.art.ensure_level(&self.doc.rom, l) {
             Capture::Ready => return,
             Capture::Failed(e) => {
@@ -265,15 +275,37 @@ impl Editor {
         self.atlases[l] = self.art.level(l).map(make_atlas);
     }
 
-    /// The world map's tiles, as the game shows them (captured on the map screen).
+    /// The shown map's tiles, as the game shows them (captured on that map's screen).
     fn ensure_world_art(&mut self) {
-        if self.world_atlas.is_some() {
+        if self.map_atlas().is_some() {
             return;
         }
         if !self.art.booted() {
             self.ensure_art(self.cur);
         }
-        self.world_atlas = self.art.world().map(make_world_atlas);
+        match self.world_map {
+            OnMap::World => self.world_atlas = self.art.world().map(make_world_atlas),
+            OnMap::Zone(z) => self.zone_atlases[z] = self.art.zone(z).map(make_world_atlas),
+        }
+    }
+
+    /// The tiles of the map picture shown.
+    fn map_atlas(&self) -> Option<&Texture2D> {
+        match self.world_map {
+            OnMap::World => self.world_atlas.as_ref(),
+            OnMap::Zone(z) => self.zone_atlases[z].as_ref(),
+        }
+    }
+
+    /// Show another map picture (the world map or a zone map).
+    pub fn show_map(&mut self, map: OnMap) {
+        if map == self.world_map {
+            return;
+        }
+        self.world_map = map;
+        self.cam = Vec2::ZERO;
+        self.sel_point = None;
+        self.ensure_world_art();
     }
 
     pub fn select_level(&mut self, l: usize) {
@@ -308,6 +340,37 @@ impl Editor {
             self.cam = self.level_cam;
         }
         self.in_world = on;
+    }
+
+    pub fn level_count(&self) -> usize {
+        self.doc.levels.len()
+    }
+
+    /// A new level, a copy of the one shown, and show it.
+    fn new_level(&mut self) {
+        match self.doc.add_level(self.cur) {
+            Some(n) => {
+                let base = self.doc.base_of(n);
+                self.select_level(n);
+                self.status = format!(
+                    "{} {n:02}: {} {base:02} ({}). {}",
+                    tr(self.es, "New level", "Nivel nuevo"),
+                    tr(self.es, "plays as level", "se juega como el nivel"),
+                    tr(self.es, "its graphics, music and time", "sus graficos, musica y tiempo"),
+                    tr(self.es, "Put it on a point of Your map to reach it in the game.", "Ponlo en un punto de Mapa propio para llegar a el en el juego.")
+                );
+            }
+            None => self.status = tr(self.es, "There can't be more levels.", "No caben mas niveles.").into(),
+        }
+    }
+
+    /// Delete the new level shown (the 32 of the game stay).
+    fn delete_level(&mut self) {
+        let l = self.cur;
+        if self.doc.remove_level(l) {
+            self.select_level(l.min(self.doc.levels.len() - 1));
+            self.status = format!("{} {l:02} {}", tr(self.es, "Level", "Nivel"), tr(self.es, "deleted (save to keep it); the ones after it moved down a number.", "borrado (guarda para conservarlo); los siguientes bajan un numero."));
+        }
     }
 
     fn undo(&mut self) {
@@ -347,6 +410,7 @@ impl Editor {
                         Saved::WorldMap => tr(es, "world map", "mapa de mundos").to_string(),
                         Saved::LevelPoints => tr(es, "level points", "puntos de nivel").to_string(),
                         Saved::CustomMap => tr(es, "your world map", "tu mapa de mundos").to_string(),
+                        Saved::NewLevels(n, used) => format!("{n} {} {used} bytes", tr(es, "new levels", "niveles nuevos")),
                     })
                     .collect();
                 self.status = format!(
@@ -378,6 +442,7 @@ impl Editor {
             return;
         }
         self.status = match self.launcher.launch(self.store.path(), Some(self.cur)) {
+            Ok(()) if self.cur >= LEVELS => format!("{} {:02} ({} {:02})", tr(self.es, "Playing level", "Jugando el nivel"), self.cur, tr(self.es, "as", "como"), self.doc.base_of(self.cur)),
             Ok(()) => format!("{} {:02}", tr(self.es, "Playing level", "Jugando el nivel"), self.cur),
             Err(e) => format!("{} {e}", tr(self.es, "Could not start", "No se pudo abrir")),
         };
@@ -408,7 +473,7 @@ impl Editor {
             return;
         }
         for (i, (x, y, l)) in [(120, 120, Some(0u8)), (180, 140, None), (240, 150, Some(1)), (300, 200, Some(2))].iter().enumerate() {
-            self.doc.custom.points.push(Point { x: *x, y: *y, level: *l });
+            self.doc.custom.points.push(Point::new(*x, *y, *l));
             if i > 0 {
                 self.doc.custom.paths.push((i - 1, i));
             }

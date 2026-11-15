@@ -9,6 +9,7 @@ use crate::domain::overlay::draw_hint;
 use crate::domain::progress::LevelTracker;
 use crate::domain::settings::Settings;
 use crate::ports::{AudioOut, Keyboard, ProgressStore, SaveStore};
+use cart_model::extra_levels;
 use cart_model::ram_map::LEVEL_NUMBER;
 use cart_model::{GameDriver, GameMode};
 use gb_core::palette::{Palette, PALETTES};
@@ -18,6 +19,19 @@ use gb_core::{Buttons, Gb, FRAME_SECONDS};
 pub enum Flow {
     Continue,
     Quit,
+}
+
+/// Writes that undo a new level put in place of its base level.
+type Undo = Vec<(usize, Vec<u8>)>;
+
+/// The level to ask the game for, to play `level`: a new level (32 and up, see
+/// `extra_levels`) is put in place of its base level in the console's ROM, and the writes
+/// that undo it come back. None if the copy has no such level.
+fn stand_in(g: &mut Gb, level: u8) -> Option<(u8, Option<Undo>)> {
+    let Some(k) = (level as usize).checked_sub(extra_levels::FIRST) else { return Some((level, None)) };
+    let e = extra_levels::read(g.cart().rom()).into_iter().nth(k)?;
+    let writes = extra_levels::writes_for(g.cart().rom(), &e);
+    Some((e.base, Some(extra_levels::apply(g.cart_mut().rom_mut(), &writes))))
 }
 
 /// What a session is started with, besides the console itself.
@@ -52,13 +66,20 @@ pub struct GameSession {
     prev_mode: GameMode,
     map_frames: u32,
     screen: Vec<u8>,
+    /// The new level being played (its number, and how to put its base level back once
+    /// Mario is on the map again).
+    extra: Option<(u8, Undo)>,
 }
 
 impl GameSession {
     pub fn new(mut gb: Gb, parts: SessionParts) -> GameSession {
+        let mut extra = None;
         if let Some(n) = parts.start_level {
             if gb.boot_to_map() {
-                gb.enter_level(n.min(31));
+                if let Some((ask, undo)) = stand_in(&mut gb, n) {
+                    extra = undo.map(|u| (n, u));
+                    gb.enter_level(ask.min(31));
+                }
             }
         }
         let screen = gb.screen().to_vec();
@@ -79,6 +100,7 @@ impl GameSession {
             prev_mode: GameMode::Other(0),
             map_frames: 0,
             screen,
+            extra,
         }
     }
 
@@ -115,11 +137,18 @@ impl GameSession {
             self.hint_time = 3.0;
         }
         self.prev_mode = mode;
-        if let Some(level) = self.tracker.observe(mode, || g.read(LEVEL_NUMBER)) {
+        let playing_extra = self.extra.as_ref().map(|e| e.0);
+        if let Some(level) = self.tracker.observe(mode, || playing_extra.unwrap_or_else(|| g.read(LEVEL_NUMBER))) {
             if let Some(v) = self.map_view.as_mut() {
                 if v.mark_cleared(level) {
                     self.progress.save(&v.cleared);
                 }
+            }
+        }
+        // back on the map: the base level of a new level is itself again
+        if mode == GameMode::Map {
+            if let Some((_, undo)) = self.extra.take() {
+                extra_levels::apply(g.cart_mut().rom_mut(), &undo);
             }
         }
         self.map_frames = if mode == GameMode::Map { self.map_frames + 1 } else { 0 };
@@ -225,11 +254,18 @@ impl GameSession {
             let lock = self.input_lock;
             let k = |i: usize| input.held(st.keys[i]) && !lock;
             let enter = !lock && (input.pressed(st.keys[keys::A]) || input.pressed(st.keys[keys::START]));
+            if !lock && input.pressed(st.keys[keys::B]) {
+                v.go_through_door();
+            }
             if let Some(level) = v.update(k(keys::LEFT), k(keys::RIGHT), k(keys::UP), k(keys::DOWN), enter) {
-                g.enter_level_anywhere(level);
+                if let Some((ask, undo)) = stand_in(g, level) {
+                    self.extra = undo.map(|u| (level, u));
+                    g.enter_level_anywhere(ask);
+                }
                 self.acc = 0.0;
                 self.input_lock = true;
             }
+            v.prepare(g); // through a door: the new picture is drawn this frame already
             b = Buttons::NONE;
         }
         g.set_buttons(b);
@@ -398,5 +434,56 @@ mod tests {
         let before = rec.battery_saves.get();
         s.finish();
         assert_eq!(rec.battery_saves.get(), before + 1);
+    }
+
+    /// A new level (32) on the port's own map: played in place of its base level, counted
+    /// as itself when cleared, and the base level is back once on the map.
+    #[test]
+    fn a_new_level_is_played_from_the_ports_map() {
+        use cart_model::custom_map::{CustomMap, Point};
+        let Some(rom) = host::find_rom(None) else {
+            eprintln!("no cartridge found: session test skipped");
+            return;
+        };
+        let mut copy = cart_model::patch::expand(&std::fs::read(rom).unwrap()).unwrap();
+        let mut e = extra_levels::based_on(&copy, 0);
+        for c in 30..90 {
+            e.map[30 * cart_model::levels::COLS + c] = 1;
+        }
+        extra_levels::store(&mut copy, &[e.clone()]).unwrap();
+        let gb = Gb::new(copy.clone(), 44100).unwrap();
+        let rec = Record::default();
+        let map = CustomMap { points: vec![Point::new(200, 260, Some(32))], paths: Vec::new(), start: 0 };
+        let parts = SessionParts {
+            prefs: Preferences::new(Box::new(rec.clone()), Box::new(rec.clone())),
+            saves: Box::new(rec.clone()),
+            progress: Box::new(rec.clone()),
+            map_view: Some(MapView::new(map, HashSet::new())),
+            start_level: None,
+            checking: false,
+        };
+        let mut s = GameSession::new(gb, parts);
+        let mut keys = FakeKeys::default();
+        let mut f = 0;
+        while s.gb.mode() != GameMode::Playing {
+            assert!(f < 3000, "never reached a level");
+            keys.set(if f % 150 >= 140 { &[Key::Enter] } else { &[] });
+            s.frame(FRAME_SECONDS as f32, &keys, &Silence);
+            f += 1;
+        }
+        assert_eq!(s.extra.as_ref().map(|x| x.0), Some(32));
+        assert_eq!(cart_model::live::map_in_memory(&s.gb), e.map, "the new level's map is played");
+        keys.set(&[]);
+        for _ in 0..30 {
+            s.frame(FRAME_SECONDS as f32, &keys, &Silence);
+        }
+        s.gb.back_to_map();
+        for _ in 0..600 {
+            s.frame(FRAME_SECONDS as f32, &keys, &Silence);
+        }
+        assert_eq!(s.gb.mode(), GameMode::Map);
+        assert!(s.extra.is_none() && s.gb.cart().rom() == &copy[..], "the base level is back");
+        let cleared = &s.map_view.as_ref().unwrap().cleared;
+        assert!(cleared.contains(&32) && !cleared.contains(&0), "{cleared:?}");
     }
 }

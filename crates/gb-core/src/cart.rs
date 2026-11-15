@@ -89,6 +89,12 @@ impl Cart {
         &self.rom
     }
 
+    /// The ROM image to change in place (a port playing levels the cartridge has no room
+    /// for writes them over others while they are played).
+    pub fn rom_mut(&mut self) -> &mut [u8] {
+        &mut self.rom
+    }
+
     /// Battery-backed (or plain) cartridge RAM.
     pub fn ram(&self) -> &[u8] {
         &self.ram

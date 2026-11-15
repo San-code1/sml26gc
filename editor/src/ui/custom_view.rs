@@ -1,7 +1,9 @@
-//! "Your map": the editor-made world map over the map picture. Points go anywhere, paths
-//! join them, each point may open a level; the game walks it with the d-pad.
+//! "Your map": the editor-made world map over the world map and zone map pictures. Points
+//! go anywhere, paths join them, each point may open a level; a path to a point on another
+//! picture is a door. The game walks it with the d-pad.
 use super::widgets::*;
 use super::Editor;
+use crate::domain::document::EditorDocument;
 use cart_model::custom_map::Point;
 use macroquad::prelude::*;
 
@@ -14,6 +16,7 @@ impl Editor {
             .points
             .iter()
             .enumerate()
+            .filter(|(_, p)| p.map == self.world_map)
             .map(|(i, p)| (i, (vec2(p.x as f32, p.y as f32) - w).length()))
             .filter(|(_, d)| *d <= 7.0)
             .min_by(|a, b| a.1.partial_cmp(&b.1).unwrap())
@@ -25,7 +28,10 @@ impl Editor {
             return;
         }
         let w = self.world_pos(m);
-        let snap = |v: f32| ((v / 4.0).round() * 4.0).clamp(4.0, 508.0) as i32;
+        let on = self.world_map;
+        let (mw, mh) = EditorDocument::map_size(on);
+        let snap_x = |v: f32| ((v / 4.0).round() * 4.0).clamp(4.0, mw as f32 * 8.0 - 4.0) as i32;
+        let snap_y = |v: f32| ((v / 4.0).round() * 4.0).clamp(4.0, mh as f32 * 8.0 - 4.0) as i32;
         if is_key_pressed(KeyCode::L) {
             self.link_from = self.sel_point;
         }
@@ -50,9 +56,9 @@ impl Editor {
                 (None, _) => {
                     // a new point, joined to the selected one so a route is drawn click by click
                     let map = &mut self.doc.custom;
-                    map.points.push(Point { x: snap(w.x), y: snap(w.y), level: None });
+                    map.points.push(Point { x: snap_x(w.x), y: snap_y(w.y), level: None, map: on });
                     let n = map.points.len() - 1;
-                    if let Some(s) = self.sel_point {
+                    if let Some(s) = self.sel_point.filter(|&s| map.points[s].map == on) {
                         map.toggle_path(s, n);
                     }
                     self.sel_point = Some(n);
@@ -65,7 +71,7 @@ impl Editor {
         if self.drag_point {
             if is_mouse_button_down(MouseButton::Left) {
                 if let Some(i) = self.sel_point {
-                    let (x, y) = (snap(w.x), snap(w.y));
+                    let (x, y) = (snap_x(w.x), snap_y(w.y));
                     let p = &mut self.doc.custom.points[i];
                     if (p.x, p.y) != (x, y) {
                         p.x = x;
@@ -89,19 +95,31 @@ impl Editor {
 
     pub(super) fn draw_custom(&self) {
         let map = &self.doc.custom;
+        let on = self.world_map;
         let to = |x: i32, y: i32| vec2(PANEL + (x as f32 - self.cam.x) * self.scale(), (y as f32 - self.cam.y) * self.scale());
         for &(a, b) in &map.paths {
             let (pa, pb) = (map.points[a], map.points[b]);
+            if pa.map != on || pb.map != on {
+                continue;
+            }
             let (s, e) = (to(pa.x, pa.y), to(pb.x, pb.y));
             draw_line(s.x, s.y, e.x, e.y, 3.0 * self.scale().max(1.0), Color::new(0.12, 0.12, 0.12, 0.85));
         }
-        if let Some(a) = self.link_from {
+        if let Some(a) = self.link_from.filter(|&a| a < map.points.len()) {
             let p = map.points[a];
-            let s = to(p.x, p.y);
             let m: Vec2 = mouse_position().into();
-            draw_line(s.x, s.y, m.x, m.y, 2.0, WHITE);
+            if p.map == on {
+                let s = to(p.x, p.y);
+                draw_line(s.x, s.y, m.x, m.y, 2.0, WHITE);
+            } else {
+                let t = format!("{} {}", tr(self.es, "joining from", "uniendo desde"), self.map_name(p.map));
+                draw_text(&t, m.x + 12.0, m.y - 8.0, 18.0, WHITE);
+            }
         }
         for (i, p) in map.points.iter().enumerate() {
+            if p.map != on {
+                continue;
+            }
             let c = to(p.x, p.y);
             let r = 5.0 * self.scale();
             match p.level {
@@ -117,6 +135,11 @@ impl Editor {
             }
             if i == map.start {
                 draw_text("S", c.x + r + 2.0, c.y - r, 18.0, WHITE);
+            }
+            if let Some(d) = map.door(i) {
+                let t = format!("> {}", self.map_name(map.points[d].map));
+                draw_text(&t, c.x + r + 3.0, c.y + r + 13.0, 16.0, BLACK);
+                draw_text(&t, c.x + r + 2.0, c.y + r + 12.0, 16.0, WHITE);
             }
             if self.sel_point == Some(i) {
                 draw_rectangle_lines(c.x - r - 3.0, c.y - r - 3.0, r * 2.0 + 6.0, r * 2.0 + 6.0, 2.0, WHITE);
@@ -134,6 +157,10 @@ impl Editor {
         if let Some(i) = self.sel_point.filter(|&i| i < self.doc.custom.points.len()) {
             let cur = self.doc.custom.points[i].level;
             draw_text(&format!("{} {i}", tr(es, "Point", "Punto")), 10.0, y + 18.0, 18.0, col(3));
+            if let Some(d) = self.doc.custom.door(i) {
+                let t = format!("{} {}", tr(es, "door to", "puerta a"), self.map_name(self.doc.custom.points[d].map));
+                draw_text(&t, 100.0, y + 18.0, 16.0, col(2));
+            }
             y += 28.0;
             draw_text(tr(es, "Opens", "Abre"), 10.0, y + 18.0, 18.0, col(3));
             let mut change = 0i32;
@@ -149,10 +176,11 @@ impl Editor {
                 change = 1;
             }
             if change != 0 {
-                // cycle: nothing, 0, 1, ... 31, nothing
-                let idx = cur.map(|l| l as i32).unwrap_or(32);
-                let n = (idx + change).rem_euclid(33);
-                self.doc.custom.points[i].level = if n == 32 { None } else { Some(n as u8) };
+                // cycle: nothing, 0, 1, ... the last level (new ones too), nothing
+                let count = self.doc.levels.len() as i32;
+                let idx = cur.map(|l| l as i32).unwrap_or(count);
+                let n = (idx + change).rem_euclid(count + 1);
+                self.doc.custom.points[i].level = if n == count { None } else { Some(n as u8) };
                 self.doc.custom_dirty = true;
             }
             y += 32.0;
@@ -176,11 +204,16 @@ impl Editor {
         if button(Rect::new(10.0, y, 276.0, 28.0), tr(es, "Try it in the game", "Probarlo en el juego"), false, 16.0) {
             act = Some(6);
         }
-        y += 40.0;
+        y += 32.0;
+        if button(Rect::new(10.0, y, 276.0, 26.0), tr(es, "Add the game's own points", "Anadir los puntos originales"), false, 15.0) {
+            let added = self.doc.add_original_points();
+            self.status = format!("{} {added}", tr(es, "Original points added:", "Puntos originales anadidos:"));
+        }
+        y += 36.0;
         let help = tr(
             es,
-            "Click empty map: new point, joined to the selected one. Drag: move. Right click: delete. Join to... then click another point: add or remove a path. In the game, the d-pad walks the paths and A or Start enters the point's level. The pause menu switches between this map and the original.",
-            "Clic en el mapa vacio: punto nuevo, unido al elegido. Arrastrar: mover. Clic derecho: borrar. Unir con... y clic en otro punto: pone o quita un camino. En el juego, la cruceta recorre los caminos y A o Start entra en el nivel del punto. El menu de pausa cambia entre este mapa y el original.",
+            "Click empty map: new point, joined to the selected one. Drag: move. Right click: delete. Join to... then click another point: add or remove a path; change map with < > before the second click to make a door to a zone. In the game, the d-pad walks the paths, A or Start enters the point's level, B goes through a door (A too where there is no level). The pause menu switches between this map and the original.",
+            "Clic en el mapa vacio: punto nuevo, unido al elegido. Arrastrar: mover. Clic derecho: borrar. Unir con... y clic en otro punto: pone o quita un camino; cambia de mapa con < > antes del segundo clic para hacer una puerta a una zona. En el juego, la cruceta recorre los caminos, A o Start entra en el nivel del punto, B cruza la puerta (A tambien si no hay nivel). El menu de pausa cambia entre este mapa y el original.",
         );
         for (k, line) in wrap(help, 38).iter().enumerate() {
             draw_text(line, 10.0, y + k as f32 * 16.0, 15.0, col(2));

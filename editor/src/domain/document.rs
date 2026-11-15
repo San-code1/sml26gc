@@ -1,13 +1,16 @@
 //! Everything being edited: the cartridge being built (the edited copy), the untouched
-//! original it is checked against, the 32 levels (blocks and objects) with their undo
-//! history, the world map picture and level points, and the editor-made world map. What
-//! has changed since the last save is tracked here; the files are not.
+//! original it is checked against, the 32 levels (blocks and objects) and the new ones
+//! after them (`extra_levels`) with their undo history, the world map picture and level
+//! points, and the editor-made world map. What has changed since the last save is tracked
+//! here; the files are not.
 use super::history::History;
 use cart_model::custom_map::CustomMap;
 use cart_model::error::{BankUsage, ObjectsUsage};
+use cart_model::extra_levels::{self, Extra};
 use cart_model::levels::{self, COLS, LEVELS, ROWS};
 use cart_model::objects::{self, Obj};
-use cart_model::{layout, patch, world, CartError};
+use cart_model::original_points::OnMap;
+use cart_model::{layout, patch, world, zone_maps, CartError};
 
 /// A level as it can be undone: its blocks and its objects.
 #[derive(Clone, PartialEq, Debug)]
@@ -35,16 +38,26 @@ pub enum Saved {
     WorldMap,
     LevelPoints,
     Objects(ObjectsUsage),
+    /// The new levels: how many, bytes used.
+    NewLevels(usize, usize),
     CustomMap,
 }
 
 pub struct EditorDocument {
     pub original: Vec<u8>,
     pub rom: Vec<u8>,
+    /// The 32 levels, then the new ones (number 32 and up).
     pub levels: Vec<LevelDoc>,
+    /// Per new level: the level it is played in place of, and its header.
+    pub extras: Vec<(u8, [u8; 20])>,
+    /// A new level was added or removed.
+    pub extras_dirty: bool,
+    /// The world map picture (64 x 64 tiles) and the zone maps' (20 x 18 each).
     pub world: Vec<u8>,
+    pub zones: Vec<Vec<u8>>,
+    /// Any map picture changed.
     pub world_dirty: bool,
-    world_history: History<Vec<u8>>,
+    world_history: History<(Vec<u8>, Vec<Vec<u8>>)>,
     /// Which level each of the game's own map points opens.
     pub points: Vec<u8>,
     pub points_dirty: bool,
@@ -65,11 +78,15 @@ impl EditorDocument {
             .filter(|r| r.len() == original.len() || patch::is_expanded(r))
             .unwrap_or_else(|| patch::expand(&original).unwrap_or_else(|_| original.clone()));
         patch::upgrade(&mut rom); // copies made before the object patch get it now
-        let levels = (0..LEVELS)
-            .map(|l| LevelDoc { content: level_from(&rom, l), blocks_dirty: false, objects_dirty: false, history: History::default() })
-            .collect();
+        let doc = |content| LevelDoc { content, blocks_dirty: false, objects_dirty: false, history: History::default() };
+        let mut levels: Vec<LevelDoc> = (0..LEVELS).map(|l| doc(level_from(&rom, l))).collect();
+        let stored = extra_levels::read(&rom);
+        levels.extend(stored.iter().map(|e| doc(LevelContent { map: e.map.clone(), objs: e.objs.clone() })));
         EditorDocument {
+            extras: stored.iter().map(|e| (e.base, e.header)).collect(),
+            extras_dirty: false,
             world: world::read(&rom),
+            zones: zone_maps::ZONES.iter().enumerate().map(|(z, _)| zone_maps::read(&rom, z)).collect(),
             world_dirty: false,
             world_history: History::default(),
             points: world::point_levels(&rom),
@@ -126,18 +143,75 @@ impl EditorDocument {
         self.levels[l].content.map[r as usize * COLS + c as usize]
     }
 
-    /// The level as the original cartridge has it (undoable).
+    /// The level as the original cartridge has it (undoable); a new level, as its base level
+    /// is there.
     pub fn restore_level(&mut self, l: usize) {
         self.snapshot(l);
+        let content = level_from(&self.original, self.base_of(l));
         let lv = &mut self.levels[l];
-        lv.content = level_from(&self.original, l);
+        lv.content = content;
         lv.blocks_dirty = true;
         lv.objects_dirty = true;
     }
 
-    /// Levels whose map is the same one as level `l`'s.
+    /// Levels whose map is the same one as level `l`'s (a new level has its own).
     pub fn sharing(&self, l: usize) -> Vec<usize> {
+        if l >= LEVELS {
+            return Vec::new();
+        }
         levels::sharing(&self.rom, l)
+    }
+
+    // ------------------------------------------------------------ new levels
+
+    /// The level of the 32 that level `l` is played as (itself for those): its graphics,
+    /// blocks, music and time.
+    pub fn base_of(&self, l: usize) -> usize {
+        if l < LEVELS {
+            l
+        } else {
+            self.extras.get(l - LEVELS).map(|e| e.0 as usize).unwrap_or(0)
+        }
+    }
+
+    /// A new level after the others, starting as a copy of level `from` as it is being
+    /// edited (a new level copies its base). Returns its number, or None when there are as
+    /// many as there can be.
+    pub fn add_level(&mut self, from: usize) -> Option<usize> {
+        if self.extras.len() >= extra_levels::MAX {
+            return None;
+        }
+        let base = self.base_of(from);
+        let header = if from < LEVELS { extra_levels::based_on(&self.rom, base as u8).header } else { self.extras[from - LEVELS].1 };
+        self.extras.push((base as u8, header));
+        let content = self.levels[from].content.clone();
+        self.levels.push(LevelDoc { content, blocks_dirty: true, objects_dirty: true, history: History::default() });
+        self.extras_dirty = true;
+        Some(self.levels.len() - 1)
+    }
+
+    /// Delete new level `l`; the ones after it move down a number, and the points of the
+    /// editor-made map follow (those that opened it open nothing).
+    pub fn remove_level(&mut self, l: usize) -> bool {
+        if l < LEVELS || l >= self.levels.len() {
+            return false;
+        }
+        self.levels.remove(l);
+        self.extras.remove(l - LEVELS);
+        self.extras_dirty = true;
+        for p in &mut self.custom.points {
+            match p.level.map(|v| v as usize) {
+                Some(v) if v == l => p.level = None,
+                Some(v) if v > l => p.level = Some(v as u8 - 1),
+                _ => {}
+            }
+        }
+        self.custom_dirty = true;
+        true
+    }
+
+    fn extras_now(&self) -> Vec<Extra> {
+        self.extras.iter().zip(&self.levels[LEVELS..]).map(|(&(base, header), lv)| Extra { base, header, map: lv.content.map.clone(), objs: lv.content.objs.clone() }).collect()
     }
 
     /// Where a level's view should start: the first column that isn't background filler
@@ -197,38 +271,65 @@ impl EditorDocument {
 
     // ------------------------------------------------------------ world map
 
+    /// Remember every map picture before a change, for undo.
     pub fn world_snapshot(&mut self) {
-        self.world_history.record(self.world.clone());
+        self.world_history.record((self.world.clone(), self.zones.clone()));
+    }
+
+    fn swap_pictures(&mut self, undo: bool) {
+        let mut cur = (std::mem::take(&mut self.world), std::mem::take(&mut self.zones));
+        let done = if undo { self.world_history.undo(&mut cur) } else { self.world_history.redo(&mut cur) };
+        (self.world, self.zones) = cur;
+        if done {
+            self.world_dirty = true;
+        }
     }
 
     pub fn world_undo(&mut self) {
-        if self.world_history.undo(&mut self.world) {
-            self.world_dirty = true;
-        }
+        self.swap_pictures(true);
     }
 
     pub fn world_redo(&mut self) {
-        if self.world_history.redo(&mut self.world) {
+        self.swap_pictures(false);
+    }
+
+    /// Size of a map picture in tiles.
+    pub fn map_size(map: OnMap) -> (usize, usize) {
+        match map {
+            OnMap::World => (world::W, world::H),
+            OnMap::Zone(_) => (zone_maps::W, zone_maps::H),
+        }
+    }
+
+    fn picture(&self, map: OnMap) -> &Vec<u8> {
+        match map {
+            OnMap::World => &self.world,
+            OnMap::Zone(z) => &self.zones[z],
+        }
+    }
+
+    pub fn set_tile(&mut self, map: OnMap, x: usize, y: usize, t: u8) {
+        let i = y * Self::map_size(map).0 + x;
+        let pic = match map {
+            OnMap::World => &mut self.world,
+            OnMap::Zone(z) => &mut self.zones[z],
+        };
+        if pic[i] != t {
+            pic[i] = t;
             self.world_dirty = true;
         }
     }
 
-    pub fn set_tile(&mut self, x: usize, y: usize, t: u8) {
-        let i = y * world::W + x;
-        if self.world[i] != t {
-            self.world[i] = t;
-            self.world_dirty = true;
-        }
+    pub fn tile(&self, map: OnMap, x: usize, y: usize) -> u8 {
+        self.picture(map)[y * Self::map_size(map).0 + x]
     }
 
-    pub fn tile(&self, x: usize, y: usize) -> u8 {
-        self.world[y * world::W + x]
-    }
-
-    /// The world picture and level points as the original has them (the picture undoable).
+    /// Every map picture and the level points as the original has them (the pictures
+    /// undoable).
     pub fn restore_world(&mut self) {
         self.world_snapshot();
         self.world = world::read(&self.original);
+        self.zones = (0..zone_maps::ZONES.len()).map(|z| zone_maps::read(&self.original, z)).collect();
         self.points = world::point_levels(&self.original);
         self.world_dirty = true;
         self.points_dirty = true;
@@ -246,6 +347,37 @@ impl EditorDocument {
         self.points_dirty = true;
     }
 
+    /// Add the game's own map (its points where it draws them, with the levels they open now,
+    /// and its paths and doors) to the editor-made map; points already there (same map and
+    /// place) are reused. Returns how many points were added.
+    pub fn add_original_points(&mut self) -> usize {
+        let original = CustomMap::from_original(&self.points);
+        let was_empty = self.custom.points.is_empty();
+        let mut added = 0;
+        let mut index = Vec::new();
+        for p in &original.points {
+            match self.custom.points.iter().position(|q| (q.map, q.x, q.y) == (p.map, p.x, p.y)) {
+                Some(i) => index.push(i),
+                None => {
+                    self.custom.points.push(*p);
+                    index.push(self.custom.points.len() - 1);
+                    added += 1;
+                }
+            }
+        }
+        for &(a, b) in &original.paths {
+            if !self.custom.linked(index[a], index[b]) {
+                self.custom.paths.push((index[a], index[b]));
+                self.custom_dirty = true;
+            }
+        }
+        if was_empty {
+            self.custom.start = index[original.start];
+        }
+        self.custom_dirty |= added > 0;
+        added
+    }
+
     // ------------------------------------------------------------ space and saving
 
     /// The edited maps of one bank: (map number, blocks), one per map.
@@ -260,18 +392,25 @@ impl EditorDocument {
         v
     }
 
-    /// Bytes level `l`'s zone needs and has.
+    /// Bytes level `l`'s zone needs and has (a new level: its own map and the room it gets).
     pub fn zone_space(&self, l: usize) -> (usize, usize) {
+        if l >= LEVELS {
+            return (levels::encode(&self.levels[l].content.map).len(), extra_levels::MAP_ROOM);
+        }
         let bank = levels::header(&self.rom, l).bank;
         layout::bank_space(&self.rom, &self.original, bank, &self.bank_edits(bank))
     }
 
     fn object_lists(&self) -> Vec<Vec<Obj>> {
-        self.levels.iter().map(|l| l.content.objs.clone()).collect()
+        self.levels[..LEVELS].iter().map(|l| l.content.objs.clone()).collect()
     }
 
-    /// Bytes all the object lists need and have.
-    pub fn object_space(&self) -> (usize, usize) {
+    /// Bytes the object lists need and have: all those of the 32 levels together, or a new
+    /// level's own (`l`).
+    pub fn object_space(&self, l: usize) -> (usize, usize) {
+        if l >= LEVELS {
+            return (self.levels[l].content.objs.len() * 3 + 1, extra_levels::OBJECTS_ROOM);
+        }
         objects::space(&self.rom, &self.original, &self.object_lists())
     }
 
@@ -302,6 +441,9 @@ impl EditorDocument {
         }
         if self.world_dirty {
             world::write(&mut self.rom, &self.world);
+            for (z, pic) in self.zones.iter().enumerate() {
+                zone_maps::write(&mut self.rom, z, pic);
+            }
             self.world_dirty = false;
             notes.push(Saved::WorldMap);
         }
@@ -310,7 +452,7 @@ impl EditorDocument {
             self.points_dirty = false;
             notes.push(Saved::LevelPoints);
         }
-        if self.levels.iter().any(|l| l.objects_dirty) {
+        if self.levels[..LEVELS].iter().any(|l| l.objects_dirty) {
             let mut rom = self.rom.clone();
             notes.push(Saved::Objects(objects::store(&mut rom, &self.original, &self.object_lists())?));
             self.rom = rom;
@@ -319,6 +461,19 @@ impl EditorDocument {
                 self.levels[l].content.objs = objects::read(&self.rom, l).0;
                 self.levels[l].objects_dirty = false;
             }
+        }
+        if self.extras_dirty || self.levels[LEVELS..].iter().any(|l| l.dirty()) {
+            let mut rom = self.rom.clone();
+            let used = extra_levels::store(&mut rom, &self.extras_now())?;
+            self.rom = rom;
+            for (k, e) in extra_levels::read(&self.rom).into_iter().enumerate() {
+                let lv = &mut self.levels[LEVELS + k];
+                lv.content.objs = e.objs; // stored left to right, as the game keeps them
+                lv.blocks_dirty = false;
+                lv.objects_dirty = false;
+            }
+            self.extras_dirty = false;
+            notes.push(Saved::NewLevels(self.extras.len(), used));
         }
         Ok(notes)
     }
@@ -353,8 +508,12 @@ mod tests {
 
         let i = doc.add_object(3, Obj { x: 64, y: 32, kind: 5, flag: false });
         doc.move_object(3, i, 72, 40);
-        doc.set_tile(1, 1, doc.tile(1, 1) ^ 1);
-        let tile = doc.tile(1, 1);
+        doc.set_tile(OnMap::World, 1, 1, doc.tile(OnMap::World, 1, 1) ^ 1);
+        let tile = doc.tile(OnMap::World, 1, 1);
+        let zone = OnMap::Zone(2);
+        doc.world_snapshot();
+        doc.set_tile(zone, 19, 17, doc.tile(zone, 19, 17) ^ 1);
+        let zone_tile = doc.tile(zone, 19, 17);
         let parts = doc.commit().unwrap_or_else(|e| panic!("{e}"));
         assert!(matches!(parts[0], Saved::Bank(_)));
         assert!(parts.iter().any(|p| matches!(p, Saved::WorldMap)));
@@ -365,7 +524,9 @@ mod tests {
         let again = EditorDocument::open(doc.original.clone(), Some(doc.rom.clone()), CustomMap::default());
         assert_eq!(again.block(3, 10, 5), new);
         assert!(again.levels[3].content.objs.iter().any(|o| (o.x, o.y, o.kind) == (72, 40, 5)));
-        assert_eq!(again.tile(1, 1), tile);
+        assert_eq!(again.tile(OnMap::World, 1, 1), tile);
+        assert_eq!(again.tile(zone, 19, 17), zone_tile);
+        assert_eq!(again.zones[0], doc.zones[0], "other zone maps untouched");
         assert_eq!(again.levels[4].content, doc.levels[4].content, "other levels untouched");
     }
 
@@ -383,7 +544,48 @@ mod tests {
 
         doc.step_point_level(0, 1);
         assert!(doc.points_dirty);
+        let zone = OnMap::Zone(5);
+        let before = doc.tile(zone, 3, 3);
+        doc.world_snapshot();
+        doc.set_tile(zone, 3, 3, before ^ 1);
+        doc.world_undo();
+        assert_eq!(doc.tile(zone, 3, 3), before, "zone maps are undone with the world map");
+        doc.world_redo();
         doc.restore_world();
         assert_eq!(doc.points, world::point_levels(&doc.original));
+        assert_eq!(doc.tile(zone, 3, 3), before);
+
+        let n = doc.add_original_points();
+        assert!(n > 30 && doc.custom_dirty);
+        assert_eq!(doc.custom.points[doc.custom.start].level, Some(0), "Mario starts on the first level");
+        let paths = CustomMap::from_original(&doc.points).paths.len();
+        assert_eq!(doc.custom.paths.len(), paths, "the paths come too");
+        assert_eq!(doc.add_original_points(), 0, "points already there are not added twice");
+        assert_eq!(doc.custom.paths.len(), paths);
+    }
+
+    #[test]
+    fn new_levels_are_added_saved_and_removed() {
+        let Some(mut doc) = open() else {
+            eprintln!("no cartridge found: document test skipped");
+            return;
+        };
+        doc.set_block(5, 10, 5, 3);
+        let n = doc.add_level(5).unwrap();
+        assert_eq!((n, doc.base_of(n)), (LEVELS, 5));
+        assert_eq!(doc.block(n, 10, 5), 3, "a copy of the level as it is being edited");
+        let m = doc.add_level(n).unwrap();
+        assert_eq!(doc.base_of(m), 5, "a copy of a new level has the same base");
+        doc.set_block(m, 20, 5, 4);
+        doc.add_object(m, Obj { x: 80, y: 40, kind: 5, flag: false });
+        doc.custom.points.push(cart_model::custom_map::Point::new(10, 10, Some(m as u8)));
+        doc.commit().unwrap();
+        let again = EditorDocument::open(doc.original.clone(), Some(doc.rom.clone()), CustomMap::default());
+        assert_eq!(again.levels.len(), LEVELS + 2);
+        assert_eq!(again.levels[m].content, doc.levels[m].content);
+        assert_eq!(again.base_of(m), 5);
+        assert!(doc.remove_level(n) && !doc.remove_level(3));
+        assert_eq!(doc.custom.points.last().unwrap().level, Some(n as u8), "the point follows its level");
+        assert_eq!(doc.levels[n].content, again.levels[m].content);
     }
 }

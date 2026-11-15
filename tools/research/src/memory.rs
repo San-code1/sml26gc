@@ -150,15 +150,26 @@ pub fn cmp_map(rom: &Path, sa: &str, fa: u32, sb: &str, at: u32, fb: u32) {
 
 /// Log data reads from ROM bank `bank` addresses lo..=hi between frames, summarised by
 /// reading instruction: how many reads and the address range each one touched.
+/// Env READS_POKE="FRAME:ff9b=09,a299=00" writes memory at that frame (to clear a level).
 pub fn reads(rom: &Path, script: &str, bank: usize, lo: u16, hi: u16, from: u32, to: u32) {
     let Some(mut gb) = probed(rom) else { return };
     let sc = parse_script(script);
+    let poke = std::env::var("READS_POKE").ok().and_then(|v| v.split_once(':').map(|(f, p)| (f.parse::<u32>().unwrap_or(0), p.to_string())));
     let mut by_pc: std::collections::BTreeMap<u32, (usize, u16, u16, Vec<u32>)> = Default::default();
     for f in 0..to {
         if f == from {
             gb.observer_mut().read_watch = Some((lo, hi, bank));
         }
+        if let Some((_, pokes)) = poke.as_ref().filter(|p| p.0 == f) {
+            for (a, v) in pokes.split(',').filter_map(|p| p.split_once('=')) {
+                gb.write(u16::from_str_radix(a, 16).unwrap_or(0), u8::from_str_radix(v, 16).unwrap_or(0));
+            }
+        }
+        let before = gb.read(GAME_MODE);
         run_script(&mut gb, &sc, f);
+        if std::env::var("READS_MODES").is_ok() && gb.read(GAME_MODE) != before {
+            println!("f{f} mode {:02x}", gb.read(GAME_MODE));
+        }
         for (pc, a, b) in gb.observer_mut().read_log.drain(..) {
             let key = (b as u32) << 16 | pc as u32;
             let e = by_pc.entry(key).or_insert((0, u16::MAX, 0, Vec::new()));
@@ -288,6 +299,23 @@ pub fn trace(rom: &Path, script: &str, addrs: &[u16], from: u32, to: u32) {
         if f >= from {
             let v: Vec<String> = addrs.iter().map(|&a| format!("{:02x}", gb.read(a))).collect();
             println!("f{f} btn={:02x} {}", buttons_at(&sc, f).bits(), v.join(" "));
+        }
+    }
+}
+
+/// Cartridge and work RAM on the world map with no save and with the player's battery save:
+/// the addresses that differ (where the game keeps its progress).
+pub fn save_diff(rom: &Path) {
+    let snap = |save: bool| {
+        crate::console::use_battery_save(save);
+        let mut gb = load(rom)?;
+        gb.boot_to_map();
+        Some(crate::console::ram_snapshot(&mut gb))
+    };
+    let (Some(a), Some(b)) = (snap(false), snap(true)) else { return };
+    for (x, y) in a.iter().zip(&b) {
+        if x.1 != y.1 && x.0 < 0xC000 {
+            println!("{:04x}: new {:02x}  saved {:02x}", x.0, x.1, y.1);
         }
     }
 }
