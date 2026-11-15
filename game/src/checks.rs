@@ -1,7 +1,12 @@
 //! Checks of the game's own additions, run from the command line without a window:
 //!   game --research customcheck OUT.png   the editor-made world map, walked and entered
 //!   game --research menushots DIR         the pause menu's screens in every language
-use crate::{load_gb, GameDriver, PALETTES};
+use crate::domain::map_view::MapView;
+use crate::domain::menu::Menu;
+use crate::domain::settings::Settings;
+use cart_model::GameDriver;
+use gb_core::palette::PALETTES;
+use host::load_gb;
 use cart_model::custom_map::{CustomMap, Point};
 use gb_core::script::{buttons_at, parse_script};
 use host::png_out::{write_rgba, write_screen};
@@ -20,7 +25,8 @@ pub fn custom_check(rom_path: &Path, png: &Path) {
         start: 0,
     };
     host::save_custom_map(&map, &rom_copy).unwrap();
-    let mut v = crate::mapview::MapView::load(&rom_copy).expect("map file");
+    let loaded = host::load_custom_map(&rom_copy).expect("map file");
+    let mut v = MapView::new(loaded, host::progress::load(&host::progress_path(&rom_copy)));
     let parsed_same = v.map == map;
     let Ok(mut g) = load_gb(&rom_copy, 44100, false) else { return };
     g.boot_to_map();
@@ -68,12 +74,12 @@ pub fn menu_shots(rom: &Path, dir: &Path) {
         gb.clear_audio();
     }
     let _ = std::fs::create_dir_all(dir);
-    let mut st = crate::menu::Settings::default();
+    let mut st = Settings::default();
     for (lang, tag) in ["en", "es", "ja"].iter().enumerate() {
         st.lang = lang;
         for name in ["main", "controls", "wait", "display", "sound", "language", "confirm"] {
             let mut screen = *gb.screen();
-            crate::menu::Menu::preview(name).draw(&mut screen, &st);
+            Menu::preview(name).draw(&mut screen, &st);
             if let Err(e) = write_screen(&dir.join(format!("{tag}-{name}.png")), &screen, &PALETTES[0]) {
                 eprintln!("{e}");
             }

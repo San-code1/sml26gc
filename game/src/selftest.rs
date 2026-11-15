@@ -1,5 +1,6 @@
 //! Scripted play without a window: frame dumps for development and the --self-test report.
-use crate::{load_gb, ppu, Gb};
+use gb_core::{ppu, Gb};
+use host::load_gb;
 pub use gb_core::script::{buttons_at, parse_script};
 pub use host::png_out::save_png;
 use std::path::Path;

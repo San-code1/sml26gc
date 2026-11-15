@@ -1,4 +1,5 @@
 //! Speaker output through the system's default audio device.
+use crate::ports::AudioOut;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
@@ -22,8 +23,15 @@ impl Audio {
         }
     }
 
+}
+
+impl AudioOut for Audio {
+    fn sample_rate(&self) -> u32 {
+        self.rate
+    }
+
     /// Queue interleaved stereo samples, keeping the delay short.
-    pub fn push(&self, samples: &[f32], volume: f32) {
+    fn push(&self, samples: &[f32], volume: f32) {
         if self._stream.is_none() {
             return;
         }
@@ -35,7 +43,7 @@ impl Audio {
         }
     }
 
-    pub fn queued_seconds(&self) -> f32 {
+    fn queued_seconds(&self) -> f32 {
         self.queue.lock().map(|q| q.len() as f32 / 2.0 / self.rate as f32).unwrap_or(0.0)
     }
 }

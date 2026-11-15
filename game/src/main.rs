@@ -1,18 +1,27 @@
 //! Native Windows port of a Game Boy cartridge: the original program runs on a
 //! Game Boy implemented in Rust, drawn and heard through macroquad and cpal.
-mod audio;
-mod mapview;
-mod menu;
+//!
+//! Layers: `domain` (rules, no I/O) ← `application` (session use case) ← `ports` (traits)
+//! ← `adapters` (macroquad, cpal, files, Win32). This file is the composition root: it
+//! reads the command line, picks the adapters and starts the window loop.
+mod adapters;
+mod application;
 mod checks;
+mod domain;
+mod ports;
 mod selftest;
 
-pub use cart_model::ram_map::LEVEL_NUMBER;
-pub use cart_model::{GameDriver, GameMode};
-pub use gb_core::palette::{fb_to_rgba, PALETTES};
-pub use gb_core::{ppu, Buttons, Gb, FRAME_SECONDS};
-pub use host::load_gb;
-use macroquad::prelude::*;
-use std::path::{Path, PathBuf};
+use adapters::cpal_audio::Audio;
+use adapters::fs_stores::{BatteryFile, DefaultSettings, ProgressFile, SettingsFile};
+use adapters::macroquad_display::{save_window_png, MacroquadDisplay, MacroquadWindow};
+use adapters::macroquad_keyboard::MacroquadKeyboard;
+use adapters::win32;
+use application::preferences::Preferences;
+use application::session::{Flow, GameSession, SessionParts};
+use domain::keys::Key;
+use domain::map_view::MapView;
+use ports::{AudioOut, Keyboard, SettingsStore};
+use std::path::PathBuf;
 
 #[derive(Default)]
 struct Args {
@@ -27,103 +36,34 @@ struct Args {
     level: Option<u8>,
 }
 
-fn parse_args() -> Args {
+fn parse_args(v: &[String]) -> Args {
     let mut a = Args { frames: 600, every: 60, ..Default::default() };
-    let v: Vec<String> = std::env::args().skip(1).collect();
     let mut i = 0;
     while i < v.len() {
         let next = v.get(i + 1).cloned().unwrap_or_default();
         match v[i].as_str() {
-            "--screenshot" => {
-                a.screenshot = Some(next.into());
+            "--screenshot" => a.screenshot = Some(next.into()),
+            "--self-test" => a.self_test = Some(next.into()),
+            "--dump" => a.dump = Some(next.into()),
+            "--script" => a.script = next,
+            "--frames" => a.frames = next.parse().unwrap_or(600),
+            "--every" => a.every = next.parse().unwrap_or(60),
+            "--rom" => a.rom = Some(next.into()),
+            "--level" => a.level = next.parse().ok(),
+            s => {
+                if !s.starts_with("--") {
+                    a.rom = Some(s.into());
+                }
                 i += 1;
+                continue;
             }
-            "--self-test" => {
-                a.self_test = Some(next.into());
-                i += 1;
-            }
-            "--dump" => {
-                a.dump = Some(next.into());
-                i += 1;
-            }
-            "--script" => {
-                a.script = next;
-                i += 1;
-            }
-            "--frames" => {
-                a.frames = next.parse().unwrap_or(600);
-                i += 1;
-            }
-            "--every" => {
-                a.every = next.parse().unwrap_or(60);
-                i += 1;
-            }
-            "--rom" => {
-                a.rom = Some(next.into());
-                i += 1;
-            }
-            "--level" => {
-                a.level = next.parse().ok();
-                i += 1;
-            }
-            s if !s.starts_with("--") => a.rom = Some(s.into()),
-            _ => {}
         }
-        i += 1;
+        i += 2; // option and its value
     }
     a
 }
 
-fn write_save(gb: &mut Gb, rom_path: &Path) {
-    if let Err(e) = host::write_battery_save(gb, rom_path) {
-        eprintln!("could not write the save file: {e}");
-    }
-}
-
-fn read_keys(keys: &[KeyCode; 8]) -> Buttons {
-    // Order matches menu::BUTTON_NAMES: Up, Down, Left, Right, A, B, Start, Select.
-    const BITS: [Buttons; 8] = [Buttons::UP, Buttons::DOWN, Buttons::LEFT, Buttons::RIGHT, Buttons::A, Buttons::B, Buttons::START, Buttons::SELECT];
-    let mut b = Buttons::NONE;
-    for (k, bit) in keys.iter().zip(BITS) {
-        if is_key_down(*k) {
-            b |= bit;
-        }
-    }
-    // A cartridge never sees opposite directions held together.
-    if b & (Buttons::LEFT | Buttons::RIGHT) == Buttons::LEFT | Buttons::RIGHT {
-        b &= !(Buttons::LEFT | Buttons::RIGHT);
-    }
-    if b & (Buttons::UP | Buttons::DOWN) == Buttons::UP | Buttons::DOWN {
-        b &= !(Buttons::UP | Buttons::DOWN);
-    }
-    b
-}
-
 const TITLE: &str = "Game Boy Native (Rust)";
-
-#[cfg(windows)]
-mod win {
-    use std::sync::atomic::{AtomicIsize, Ordering};
-    use windows_sys::Win32::UI::WindowsAndMessaging::*;
-    pub static PREV: AtomicIsize = AtomicIsize::new(0);
-    pub fn remember_foreground() {
-        unsafe { PREV.store(GetForegroundWindow() as isize, Ordering::SeqCst) }
-    }
-    /// Push our window behind the others and give focus back to whatever had it.
-    pub fn send_to_back(title: &str) {
-        let w: Vec<u16> = title.encode_utf16().chain(Some(0)).collect();
-        unsafe {
-            let hwnd = FindWindowW(std::ptr::null(), w.as_ptr());
-            if !hwnd.is_null() {
-                SetWindowPos(hwnd, HWND_BOTTOM, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
-            }
-            let prev = PREV.load(Ordering::SeqCst);
-            if prev != 0 {
-                SetForegroundWindow(prev as _);
-            }
-        }
-    }
-}
 
 fn main() {
     let raw: Vec<String> = std::env::args().skip(1).collect();
@@ -135,13 +75,11 @@ fn main() {
         checks::research_main(&rom, &raw[1..]);
         return;
     }
-    let args = parse_args();
+    let args = parse_args(&raw);
     let found = host::require_rom(args.rom.clone());
-    let rom = found.as_ref().ok().cloned();
-    let rom_error = found.err();
 
     if let Some(out) = &args.self_test {
-        let res = selftest::run(rom.as_deref());
+        let res = selftest::run(found.as_deref().ok());
         if let Err(e) = std::fs::write(out, res) {
             eprintln!("could not write {}: {e}", out.display());
             std::process::exit(1);
@@ -149,17 +87,17 @@ fn main() {
         return;
     }
     if let Some(dir) = &args.dump {
-        selftest::dump(rom.as_deref(), dir, &args.script, args.frames, args.every);
+        selftest::dump(found.as_deref().ok(), dir, &args.script, args.frames, args.every);
         return;
     }
 
-    let quiet = args.screenshot.is_some();
-    let title = if quiet { format!("{TITLE} [check {}]", std::process::id()) } else { TITLE.to_string() };
-    #[cfg(windows)]
-    if quiet {
-        win::remember_foreground();
+    // A check run (--screenshot) is unattended: silent, default settings, no menu.
+    let checking = args.screenshot.is_some();
+    let title = if checking { format!("{TITLE} [check {}]", std::process::id()) } else { TITLE.to_string() };
+    if checking {
+        win32::remember_foreground();
     }
-    let conf = Conf {
+    let conf = macroquad::window::Conf {
         window_title: title.clone(),
         window_width: 640,
         window_height: 576,
@@ -167,270 +105,76 @@ fn main() {
         window_resizable: true,
         ..Default::default()
     };
-    macroquad::Window::from_config(conf, run(args, rom, rom_error, title));
+    macroquad::Window::from_config(conf, run(args, found, checking, title));
 }
 
-async fn run(args: Args, rom_path: Option<PathBuf>, rom_error: Option<String>, title: String) {
-    let quiet = args.screenshot.is_some();
-    prevent_quit();
-    let audio =if quiet { audio::Audio::silent() } else { audio::Audio::new() };
-    let mut error = String::new();
-    let mut gb = match &rom_path {
-        Some(p) => match load_gb(p, audio.rate, !quiet) {
-            Ok(g) => Some(g),
-            Err(e) => {
-                error = e;
-                None
-            }
-        },
-        None => {
-            error = rom_error.unwrap_or_else(|| host::NO_CARTRIDGE.into());
-            None
-        }
+/// Plug the adapters into a session, or keep the error to show it.
+fn start(args: &Args, found: Result<PathBuf, String>, checking: bool, audio: &dyn AudioOut) -> Result<GameSession, (Preferences, String)> {
+    let settings: Box<dyn SettingsStore> = if checking { Box::new(DefaultSettings) } else { Box::new(SettingsFile) };
+    let prefs = Preferences::new(settings, Box::new(MacroquadWindow));
+    let rom = match found {
+        Ok(r) => r,
+        Err(e) => return Err((prefs, e)),
     };
+    let gb = match host::load_gb(&rom, audio.sample_rate(), !checking) {
+        Ok(g) => g,
+        Err(e) => return Err((prefs, e)),
+    };
+    let progress = ProgressFile::for_rom(&rom);
+    let map_view = if checking { None } else { host::load_custom_map(&rom).map(|m| MapView::new(m, progress.load())) };
+    let parts = SessionParts {
+        prefs,
+        saves: Box::new(BatteryFile { rom }),
+        progress: Box::new(progress),
+        map_view,
+        start_level: args.level,
+        checking,
+    };
+    Ok(GameSession::new(gb, parts))
+}
 
-    // Started from the level editor: go straight into the chosen level.
-    if let (Some(n), Some(g)) = (args.level, gb.as_mut()) {
-        if g.boot_to_map() {
-            g.enter_level(n.min(31));
-        }
-    }
-
-    let mut rgba = vec![0u8; ppu::W * ppu::H * 4];
-    let tex = Texture2D::from_rgba8(ppu::W as u16, ppu::H as u16, &rgba);
-    tex.set_filter(FilterMode::Nearest);
-    let mut st = if quiet { menu::Settings::default() } else { menu::Settings::load() };
-    if st.fullscreen && !quiet {
-        set_fullscreen(true);
-    }
-    let mut acc = 0.0f64;
+async fn run(args: Args, found: Result<PathBuf, String>, checking: bool, title: String) {
+    macroquad::input::prevent_quit();
+    let audio = if checking { Audio::silent() } else { Audio::new() };
+    let keyboard = MacroquadKeyboard;
+    let mut display = MacroquadDisplay::new();
+    let mut app = start(&args, found, checking, &audio);
     let mut render_frames = 0u32;
-    let mut save_timer = 0.0f32;
-    let mut pause: Option<menu::Menu> = None;
-    // After the menu closes, the game sees no buttons until every key is let go,
-    // so the key that closed it doesn't also press a button in the game.
-    let mut input_lock = false;
-    let mut start_tap = 0u32;
-    let mut hint_time = if quiet { 0.0 } else { 4.0f32 };
-    let mut screen = vec![0u8; ppu::W * ppu::H];
-    let mut prev_mode = GameMode::Other(0);
-    // The editor-made world map for this cartridge, if there is one (see mapview.rs).
-    let mut mapview = if quiet { None } else { rom_path.as_ref().and_then(|p| mapview::MapView::load(p)) };
-    // The level being played, to mark it cleared when the map comes back without a lost life.
-    let mut playing: Option<u8> = None;
-    let mut lost_life = false;
-    let mut map_frames = 0u32;
 
     loop {
-        if quiet && render_frames == 1 {
-            #[cfg(windows)]
-            win::send_to_back(&title);
+        if checking && render_frames == 1 {
+            win32::send_to_back(&title);
         }
-        if is_key_pressed(KeyCode::F11) {
-            st.fullscreen = !st.fullscreen;
-            set_fullscreen(st.fullscreen);
-            st.save();
-        }
-
-        if let Some(g) = gb.as_mut() {
-            // In a level the Start key opens this pause menu; elsewhere it is the game's own
-            // Start. Esc opens it anywhere.
-            let mode = g.mode();
-            let in_level = mode == GameMode::Playing;
-            // Show the "ESC: menu / Enter: pause" tag again each time a level begins.
-            if in_level && prev_mode != GameMode::Playing && prev_mode != GameMode::Paused && !quiet {
-                hint_time = 3.0;
+        let dt = macroquad::time::get_frame_time();
+        match &mut app {
+            Ok(session) => {
+                if session.frame(dt, &keyboard, &audio) == Flow::Quit {
+                    break;
+                }
+                display.present(session.screen(), session.palette(), session.settings().integer_scale);
             }
-            prev_mode = mode;
-            // Follow the level being played: losing a life or game over mean it wasn't
-            // cleared; reaching the map otherwise means it was.
-            match mode {
-                GameMode::Playing if playing.is_none() => {
-                    playing = Some(g.read(LEVEL_NUMBER));
-                    lost_life = false;
+            Err((prefs, error)) => {
+                if keyboard.pressed(Key::F11) {
+                    prefs.toggle_fullscreen();
                 }
-                GameMode::LosingLife | GameMode::GameOver => lost_life = true,
-                GameMode::Map => {
-                    if let (Some(l), Some(v)) = (playing, mapview.as_mut()) {
-                        if !lost_life {
-                            v.mark_cleared(l);
-                        }
-                    }
-                    playing = None;
-                }
-                GameMode::FileSelect => playing = None,
-                _ => {}
-            }
-            map_frames = if mode == GameMode::Map { map_frames + 1 } else { 0 };
-            // The editor-made map takes over the world map screen once it has finished appearing.
-            let custom = mode == GameMode::Map && map_frames > 20 && mapview.as_ref().map(|v| v.enabled).unwrap_or(false);
-            if pause.is_none() && !quiet {
-                let start_key = is_key_pressed(st.keys[6]) && in_level && !input_lock;
-                if is_key_pressed(KeyCode::Escape) || start_key {
-                    pause = Some(menu::Menu::new(mode, mapview.as_ref().map(|v| v.enabled)));
-                }
-            } else if let Some(m) = pause.as_mut() {
-                match m.update(&mut st) {
-                    menu::Action::None => {}
-                    menu::Action::Close => {
-                        pause = None;
-                        input_lock = true;
-                    }
-                    menu::Action::PressStart => {
-                        pause = None;
-                        input_lock = true;
-                        start_tap = 8;
-                    }
-                    menu::Action::Quit => break,
-                    menu::Action::BackToMap => {
-                        pause = None;
-                        input_lock = true;
-                        lost_life = true; // left on purpose: not cleared
-                        g.back_to_map();
-                    }
-                    menu::Action::ToggleWorld => {
-                        if let Some(v) = mapview.as_mut() {
-                            v.enabled = !v.enabled;
-                        }
-                    }
-                    menu::Action::FileSelect => {
-                        pause = None;
-                        input_lock = true;
-                        g.back_to_file_select();
-                        acc = 0.0;
-                    }
-                }
-            }
-            if quiet {
-                // Checks: run the game a little faster so the title screen is up.
-                for _ in 0..4 {
-                    g.run_frame();
-                }
-                g.clear_audio();
-            } else if pause.is_some() {
-                // Paused: the game is frozen and silent.
-                g.clear_audio();
-                acc = 0.0;
-            } else {
-                let mut b = read_keys(&st.keys);
-                let held_any = !b.is_empty() || is_key_down(KeyCode::Enter) || is_key_down(KeyCode::Space) || is_key_down(KeyCode::Escape);
-                if input_lock {
-                    if held_any {
-                        b = Buttons::NONE;
-                    } else {
-                        input_lock = false;
-                    }
-                }
-                if in_level {
-                    b &= !Buttons::START;
-                }
-                if start_tap > 0 {
-                    start_tap -= 1;
-                    b |= Buttons::START;
-                }
-                if custom {
-                    // Our map gets the buttons; the game's own map idles underneath (its music plays).
-                    let v = mapview.as_mut().unwrap();
-                    v.prepare(g);
-                    let k = |i: usize| is_key_down(st.keys[i]) && !input_lock;
-                    let enter = !input_lock && (is_key_pressed(st.keys[4]) || is_key_pressed(st.keys[6]));
-                    if let Some(level) = v.update(k(2), k(3), k(0), k(1), enter) {
-                        g.enter_level_anywhere(level);
-                        acc = 0.0;
-                        input_lock = true;
-                    }
-                    b = Buttons::NONE;
-                }
-                g.set_buttons(b);
-                let fast = is_key_down(KeyCode::LeftControl) || is_key_down(KeyCode::RightControl);
-                acc += get_frame_time().min(0.1) as f64;
-                // Keep the sound queue fed: nudge timing when it runs low or high.
-                let q = audio.queued_seconds();
-                let target = FRAME_SECONDS * if q < 0.03 { 0.9 } else if q > 0.09 { 1.1 } else { 1.0 };
-                let mut ran = 0;
-                while acc >= target && ran < 4 {
-                    acc -= target;
-                    g.run_frame();
-                    ran += 1;
-                }
-                if fast {
-                    for _ in 0..3 {
-                        g.run_frame();
-                    }
-                    g.clear_audio();
-                }
-                audio.push(g.audio(), st.volume as f32 / 10.0);
-                g.clear_audio();
-                save_timer += get_frame_time();
-                if save_timer > 5.0 {
-                    save_timer = 0.0;
-                    if let Some(p) = &rom_path {
-                        write_save(g, p);
-                    }
-                }
-            }
-            screen.copy_from_slice(g.screen());
-            if custom {
-                if let Some(v) = &mapview {
-                    v.draw(&mut screen, st.lang);
-                }
-            }
-            if let Some(m) = &pause {
-                m.draw(&mut screen, &st);
-            } else if hint_time > 0.0 {
-                hint_time -= get_frame_time();
-                menu::draw_hint(&mut screen, st.lang);
-            }
-            fb_to_rgba(&screen, &PALETTES[st.palette % PALETTES.len()], &mut rgba);
-            tex.update_from_bytes(ppu::W as u32, ppu::H as u32, &rgba);
-        }
-
-        clear_background(Color::from_hex(0x101010));
-        if gb.is_some() {
-            let sw = screen_width();
-            let sh = screen_height();
-            let fit = (sw / ppu::W as f32).min(sh / ppu::H as f32);
-            let scale = if st.integer_scale { fit.floor().max(1.0) } else { fit };
-            let scale = if scale * (ppu::W as f32) > sw || scale * (ppu::H as f32) > sh {
-                (sw / ppu::W as f32).min(sh / ppu::H as f32)
-            } else {
-                scale
-            };
-            let w = ppu::W as f32 * scale;
-            let h = ppu::H as f32 * scale;
-            draw_texture_ex(
-                &tex,
-                ((sw - w) / 2.0).floor(),
-                ((sh - h) / 2.0).floor(),
-                WHITE,
-                DrawTextureParams { dest_size: Some(vec2(w, h)), ..Default::default() },
-            );
-        } else {
-            for (i, line) in error.lines().enumerate() {
-                draw_text(line, 20.0, 60.0 + i as f32 * 30.0, 26.0, WHITE);
+                display.show_error(error);
             }
         }
 
         if let Some(out) = &args.screenshot {
             render_frames += 1;
             if render_frames >= 120 {
-                // Screen data is bottom-up and export_png writes it that way round,
-                // so the saved picture comes out upright.
-                let img = get_screen_data();
-                if let Some(d) = out.parent() {
-                    let _ = std::fs::create_dir_all(d);
-                }
-                img.export_png(&out.to_string_lossy());
+                save_window_png(out);
                 return;
             }
         }
 
-        if is_quit_requested() {
+        if macroquad::input::is_quit_requested() {
             break;
         }
-        next_frame().await;
+        macroquad::window::next_frame().await;
     }
-    if let (Some(g), Some(p)) = (gb.as_mut(), &rom_path) {
-        write_save(g, p);
+    if let Ok(session) = &mut app {
+        session.finish();
     }
 }

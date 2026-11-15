@@ -106,42 +106,45 @@ Propuesta (módulos):
 - Sin `std::fs`: leer/guardar `.points.txt` está en `host` (`load_custom_map`, `save_custom_map`).
 - Hecho (fase 2), con 14 tests unitarios que no necesitan la ROM.
 
-## 4. `game/`: el juego (hexagonal)
-
-Hoy: `main.rs` mezcla bucle, entrada, audio, guardado, progreso del mapa propio, menú y dibujo;
-`menu.rs` mezcla estado del menú, textos, fuente y ajustes con su fichero.
+## 4. `game/`: el juego (hexagonal) ✅
 
 ```
 game/src/
-├─ domain/            Lógica pura, testeable sin ventana
-│  ├─ settings.rs     Settings (teclas, paleta, volumen, idioma, pantalla)
-│  ├─ menu.rs         Máquina de estados del menú de pausa → Action
+├─ domain/            Lógica pura, testeable sin ventana ni ficheros
+│  ├─ keys.rs         Key (propio, no macroquad), teclas asignables, nombres en settings.cfg,
+│  │                  etiquetas, Buttons desde las asignaciones
+│  ├─ settings.rs     Settings y su texto key=value (from_text / to_text)
 │  ├─ i18n.rs         Textos EN/ES/JA
-│  ├─ overlay.rs      Fuente bitmap y dibujo sobre el Frame (menú, aviso)
-│  ├─ map_view.rs     Navegación por el mapa propio
-│  └─ progress.rs     Seguimiento de nivel superado (vida perdida / volver al mapa)
+│  ├─ overlay.rs      Fuente bitmap, Canvas y la etiqueta "ESC: MENU"
+│  ├─ menu.rs         Menú de pausa → Action; edita Settings, no guarda ni toca la ventana
+│  ├─ map_view.rs     Mapa propio (recibe mapa y niveles superados; no lee ficheros)
+│  └─ progress.rs     LevelTracker: nivel superado (vida perdida / volver al mapa)
 ├─ application/
-│  └─ session.rs      GameSession: une consola + menú + mapa propio + progreso.
-│                     Recibe puertos, no conoce macroquad ni cpal.
-├─ ports.rs           trait Display, AudioOut, InputSource, SettingsStore,
-│                     SaveStore, ProgressStore, Clock
+│  ├─ preferences.rs  Settings + guardar + seguir la pantalla completa
+│  └─ session.rs      GameSession::frame(dt, &dyn Keyboard, &dyn AudioOut) → Flow
+├─ ports.rs           Keyboard, AudioOut, Window, SettingsStore, SaveStore, ProgressStore
 ├─ adapters/
-│  ├─ macroquad_display.rs   Paleta → RGBA → textura, escalado, pantalla completa
-│  ├─ macroquad_input.rs     Teclado → Buttons + teclas de menú
-│  ├─ cpal_audio.rs          Cola de audio
-│  ├─ fs_stores.rs           (re-exporta host) settings.cfg, saves/, progress.txt
-│  └─ win32.rs               Ventana al fondo en modo check
-└─ main.rs            Raíz de composición: crea adaptadores, los inyecta, arranca
+│  ├─ macroquad_keyboard.rs  Key ↔ KeyCode
+│  ├─ macroquad_display.rs   Paleta → textura, escalado, error en pantalla, Window
+│  ├─ cpal_audio.rs          AudioOut con cpal
+│  ├─ fs_stores.rs           settings.cfg, saves/*.sav, progress.txt (vía host) y DefaultSettings
+│  └─ win32.rs               Ventana al fondo en modo comprobación
+├─ checks.rs, selftest.rs    Comprobaciones sin ventana (--research, --self-test, --dump)
+└─ main.rs            Raíz de composición: argumentos, adaptadores, bucle de la ventana
 ```
 
 Principios aplicados:
-- **S**: cada fichero tiene una única razón para cambiar (el menú no sabe guardar ajustes).
+- **S**: el menú no sabe guardar ajustes; `Preferences` guarda y aplica la pantalla completa;
+  la sesión coordina; cada adaptador traduce una sola tecnología.
 - **O**: nuevas paletas, filtros o capas de dibujo se añaden como nuevas implementaciones,
   sin tocar la sesión.
-- **L/I**: puertos pequeños (`AudioOut` sólo `push` y `queued`), fáciles de sustituir por
-  dobles de prueba (`SilentAudio`, `ScriptedInput`).
-- **D**: `GameSession` depende de traits; `main.rs` decide las implementaciones.
-- `--self-test`, `--screenshot`, `--dump` pasan a usar adaptadores falsos o sin ventana.
+- **L/I**: puertos pequeños, sustituidos en los tests por dobles (`FakeKeys`, `Silence`,
+  `Record`).
+- **D**: `GameSession` depende de traits; `main.rs` decide las implementaciones (en modo
+  `--screenshot`: audio mudo y `DefaultSettings`, que nunca escribe el fichero del jugador).
+- `domain/` y `application/` no usan macroquad, cpal, `host` ni `std::fs`.
+- Tests: teclas, ajustes, seguimiento de niveles, menú con teclado falso y una sesión
+  completa (encender → nivel → menú → pantalla completa → guardar) con puertos falsos.
 
 ## 5. `editor/`: el editor (hexagonal)
 
@@ -214,7 +217,7 @@ cartucho), `battery`, `progress`, `settings_file`, `custom_map_file` y `png_out`
 | 1 ✅ | `gb-core`: encapsular campos, `Buttons`, `Screen`, `BusObserver` (sustituye al código de investigación del bus) |
 | 2 ✅ | `cart-model`: `RomImage`, `ram_map`, `GameDriver`, errores tipados, separar ficheros |
 | 3 ✅ | `host`: localizar ROM, rutas, ajustes |
-| 4 | `game/`: dominio puro + puertos + adaptadores + raíz de composición |
+| 4 ✅ | `game/`: dominio puro + puertos + adaptadores + raíz de composición |
 | 5 | `editor/`: romper el objeto gigante en documento, historial, herramientas, comandos y paneles |
 | 6 | `tools/research/` |
 | 7 | Puntos de extensión: paletas desde fichero, paletas por capa, sustitución de gráficos, registro de ganchos |

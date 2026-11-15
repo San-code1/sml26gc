@@ -1,13 +1,14 @@
 //! The port's own world map screen (used when the editor made a map for this cartridge):
 //! the cartridge's world picture with the person's points and paths, Mario walking between
-//! them, and Start / A entering the level of the point he stands on.
-use crate::menu::Canvas;
-use crate::ppu::{H, W};
+//! them, and Start / A entering the level of the point he stands on. Where the map and the
+//! cleared levels are kept is the caller's business.
+use super::i18n::texts;
+use super::overlay::{text_width, Canvas};
 use cart_model::custom_map::CustomMap;
 use cart_model::world;
+use gb_core::ppu::{H, W};
 use gb_core::Gb;
 use std::collections::HashSet;
-use std::path::{Path, PathBuf};
 
 pub struct MapView {
     pub map: CustomMap,
@@ -15,7 +16,6 @@ pub struct MapView {
     walk: Option<(usize, usize, f32)>, // from, to, progress 0..1
     picture: Vec<u8>,                  // 512 x 512 shades
     pub cleared: HashSet<u8>,
-    progress_file: PathBuf,
     blink: u32,
     pub enabled: bool,
 }
@@ -24,17 +24,13 @@ const PW: usize = world::W * 8;
 const PH: usize = world::H * 8;
 
 impl MapView {
-    pub fn load(rom: &Path) -> Option<MapView> {
-        let map = host::load_custom_map(rom)?;
-        let progress_file = host::progress_path(rom);
-        let cleared = host::progress::load(&progress_file);
-        Some(MapView { cur: map.start, map, walk: None, picture: Vec::new(), cleared, progress_file, blink: 0, enabled: true })
+    pub fn new(map: CustomMap, cleared: HashSet<u8>) -> MapView {
+        MapView { cur: map.start, map, walk: None, picture: Vec::new(), cleared, blink: 0, enabled: true }
     }
 
-    pub fn mark_cleared(&mut self, level: u8) {
-        if self.cleared.insert(level) {
-            let _ = host::progress::save(&self.progress_file, &self.cleared);
-        }
+    /// Returns true when the level was not cleared before (so the progress needs saving).
+    pub fn mark_cleared(&mut self, level: u8) -> bool {
+        self.cleared.insert(level)
     }
 
     /// Draw the world picture once with the map tiles the game has just loaded.
@@ -162,14 +158,10 @@ impl MapView {
         // the level of the point Mario stands on
         if self.walk.is_none() {
             if let Some(l) = self.map.points.get(self.cur).and_then(|p| p.level) {
-                let word = match lang {
-                    crate::menu::LANG_ES => "NIVEL",
-                    crate::menu::LANG_JA => "コース",
-                    _ => "LEVEL",
-                };
+                let word = texts(lang).level;
                 let done = if self.cleared.contains(&l) { " *" } else { "" };
                 let t = format!("{word} {l:02}{done}");
-                let w = crate::menu::text_width(&t) + 8;
+                let w = text_width(&t) + 8;
                 c.rect(2, 2, w, 11, 3);
                 c.text(6, 4, &t, 0);
             }
