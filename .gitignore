@@ -1,0 +1,21 @@
+# Build output
+target/
+
+# Never commit the cartridge or anything derived from it
+*.gb
+*.gbc
+*.sav
+rom/
+roms/
+saves/
+edits/
+*.points.txt
+*.progress.txt
+
+# Local settings written by the game
+settings.cfg
+
+# Editors / OS
+.vscode/
+.idea/
+Thumbs.db
