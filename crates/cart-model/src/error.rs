@@ -15,6 +15,8 @@ pub enum CartError {
     LevelTooBig { level: usize, need: usize, capacity: usize },
     /// The new levels don't fit in the space kept for them.
     LevelsFull { need: usize, capacity: usize },
+    /// The map's changed ways don't fit in the space kept for them.
+    RoutesFull { need: usize, capacity: usize },
 }
 
 impl fmt::Display for CartError {
@@ -36,6 +38,7 @@ impl fmt::Display for CartError {
             CartError::TooManyLevels { max } => write!(f, "there can be {max} levels at most"),
             CartError::LevelTooBig { level, need, capacity } => write!(f, "level {level} needs {need} bytes but has {capacity}; use longer rows of the same block or fewer objects"),
             CartError::LevelsFull { need, capacity } => write!(f, "the new levels need {need} bytes but the cartridge has {capacity} for them; remove a level"),
+            CartError::RoutesFull { need, capacity } => write!(f, "the map's paths need {need} bytes but the cartridge has {capacity} for them; shorten or remove a path"),
         }
     }
 }

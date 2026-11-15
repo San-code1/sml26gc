@@ -1,9 +1,9 @@
-# Arquitectura propuesta (borrador para revisión)
+# Arquitectura
 
-Objetivo: convertir `legacy/gb_port` (un crate único con emulador, juego, editor y herramientas
-de investigación mezclados) en un **workspace de Cargo** con piezas independientes, aplicando
-SOLID y arquitectura hexagonal (puertos y adaptadores), **sin cambiar el comportamiento**:
-`regression/golden.txt` debe seguir saliendo idéntico en cada fase.
+Un **workspace de Cargo** con piezas independientes (emulador, conocimiento del cartucho,
+juego, editor, herramientas de investigación), con arquitectura hexagonal (puertos y
+adaptadores). Salió de `legacy/gb_port` (un crate único con todo mezclado) sin cambiar el
+comportamiento: `regression/golden.txt` lo vigila.
 
 ---
 
@@ -47,7 +47,7 @@ Reglas de dependencia (las flechas sólo van hacia dentro):
 Hoy: `cpu`, `bus`, `ppu`, `apu`, `cart`, con todos los campos públicos
 (`gb.bus.cart.ram`, `gb.bus.ppu.fb`...) y el código de investigación metido dentro del bus.
 
-Hecho (fase 1). API pública:
+API pública:
 
 ```rust
 pub struct GameBoy<O: BusObserver = NoObserver> { /* campos privados */ }
@@ -69,16 +69,16 @@ no son visibles fuera del crate.
 
 - **`BusObserver`** (genérico, despacho estático; `NoObserver` tiene `ENABLED = false` y el
   compilador elimina las llamadas): `on_read(pc, bank, addr)`, `on_write(pc, bank, addr, v)`.
-  Para los ganchos de mods se añadirá `on_execute(pc)` (fase 7). Sustituye a `watch`, `watch_log`,
+  Para ganchos de mods se podría añadir `on_execute(pc)`. Sustituye a `watch`, `watch_log`,
   `read_watch`... que había en el bus (ahora es `Probe`, en `tools/research`) y es **la base del
   sistema de ganchos** para futuros mods.
 - **Rendimiento**: nada de `dyn Trait` en el bucle de la CPU ni en los accesos a memoria.
   El MBC sigue siendo un `enum` (conjunto cerrado de hardware real): aquí SOLID se aplica
   con criterio, no como dogma.
-- **Punto de extensión gráfico** (fase 7): la pantalla podrá incluir, además del tono, de qué capa
+- **Posible punto de extensión gráfico**: la pantalla podría incluir, además del tono, de qué capa
   viene cada píxel (fondo, ventana, sprite con OBP0/OBP1) y qué tile lo pintó. Es un búfer
   paralelo: no cambia el búfer actual, así que la huella dorada no se ve afectada.
-  Permite paletas por capa y sustituir gráficos (fase 7).
+  Permitiría paletas por capa y sustituir gráficos.
 
 ## 3. `cart-model`: el conocimiento del cartucho
 
@@ -97,7 +97,8 @@ Propuesta (módulos):
 | `patch` | Ampliación a 1 MB, parche de objetos, `can_expand`, `upgrade` |
 | `layout` | Capacidad por banco, empaquetado de mapas y objetos (`store_bank`, `space`) |
 | `extra_levels` | Niveles nuevos (32 en adelante): guardados en bancos libres de la copia de 1 MB y jugados en lugar de un nivel base (`writes_for`, `apply`) |
-| `original_points` | Dónde dibuja el juego sus puntos y sus caminos (medidos), para el editor |
+| `original_points` | Dónde dibuja el juego sus puntos (medido), para el editor |
+| `map_routes` | Los caminos del mapa tal como los lee el juego (guiones de pasos en el banco $18), dónde queda Mario en cada punto, y los puntos nuevos; en la copia editada se mueven al banco $36 con un parche del código del mapa |
 | `art` | `LevelArt`, `WorldArt`, captura de sprites (`Look`) a partir de una `GameBoy` |
 | `live` | Lo que el juego en marcha tiene cargado: mapa del nivel, objetos, posición del jugador |
 | `error` | `CartError` (`UnknownVersion`, `ZoneFull`, `ObjectsFull`, `TooManyLevels`, `LevelTooBig`, `LevelsFull`), `BankUsage`, `ObjectsUsage` |
@@ -105,9 +106,9 @@ Propuesta (módulos):
 
 - Errores tipados (`enum CartError`) en lugar de `String`; los textos son los de siempre.
 - Sin `std::fs`: los ficheros están en `host`.
-- Hecho (fase 2), con 14 tests unitarios que no necesitan la ROM.
+- Con tests unitarios que no necesitan la ROM.
 
-## 4. `game/`: el juego (hexagonal) ✅
+## 4. `game/`: el juego (hexagonal)
 
 ```
 game/src/
@@ -147,7 +148,7 @@ Principios aplicados:
 - Tests: teclas, ajustes, seguimiento de niveles, menú con teclado falso y una sesión
   completa (encender → nivel → menú → pantalla completa → guardar) con puertos falsos.
 
-## 5. `editor/`: el editor (hexagonal) ✅
+## 5. `editor/`: el editor (hexagonal)
 
 Antes: `editor.rs` de 1.726 líneas con un único `struct Editor` de ~45 campos que hacía
 interfaz, lógica de edición, deshacer, guardado, captura de gráficos y lanzamiento del juego.
@@ -173,7 +174,7 @@ editor/src/
 │  ├─ level_view.rs   Vista del nivel, vista general, panel lateral
 │  ├─ objects_view.rs Objetos: poner, arrastrar, cambiar tipo, borrar
 │  ├─ palette.rs      Paletas de bloques y de tipos de objeto
-│  ├─ world_view.rs   Mapa del mundo: dibujo y puntos originales
+│  ├─ world_view.rs   Mapa del mundo: dibujo, nivel de cada punto, caminos y puntos nuevos
 │  ├─ custom_view.rs  "Tu mapa"
 │  ├─ status_bar.rs   Mensaje y espacio de zona/objetos
 │  └─ widgets.rs      Colores, botón, wrap, texturas a partir de los gráficos capturados
@@ -183,7 +184,7 @@ editor/src/
 Tests: historial, herramientas con un lienzo falso, y documento con la ROM real (pintar,
 deshacer/rehacer, objeto, tile, commit y releer como lo hará el juego; restaurar original).
 
-## 5b. `tools/research/` ✅
+## 5b. `tools/research/`
 
 ```
 tools/research/
@@ -217,31 +218,9 @@ cartucho, `last_rom`, `remember_rom`), `battery`, `settings_file` y `png_out`.
 
 ## 7. Estrategia de pruebas
 
-1. **Huella dorada** (`regression/`): el test se porta a la API nueva y debe dar
-   `golden.txt` idéntico. Se ejecuta en cada fase.
+1. **Huella dorada** (`regression/`): debe dar `golden.txt` idéntico; un cambio de
+   comportamiento buscado se refleja actualizando el fichero a propósito.
 2. **Tests unitarios** del dominio puro: codecs RLE y de objetos, `History`, herramientas,
    máquina de estados del menú, niveles nuevos desde el mapa original.
 3. **Rendimiento**: frames por segundo del emulador nuevo vs. legacy (no debe empeorar).
 4. **Manual / capturas**: menú y editor, comparando capturas con las del legacy.
-
-## 8. Fases (cada una = commits pequeños con la huella en verde)
-
-| Fase | Trabajo |
-|---|---|
-| 0 ✅ | Esqueleto del workspace; mover emulador y conocimiento casi tal cual a `gb-core` y `cart-model`; portar el test dorado |
-| 1 ✅ | `gb-core`: encapsular campos, `Buttons`, `Screen`, `BusObserver` (sustituye al código de investigación del bus) |
-| 2 ✅ | `cart-model`: `RomImage`, `ram_map`, `GameDriver`, errores tipados, separar ficheros |
-| 3 ✅ | `host`: localizar ROM, rutas, ajustes |
-| 4 ✅ | `game/`: dominio puro + puertos + adaptadores + raíz de composición |
-| 5 ✅ | `editor/`: romper el objeto gigante en documento, historial, herramientas, comandos y paneles |
-| 6 ✅ | `tools/research/`: comandos en tabla, módulos por tema (disasm, memory, checks, rom_views, probe, console) |
-| 7 | Puntos de extensión: paletas desde fichero, paletas por capa, sustitución de gráficos, registro de ganchos |
-| 8 | Paridad confirmada → borrar `legacy/` |
-
-## 9. Decisiones abiertas
-
-1. **`research.rs`** (971 líneas: desensamblador, vigilar/trazar memoria, capturas...):
-   propuesta → conservarlo como `tools/research`, porque será útil para localizar gráficos y
-   rutinas cuando hagamos mods.
-2. **Nombres de los ejecutables**: propuesta → `game.exe` y `editor.exe` (hoy `gb_port.exe`).
-   Las partidas no se pierden: dependen del nombre de la ROM, no del ejecutable.

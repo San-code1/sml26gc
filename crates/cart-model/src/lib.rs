@@ -8,6 +8,7 @@
 //! | `extra_levels` | Levels beyond the 32, played in place of a base level |
 //! | `objects` | Object lists per level: 3-byte format, reading, re-packing |
 //! | `world` | World map picture and which level each map point opens |
+//! | `map_routes` | The paths between map points (walk scripts) and where Mario stands on each |
 //! | `zone_maps` | The zones' own one-screen maps (pictures) |
 //! | `original_points` | Where the game draws its own map points (measured) |
 //! | `patch` | The 1 MB edited copy that gives levels and objects more room |
@@ -24,6 +25,7 @@ pub mod extra_levels;
 pub mod layout;
 pub mod levels;
 pub mod live;
+pub mod map_routes;
 pub mod objects;
 pub mod original_points;
 pub mod patch;

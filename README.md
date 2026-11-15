@@ -13,8 +13,8 @@ saves and edited copies are never part of this repository (see `.gitignore`).
 | `editor/` | The editor → `editor.exe` |
 | `tools/research/` | Reverse-engineering command line → `research.exe` |
 | `regression/` | Golden fingerprint test (behaviour must match the legacy port) |
-| `legacy/gb_port/` | The original port, untouched, kept as reference until the refactor ends |
-| `docs/ARCHITECTURE.md` | Target architecture and refactor phases |
+| `legacy/gb_port/` | The original port, untouched, kept as reference |
+| `docs/ARCHITECTURE.md` | Architecture of the workspace |
 
 ## Build and run
 
