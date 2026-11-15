@@ -9,8 +9,8 @@ level and project files, each entry showing its shortcut.
 ### Requirement: File menu
 The editor window SHALL have a menu bar above the panels with a File menu (Spanish: Archivo)
 holding, in order: Save; Export level, Import level as a new level, Replace this level from a
-file; Export project, Import project. Each entry SHALL show its shortcut and run the same
-action as the shortcut.
+file; Export zone, Import zone as a new zone, Replace this zone from a file; Export project,
+Import project. Each entry SHALL show its shortcut and run the same action as the shortcut.
 
 #### Scenario: Export a level from the menu
 - **WHEN** the level editor is shown and the user opens File and chooses Export level
@@ -20,17 +20,26 @@ action as the shortcut.
 - **WHEN** the user opens the File menu
 - **THEN** each entry shows its keys at the right, for example "Export project... Ctrl+Shift+E"
 
+#### Scenario: Export a zone from the menu
+- **WHEN** a zone map is shown in the world map editor and the user chooses Export zone
+- **THEN** the Save dialog for a zone file opens, as with Ctrl+E there
+
 ### Requirement: Unavailable entries greyed out
 File menu entries that cannot run where the editor is SHALL be greyed out and do nothing:
-the level file entries in the world map editor, and Replace on the game's 32 levels.
+the level file entries in the world map editor, the zone file entries in the level editor and
+on the world map, Replace on the game's 32 levels and Replace on the game's zones.
 
 #### Scenario: World map editor
-- **WHEN** the world map editor is shown and the user opens the File menu
-- **THEN** Save and the project entries can be chosen and the level file entries are greyed out
+- **WHEN** the world map editor shows the world map and the user opens the File menu
+- **THEN** Save and the project entries can be chosen, and the level and zone file entries are greyed out
 
 #### Scenario: Original level
 - **WHEN** level 07 is shown and the user opens the File menu
 - **THEN** Replace is greyed out, and it is available again when a new level is shown
+
+#### Scenario: Zone map
+- **WHEN** the Macro Zone is shown and the user opens the File menu
+- **THEN** Export zone and Import zone can be chosen and Replace zone is greyed out
 
 ### Requirement: No file buttons in the panels
 The level and project file actions SHALL be reached from the File menu and the keyboard only;

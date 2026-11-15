@@ -9,9 +9,9 @@ another computer or go back to an earlier state, over the same original cartridg
 ### Requirement: Exporting the project
 The editor SHALL export the whole project, as it is being edited, to a file the user names:
 every level (the 32 and the new ones, with their base levels and headers), the world map and
-zone map pictures, the level each map point opens, the paths, where Mario stands on each
-point, the new points, the doors, and which cartridge it belongs to. It SHALL include what
-has not changed too.
+zone map pictures, the new zones, the level each map point opens, the paths, where Mario
+stands on each point, the new points, the doors, and which cartridge it belongs to. It SHALL
+include what has not changed too.
 
 #### Scenario: Export
 - **WHEN** the user exports the project to "my world.nmbproject"
@@ -63,3 +63,11 @@ The world map and the zone maps SHALL be exported and imported only as part of a
 #### Scenario: World map editor
 - **WHEN** the world map editor is shown
 - **THEN** the File menu offers project export and import, and no export or import of the map alone
+
+### Requirement: Older project files
+Project files written before new zones existed SHALL still be imported, as projects with no
+new zones.
+
+#### Scenario: Import an older file
+- **WHEN** a project file without new zones is imported over a project with two new zones
+- **THEN** the project has no new zones and everything else from the file

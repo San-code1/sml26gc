@@ -72,3 +72,17 @@ copy only when the user saves, with the same room checks as any edited level.
 #### Scenario: Save after an import
 - **WHEN** a level was imported and the user saves
 - **THEN** it is stored with the other new levels, or the save reports what does not fit
+
+### Requirement: Naming a new level
+The level panel SHALL show a name field on a new level (32 and up); the name (up to 24
+printable ASCII characters) SHALL be shown with the level in the editor, saved in the edited
+copy and kept in level and project files. Level files become version 2 (with the name);
+version 1 files SHALL still be read, with no name. The game's 32 levels SHALL have no name.
+
+#### Scenario: Name a level
+- **WHEN** new level 33 is shown and the user types "Ice cave" in its name field and presses Enter
+- **THEN** the points panel shows "33 Ice cave" where a point opens it, and a level file exported from it has the line `name Ice cave`
+
+#### Scenario: Old level file
+- **WHEN** the user imports a level file of version 1
+- **THEN** it becomes a new level with no name
