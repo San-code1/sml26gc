@@ -12,16 +12,20 @@ mod domain;
 mod ports;
 mod ui;
 
+use adapters::file_dialogs::SystemDialogs;
 use adapters::fs_repository;
+use adapters::menu_bar::WindowMenu;
 use adapters::process_launcher::GameProcess;
 use cart_model::original_points::OnMap;
 use cart_model::zone_maps::ZONES;
 use macroquad::prelude::*;
 use std::path::PathBuf;
-use ui::{col, Editor, Mode, TAB_POINTS};
+use ui::{col, Editor, Mode, Ports, TAB_POINTS};
+
+const TITLE: &str = "Level Editor (Rust)";
 
 fn conf() -> Conf {
-    Conf { window_title: "Level Editor (Rust)".into(), window_width: 1280, window_height: 820, window_resizable: true, high_dpi: false, ..Default::default() }
+    Conf { window_title: TITLE.into(), window_width: 1280, window_height: 820, window_resizable: true, high_dpi: false, ..Default::default() }
 }
 
 /// Show a message until the window is closed.
@@ -56,7 +60,16 @@ async fn main() {
         Ok(o) => o,
         Err(e) => show_forever(&e, 26.0, 0.0).await,
     };
-    let mut ed = Editor::new(opened.doc, Box::new(opened.store), Box::new(GameProcess), Box::new(fs_repository::PrefsFile), opened.had_copy, fs_repository::spanish());
+    let es = fs_repository::spanish();
+    let ports = Ports {
+        store: Box::new(opened.store),
+        launcher: Box::new(GameProcess),
+        prefs: Box::new(fs_repository::PrefsFile),
+        dialogs: Box::new(SystemDialogs { es, owner: TITLE }),
+        text_files: Box::new(fs_repository::TextFile),
+        menu: Box::new(WindowMenu::new(TITLE)),
+    };
+    let mut ed = Editor::new(opened.doc, ports, opened.had_copy, es);
 
     ed.select_level(level.unwrap_or(0).min(ed.level_count() - 1));
     if flag("--objects") {

@@ -13,3 +13,6 @@ gb-core.workspace = true
 cart-model.workspace = true
 host.workspace = true
 macroquad.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows-sys.workspace = true

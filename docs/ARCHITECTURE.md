@@ -81,13 +81,17 @@ ports with fakes.
 editor/src/
 ├─ domain/        document (everything being edited, dirty flags, commit to the ROM image),
 │                 history (generic undo/redo), tools (Tool trait: pencil, box, select, paste),
-│                 stamp (a rectangle of cells: brush and clipboard), prefs (editor.cfg text)
-├─ application/   save (commit + write through a port), art_service (captured graphics)
-├─ ports.rs       EditedCopyStore, GameLauncher, PrefsStore
-├─ adapters/      file repository (edited copy, editor.cfg), game.exe launcher
+│                 stamp (a rectangle of cells: brush and clipboard), prefs (editor.cfg text),
+│                 files (level and project files: text format)
+├─ application/   save (commit + write through a port), art_service (captured graphics),
+│                 exchange (level and project files through the dialogs)
+├─ ports.rs       EditedCopyStore, GameLauncher, PrefsStore, FileDialogs, TextFiles, MenuBar
+├─ adapters/      file repository (edited copy, editor.cfg, text files), Win32 file dialogs
+│                 and menu bar, game.exe launcher
 ├─ ui/            macroquad panels: level, objects, palettes, world map, status bar, widgets;
 │                 grid_edit (painting and clipboard shared by both views), shortcuts (one
-│                 table for keys and button labels)
+│                 table for keys and button labels), menu (the File menu), files_view
+│                 (file actions and their messages)
 └─ main.rs        composition root
 ```
 
@@ -110,6 +114,7 @@ trace, ROM views, and checks that play the edited data in the emulator (`routech
 | Last cartridge chosen | `last_cartridge.txt` |
 | Settings (the editor reads the language) | `settings.cfg` |
 | Editor settings (palette zoom) | `editor.cfg` |
+| Level and project files (editor only) | `exports/*.nmblevel`, `exports/*.nmbproject` |
 
 Paths and names live in `host::paths`, so both programs compute them the same way.
 

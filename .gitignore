@@ -9,6 +9,9 @@ rom/
 roms/
 saves/
 edits/
+exports/
+*.nmblevel
+*.nmbproject
 *.points.txt
 *.progress.txt
 

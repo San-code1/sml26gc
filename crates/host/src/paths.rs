@@ -7,6 +7,7 @@
 //!   last_cartridge.txt                the cartridge file chosen last at the game's start
 //!   saves\<cartridge>.sav             battery save
 //!   edits\<cartridge> (edit).gb       the editor's copy of the cartridge
+//!   exports\                          level and project files the editor writes
 use std::path::{Path, PathBuf};
 
 /// The folder the running program sits in.
@@ -39,6 +40,11 @@ pub fn save_path(rom: &Path) -> PathBuf {
 /// The editor's edited copy of an original cartridge file.
 pub fn edited_copy_path(original: &Path) -> PathBuf {
     exe_dir().join("edits").join(format!("{} (edit).gb", stem(original)))
+}
+
+/// Where the editor's Save and Open dialogs for level and project files start.
+pub fn exports_dir() -> PathBuf {
+    exe_dir().join("exports")
 }
 
 /// The game program, next to the editor.

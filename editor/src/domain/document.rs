@@ -3,6 +3,7 @@
 //! after them (`extra_levels`) with their undo history, the world map picture, the level
 //! each map point opens and the paths between points (`map_routes`). What has changed since
 //! the last save is tracked here; the files are not.
+use super::files::{self, FileError, LevelFile, ProjectFile};
 use super::history::History;
 use super::stamp::{Area, Stamp};
 use cart_model::error::{BankUsage, ObjectsUsage};
@@ -21,11 +22,21 @@ pub enum Grid {
     Map(OnMap),
 }
 
-/// A level as it can be undone: its blocks and its objects.
+/// What a new level is played as: one of the 32 (its graphics, music and time) with the new
+/// level's own header.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct StandIn {
+    pub base: u8,
+    pub header: [u8; 20],
+}
+
+/// A level as it can be undone: its blocks, its objects and, for a new level, its stand-in.
 #[derive(Clone, PartialEq, Debug)]
 pub struct LevelContent {
     pub map: Vec<u8>,
     pub objs: Vec<Obj>,
+    /// None for the 32 levels of the cartridge.
+    pub stand_in: Option<StandIn>,
 }
 
 pub struct LevelDoc {
@@ -60,8 +71,6 @@ pub struct EditorDocument {
     pub rom: Vec<u8>,
     /// The 32 levels, then the new ones (number 32 and up).
     pub levels: Vec<LevelDoc>,
-    /// Per new level: the level it is played in place of, and its header.
-    pub extras: Vec<(u8, [u8; 20])>,
     /// A new level was added or removed.
     pub extras_dirty: bool,
     /// The world map picture (64 x 64 tiles) and the zone maps' (20 x 18 each).
@@ -85,7 +94,7 @@ pub struct EditorDocument {
 
 fn level_from(rom: &[u8], l: usize) -> LevelContent {
     let (_, start) = levels::map_location(rom, levels::header(rom, l));
-    LevelContent { map: levels::decode(rom, start).0, objs: objects::read(rom, l).0 }
+    LevelContent { map: levels::decode(rom, start).0, objs: objects::read(rom, l).0, stand_in: None }
 }
 
 impl EditorDocument {
@@ -102,9 +111,8 @@ impl EditorDocument {
         let doc = |content| LevelDoc { content, blocks_dirty: false, objects_dirty: false, history: History::default() };
         let mut levels: Vec<LevelDoc> = (0..LEVELS).map(|l| doc(level_from(&rom, l))).collect();
         let stored = extra_levels::read(&rom);
-        levels.extend(stored.iter().map(|e| doc(LevelContent { map: e.map.clone(), objs: e.objs.clone() })));
+        levels.extend(stored.into_iter().map(|e| doc(LevelContent { map: e.map, objs: e.objs, stand_in: Some(StandIn { base: e.base, header: e.header }) })));
         EditorDocument {
-            extras: stored.iter().map(|e| (e.base, e.header)).collect(),
             extras_dirty: false,
             world: world::read(&rom),
             zones: zone_maps::ZONES.iter().enumerate().map(|(z, _)| zone_maps::read(&rom, z)).collect(),
@@ -169,8 +177,9 @@ impl EditorDocument {
     /// is there.
     pub fn restore_level(&mut self, l: usize) {
         self.snapshot(l);
-        let content = level_from(&self.original, self.base_of(l));
+        let mut content = level_from(&self.original, self.base_of(l));
         let lv = &mut self.levels[l];
+        content.stand_in = lv.content.stand_in;
         lv.content = content;
         lv.blocks_dirty = true;
         lv.objects_dirty = true;
@@ -187,27 +196,98 @@ impl EditorDocument {
     /// The level of the 32 that level `l` is played as (itself for those): its graphics,
     /// blocks, music and time.
     pub fn base_of(&self, l: usize) -> usize {
-        if l < LEVELS {
-            l
-        } else {
-            self.extras.get(l - LEVELS).map(|e| e.0 as usize).unwrap_or(0)
-        }
+        self.levels.get(l).and_then(|lv| lv.content.stand_in).map(|s| s.base as usize).unwrap_or(l.min(LEVELS - 1))
+    }
+
+    /// How many new levels there are.
+    pub fn new_levels(&self) -> usize {
+        self.levels.len() - LEVELS
     }
 
     /// A new level after the others, starting as a copy of level `from` as it is being
     /// edited (a new level copies its base). Returns its number, or None when there are as
     /// many as there can be.
     pub fn add_level(&mut self, from: usize) -> Option<usize> {
-        if self.extras.len() >= extra_levels::MAX {
+        let mut content = self.levels[from].content.clone();
+        let base = self.base_of(from) as u8;
+        content.stand_in = content.stand_in.or_else(|| Some(StandIn { base, header: extra_levels::based_on(&self.rom, base).header }));
+        self.push_level(content)
+    }
+
+    /// Add `content` (a new level's) after the others, or None when there is no room.
+    fn push_level(&mut self, content: LevelContent) -> Option<usize> {
+        if self.new_levels() >= extra_levels::MAX {
             return None;
         }
-        let base = self.base_of(from);
-        let header = if from < LEVELS { extra_levels::based_on(&self.rom, base as u8).header } else { self.extras[from - LEVELS].1 };
-        self.extras.push((base as u8, header));
-        let content = self.levels[from].content.clone();
         self.levels.push(LevelDoc { content, blocks_dirty: true, objects_dirty: true, history: History::default() });
         self.extras_dirty = true;
         Some(self.levels.len() - 1)
+    }
+
+    /// Level `l` as a file keeps it; one of the 32 is its own base, with its header.
+    pub fn level_file(&self, l: usize) -> LevelFile {
+        let c = &self.levels[l].content;
+        let stand_in = c.stand_in.unwrap_or_else(|| {
+            let at = levels::header(&self.rom, l).at;
+            StandIn { base: l as u8, header: self.rom[at..at + 20].try_into().unwrap_or([0; 20]) }
+        });
+        LevelFile { stand_in, map: c.map.clone(), objs: c.objs.clone() }
+    }
+
+    /// A new level after the others from a level file; None when there is no room.
+    pub fn import_level(&mut self, f: LevelFile) -> Option<usize> {
+        self.push_level(LevelContent { map: f.map, objs: f.objs, stand_in: Some(f.stand_in) })
+    }
+
+    /// Replace new level `l` whole with a level file (undoable). The 32 are never replaced.
+    pub fn replace_level(&mut self, l: usize, f: LevelFile) -> bool {
+        if l < LEVELS || l >= self.levels.len() {
+            return false;
+        }
+        self.snapshot(l);
+        let lv = &mut self.levels[l];
+        lv.content = LevelContent { map: f.map, objs: f.objs, stand_in: Some(f.stand_in) };
+        lv.blocks_dirty = true;
+        lv.objects_dirty = true;
+        true
+    }
+
+    /// Everything being edited, as a project file keeps it.
+    pub fn project_file(&self) -> ProjectFile {
+        ProjectFile {
+            cartridge: files::cartridge_id(&self.original),
+            levels: (0..self.levels.len()).map(|l| self.level_file(l)).collect(),
+            world: self.world.clone(),
+            zones: self.zones.clone(),
+            points: self.points.clone(),
+            routes: self.routes.clone(),
+            doors: self.doors.clone(),
+        }
+    }
+
+    /// Put a project file in place of everything being edited: all of it marked changed,
+    /// nothing written until the next save, every undo history emptied. Refused when the
+    /// file was made over another cartridge.
+    pub fn replace_project(&mut self, p: ProjectFile) -> Result<(), FileError> {
+        if p.cartridge != files::cartridge_id(&self.original) {
+            return Err(FileError::OtherCartridge);
+        }
+        self.levels = p
+            .levels
+            .into_iter()
+            .enumerate()
+            .map(|(l, f)| LevelDoc { content: LevelContent { map: f.map, objs: f.objs, stand_in: (l >= LEVELS).then_some(f.stand_in) }, blocks_dirty: true, objects_dirty: true, history: History::default() })
+            .collect();
+        self.extras_dirty = true;
+        (self.world, self.zones) = (p.world, p.zones);
+        self.world_dirty = true;
+        self.world_history = History::default();
+        (self.points, self.routes, self.doors) = (p.points, p.routes, p.doors);
+        self.points_dirty = true;
+        self.routes_dirty = true;
+        self.doors_dirty = true;
+        self.points_history = History::default();
+        Ok(())
     }
 
     /// Delete new level `l`; the ones after it move down a number, and the map points follow
@@ -217,7 +297,6 @@ impl EditorDocument {
             return false;
         }
         self.levels.remove(l);
-        self.extras.remove(l - LEVELS);
         self.extras_dirty = true;
         for p in &mut self.points {
             match *p as usize {
@@ -231,7 +310,10 @@ impl EditorDocument {
     }
 
     fn extras_now(&self) -> Vec<Extra> {
-        self.extras.iter().zip(&self.levels[LEVELS..]).map(|(&(base, header), lv)| Extra { base, header, map: lv.content.map.clone(), objs: lv.content.objs.clone() }).collect()
+        self.levels[LEVELS..]
+            .iter()
+            .filter_map(|lv| lv.content.stand_in.map(|s| Extra { base: s.base, header: s.header, map: lv.content.map.clone(), objs: lv.content.objs.clone() }))
+            .collect()
     }
 
     /// Where a level's view should start: the first column that isn't background filler
@@ -667,7 +749,7 @@ impl EditorDocument {
                 lv.objects_dirty = false;
             }
             self.extras_dirty = false;
-            notes.push(Saved::NewLevels(self.extras.len(), used));
+            notes.push(Saved::NewLevels(self.new_levels(), used));
         }
         Ok(notes)
     }
@@ -831,6 +913,77 @@ mod tests {
         assert_eq!(doc.points[0], n as u8, "the point follows its level");
         assert_eq!(doc.points[1], world::NO_LEVEL, "a point to a deleted level opens nothing");
         assert_eq!(doc.levels[n].content, again.levels[m].content);
+    }
+
+    #[test]
+    fn a_new_levels_stand_in_is_undone_with_it() {
+        let Some(mut doc) = open() else {
+            eprintln!("no cartridge found: document test skipped");
+            return;
+        };
+        let n = doc.add_level(2).unwrap();
+        let before = doc.levels[n].content.clone();
+        let other = doc.levels[20].content.clone();
+        doc.snapshot(n);
+        doc.levels[n].content = LevelContent { stand_in: Some(StandIn { base: 20, header: [7; 20] }), ..other };
+        assert_eq!(doc.base_of(n), 20);
+        assert!(doc.undo(n));
+        assert_eq!((doc.base_of(n), &doc.levels[n].content), (2, &before));
+        assert!(doc.redo(n));
+        assert_eq!(doc.levels[n].content.stand_in.map(|s| s.header), Some([7; 20]));
+        doc.restore_level(n);
+        assert_eq!(doc.base_of(n), 20, "restoring a new level keeps what it plays as");
+    }
+
+    #[test]
+    fn levels_go_out_to_files_and_come_back() {
+        let Some(mut doc) = open() else {
+            eprintln!("no cartridge found: document test skipped");
+            return;
+        };
+        doc.set_block(9, 4, 4, 0x11);
+        let f = files::read_level(&files::level_text(&doc.level_file(9))).unwrap();
+        assert_eq!(f.stand_in.base, 9);
+        let n = doc.import_level(f.clone()).unwrap();
+        assert_eq!((doc.base_of(n), doc.block(n, 4, 4)), (9, 0x11));
+        assert_eq!(doc.levels[n].content.objs, doc.levels[9].content.objs);
+        assert!(!doc.replace_level(9, f.clone()), "the 32 levels are never replaced");
+        let m = doc.add_level(2).unwrap();
+        let before = doc.levels[m].content.clone();
+        assert!(doc.replace_level(m, f));
+        assert_eq!((doc.base_of(m), doc.block(m, 4, 4)), (9, 0x11));
+        assert!(doc.undo(m));
+        assert_eq!(doc.levels[m].content, before);
+        while doc.add_level(0).is_some() {}
+        assert_eq!(doc.new_levels(), extra_levels::MAX);
+        assert_eq!(doc.import_level(doc.level_file(0)), None, "no room");
+    }
+
+    #[test]
+    fn a_project_goes_out_to_a_file_and_comes_back() {
+        let Some(mut doc) = open() else {
+            eprintln!("no cartridge found: document test skipped");
+            return;
+        };
+        doc.set_block(1, 6, 6, 0x22);
+        let n = doc.add_level(4).unwrap();
+        doc.set_tile(OnMap::Zone(3), 2, 2, 0x44);
+        doc.step_point_level(0, 1);
+        let text = files::project_text(&doc.project_file());
+        let mut other = open().unwrap();
+        other.snapshot(1);
+        other.replace_project(files::read_project(&text).unwrap()).unwrap();
+        assert_eq!(other.levels.len(), n + 1);
+        assert_eq!((other.block(1, 6, 6), other.base_of(n), other.tile(OnMap::Zone(3), 2, 2)), (0x22, 4, 0x44));
+        assert_eq!((&other.points, &other.routes, &other.doors), (&doc.points, &doc.routes, &doc.doors));
+        assert!(other.levels.iter().all(|l| l.dirty()) && other.world_dirty && other.points_dirty);
+        assert!(!other.undo(1), "no undo across a project import");
+        other.commit().unwrap();
+        let again = EditorDocument::open(other.original.clone(), Some(other.rom.clone()));
+        assert_eq!((again.block(1, 6, 6), again.base_of(n)), (0x22, 4));
+        let mut p = doc.project_file();
+        p.cartridge ^= 1;
+        assert_eq!(other.replace_project(p), Err(FileError::OtherCartridge));
     }
 
     #[test]
