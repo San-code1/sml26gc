@@ -8,6 +8,7 @@
 //! | `extra_levels` | Levels beyond the 32, played in place of a base level |
 //! | `objects` | Object lists per level: 3-byte format, reading, re-packing |
 //! | `world` | World map picture and which level each map point opens |
+//! | `doors` | Doors between the world map and the zones (which point enters which zone, where exits lead) |
 //! | `map_routes` | The paths between map points (walk scripts) and where Mario stands on each |
 //! | `zone_maps` | The zones' own one-screen maps (pictures) |
 //! | `original_points` | Where the game draws its own map points (measured) |
@@ -19,6 +20,7 @@
 //! | `driver` | `GameDriver`: boot to the map, enter a level, back to the map... |
 //! | `error` | `CartError` and what a save used |
 pub mod art;
+pub mod doors;
 pub mod driver;
 pub mod error;
 pub mod extra_levels;

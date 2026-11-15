@@ -7,6 +7,7 @@ use super::history::History;
 use cart_model::error::{BankUsage, ObjectsUsage};
 use cart_model::extra_levels::{self, Extra};
 use cart_model::levels::{self, COLS, LEVELS, ROWS};
+use cart_model::doors::{self, Doors, Leads};
 use cart_model::map_routes::{self, MapRoutes, Place, Way};
 use cart_model::objects::{self, Obj};
 use cart_model::original_points::OnMap;
@@ -39,6 +40,8 @@ pub enum Saved {
     LevelPoints,
     /// The map's paths and points: bytes the changed paths take.
     Routes(usize),
+    /// Which points enter which zone and where the zones' exits lead.
+    Doors,
     Objects(ObjectsUsage),
     /// The new levels: how many, bytes used.
     NewLevels(usize, usize),
@@ -65,8 +68,11 @@ pub struct EditorDocument {
     /// The paths between map points, where Mario stands on each, and the new points.
     pub routes: MapRoutes,
     pub routes_dirty: bool,
-    /// Undo of the Points tab: the levels the points open and the paths, together.
-    points_history: History<(Vec<u8>, MapRoutes)>,
+    /// Doors between the world map and the zones.
+    pub doors: Doors,
+    pub doors_dirty: bool,
+    /// Undo of the Points tab: the levels the points open, the paths and the doors, together.
+    points_history: History<(Vec<u8>, MapRoutes, Doors)>,
 }
 
 fn level_from(rom: &[u8], l: usize) -> LevelContent {
@@ -100,6 +106,8 @@ impl EditorDocument {
             points_dirty: false,
             routes,
             routes_dirty,
+            doors: doors::read(&rom),
+            doors_dirty: false,
             points_history: History::default(),
             original,
             rom,
@@ -338,9 +346,11 @@ impl EditorDocument {
         self.world_snapshot();
         self.world = world::read(&self.original);
         self.zones = (0..zone_maps::ZONES.len()).map(|z| zone_maps::read(&self.original, z)).collect();
-        self.points_history.record((self.points.clone(), self.routes.clone()));
+        self.points_record();
         self.points = world::point_levels(&self.original);
         self.routes = map_routes::read(&self.original);
+        self.doors = doors::read(&self.original);
+        self.doors_dirty = true;
         self.world_dirty = true;
         self.points_dirty = true;
         self.routes_dirty = true;
@@ -369,16 +379,39 @@ impl EditorDocument {
     }
 
     fn points_record(&mut self) {
-        self.points_history.record((self.points.clone(), self.routes.clone()));
+        self.points_history.record((self.points.clone(), self.routes.clone(), self.doors.clone()));
     }
 
     fn points_swap(&mut self, undo: bool) -> bool {
-        let mut now = (std::mem::take(&mut self.points), std::mem::take(&mut self.routes));
+        let mut now = (std::mem::take(&mut self.points), std::mem::take(&mut self.routes), std::mem::take(&mut self.doors));
         let done = if undo { self.points_history.undo(&mut now) } else { self.points_history.redo(&mut now) };
-        (self.points, self.routes) = now;
+        (self.points, self.routes, self.doors) = now;
         self.points_dirty |= done;
         self.routes_dirty |= done;
+        self.doors_dirty |= done;
         done
+    }
+
+    // ------------------------------------------------------------ doors
+
+    /// Make world point `p` enter zone `zone` (`doors::INTO` index) or nothing, undoable.
+    pub fn set_door(&mut self, p: u8, zone: Option<usize>) {
+        if self.doors.into.is_empty() || self.doors.door_of(p) == zone {
+            return;
+        }
+        self.points_record();
+        self.doors.set_door(p, zone);
+        self.doors_dirty = true;
+    }
+
+    /// Set where exit `i` (`doors::EXITS` index) is and leads, undoable.
+    pub fn set_exit(&mut self, i: usize, at: u8, leads: Leads) {
+        if self.doors.exits.get(i) == Some(&(at, leads)) || i >= self.doors.exits.len() {
+            return;
+        }
+        self.points_record();
+        self.doors.exits[i] = (at, leads);
+        self.doors_dirty = true;
     }
 
     pub fn points_undo(&mut self) -> bool {
@@ -533,6 +566,12 @@ impl EditorDocument {
             world::write_point_levels(&mut self.rom, &self.points);
             self.points_dirty = false;
             notes.push(Saved::LevelPoints);
+        }
+        if self.doors_dirty {
+            if doors::write(&mut self.rom, &self.doors) {
+                notes.push(Saved::Doors);
+            }
+            self.doors_dirty = false;
         }
         if self.routes_dirty {
             let mut rom = self.rom.clone();
@@ -732,5 +771,14 @@ mod tests {
         assert!(doc.draw_path(2, q, &[(0, 16)]).is_some());
         assert_eq!(doc.routes.ways[0x19], doc.routes.ways[2]);
         assert_eq!(doc.routes.ways[0x19][3].as_ref().map(|w| w.to), Some(q));
+        // doors: the new point opens the Pumpkin Zone, the Tree Zone's exit leads into the
+        // Macro Zone; saved, read back, undone
+        doc.set_door(q, Some(1));
+        doc.set_exit(0, 0x23, Leads::Zone(2));
+        doc.commit().unwrap();
+        let again = EditorDocument::open(doc.original.clone(), Some(doc.rom.clone()));
+        assert_eq!((again.doors.door_of(q), again.doors.exits[0]), (Some(1), (0x23, Leads::Zone(2))));
+        assert!(doc.points_undo() && doc.points_undo());
+        assert_eq!(doc.doors, doors::read(&doc.original));
     }
 }

@@ -6,6 +6,7 @@ use super::widgets::*;
 use super::{left_button, Editor, WorldCanvas, TAB_PICTURE, TAB_POINTS};
 use crate::domain::document::EditorDocument;
 use crate::domain::tools::ToolKind;
+use cart_model::doors::{self, Leads};
 use cart_model::map_routes::{self, DIRS};
 use cart_model::original_points::{self, OnMap};
 use cart_model::world;
@@ -64,6 +65,104 @@ impl Editor {
     /// Where the chosen point is drawn on the shown map, if it is.
     fn chosen_at(&self) -> Option<(i32, i32)> {
         self.map_points().into_iter().find(|s| s.0 as usize == self.point).map(|s| (s.1, s.2))
+    }
+
+    /// Is `p` a point of the world map (drawn there, the twin of a zone's entrance, or new)?
+    fn is_world_point(&self, p: u8) -> bool {
+        self.doc.routes.added.contains(&p) || map_routes::ZONE_EXITS.iter().any(|z| z.1 == p) || original_points::SPOTS.iter().any(|s| s.point == p && s.map == OnMap::World)
+    }
+
+    /// Where an exit can lead: every world map point, then every zone a door can enter.
+    fn exit_targets(&self) -> Vec<Leads> {
+        let mut pts: Vec<u8> = (0..map_routes::POINTS as u8).filter(|&p| self.is_world_point(p)).collect();
+        pts.sort();
+        pts.into_iter().map(Leads::World).chain((0..doors::INTO.len()).map(Leads::Zone)).collect()
+    }
+
+    fn leads_name(&self, l: Leads) -> String {
+        match l {
+            Leads::World(p) => format!("{p:02X} ({})", tr(self.es, "world", "mundo")),
+            Leads::Zone(i) => self.map_name(OnMap::Zone(doors::INTO[i].zone)).to_string(),
+        }
+    }
+
+    /// The label of a point on the map: its number and, for a door, where it goes.
+    fn point_tag(&self, p: u8) -> Option<String> {
+        if self.world_map != OnMap::World && self.is_world_point(p) {
+            // a world point drawn where Mario walks out of a zone
+            return Some(format!("{p:02X} ({})", tr(self.es, "world", "mundo")));
+        }
+        if let Some(z) = self.doc.doors.door_of(p) {
+            return Some(format!("{p:02X} > {}", self.map_name(OnMap::Zone(doors::INTO[z].zone))));
+        }
+        let i = self.doc.doors.exit_on(p)?;
+        Some(format!("{p:02X} > {}", self.leads_name(self.doc.doors.exits[i].1)))
+    }
+
+    /// The doors part of the points panel: where the chosen point leads.
+    fn door_rows(&mut self, mut y: f32) -> f32 {
+        if self.doc.doors.into.is_empty() {
+            return y;
+        }
+        let p = self.point as u8;
+        if let Some(i) = self.doc.doors.exit_on(p) {
+            let (at, leads) = self.doc.doors.exits[i];
+            let targets = self.exit_targets();
+            draw_text(tr(self.es, "Exit to", "Sale a"), 10.0, y + 18.0, 18.0, col(3));
+            let mut step = 0;
+            if button(Rect::new(70.0, y, 26.0, 26.0), "-", false, 18.0) {
+                step = -1;
+            }
+            draw_text(&self.leads_name(leads), 104.0, y + 18.0, 16.0, col(3));
+            if button(Rect::new(260.0, y, 26.0, 26.0), "+", false, 18.0) {
+                step = 1;
+            }
+            if step != 0 {
+                let k = targets.iter().position(|&t| t == leads).unwrap_or(0) as i32;
+                let n = targets[(k + step).rem_euclid(targets.len() as i32) as usize];
+                self.doc.set_exit(i, at, n);
+            }
+            y += 30.0;
+        } else if self.is_world_point(p) {
+            let cur = self.doc.doors.door_of(p);
+            draw_text(tr(self.es, "Door", "Puerta"), 10.0, y + 18.0, 18.0, col(3));
+            let mut step = 0;
+            if button(Rect::new(70.0, y, 26.0, 26.0), "-", false, 18.0) {
+                step = -1;
+            }
+            let name = match cur {
+                Some(z) => format!("{} {}", tr(self.es, "into", "entra en"), self.map_name(OnMap::Zone(doors::INTO[z].zone))),
+                None => tr(self.es, "none", "ninguna").to_string(),
+            };
+            draw_text(&name, 104.0, y + 18.0, 16.0, col(3));
+            if button(Rect::new(260.0, y, 26.0, 26.0), "+", false, 18.0) {
+                step = 1;
+            }
+            if step != 0 {
+                // none, then each zone
+                let count = doors::INTO.len() as i32 + 1;
+                let k = cur.map(|z| z as i32 + 1).unwrap_or(0);
+                let n = (k + step).rem_euclid(count);
+                self.doc.set_door(p, if n == 0 { None } else { Some(n as usize - 1) });
+            }
+            y += 30.0;
+        } else if let OnMap::Zone(z) = self.world_map {
+            // a zone point: one of this zone's exits can be moved here
+            let sites: Vec<usize> = (0..doors::EXITS.len())
+                .filter(|&i| original_points::SPOTS.iter().any(|s| s.point == doors::EXITS[i].point && s.map == OnMap::Zone(z)))
+                .collect();
+            if self.chosen_at().is_some() {
+                for i in sites {
+                    let (at, leads) = self.doc.doors.exits[i];
+                    let label = format!("{} ({} {at:02X})", tr(self.es, "Make it the exit", "Hacer salida aqui"), tr(self.es, "now", "ahora"));
+                    if button(Rect::new(10.0, y, 276.0, 26.0), &label, false, 15.0) {
+                        self.doc.set_exit(i, p, leads);
+                    }
+                    y += 30.0;
+                }
+            }
+        }
+        y
     }
 
     /// Choose a point and show its map (for the command line).
@@ -420,6 +519,9 @@ impl Editor {
         let pts = self.map_points();
         for &(p, x, y, _) in &pts {
             let Some(ways) = self.doc.routes.ways.get(p as usize) else { continue };
+            if self.world_map != OnMap::World && self.is_world_point(p) {
+                continue; // its paths are on the world map
+            }
             let chosen = p as usize == self.point;
             for (d, w) in ways.iter().enumerate() {
                 let Some(w) = w else { continue };
@@ -469,9 +571,10 @@ impl Editor {
                 draw_circle(c.x, c.y, r * 0.6 + 1.5, BLACK);
                 draw_circle(c.x, c.y, r * 0.6, Color::new(0.8, 0.8, 0.8, 1.0));
             }
-            let tag = match original_points::door(i) {
-                Some(to) => format!("{:02X} > {}", sp.point, self.map_name(to.map)),
-                None => format!("{:02X}", sp.point),
+            let tag = match (self.point_tag(sp.point), original_points::door(i)) {
+                (Some(t), _) => t,
+                (None, Some(to)) if self.doc.doors.into.is_empty() => format!("{:02X} > {}", sp.point, self.map_name(to.map)),
+                _ => format!("{:02X}", sp.point),
             };
             draw_text(&tag, c.x + r + 3.0, c.y - r * 0.4 + 1.0, 15.0, BLACK);
             draw_text(&tag, c.x + r + 2.0, c.y - r * 0.4, 15.0, WHITE);
@@ -494,7 +597,7 @@ impl Editor {
                 let d = measure_text(&t, None, fs as u16, 1.0);
                 draw_text(&t, c.x - d.width / 2.0, c.y + d.offset_y / 2.0, fs, WHITE);
             }
-            let tag = format!("{p:02X} {}", tr(self.es, "(new)", "(nuevo)"));
+            let tag = format!("{} {}", self.point_tag(p).unwrap_or(format!("{p:02X}")), tr(self.es, "(new)", "(nuevo)"));
             draw_text(&tag, c.x + r + 3.0, c.y - r * 0.4 + 1.0, 15.0, BLACK);
             draw_text(&tag, c.x + r + 2.0, c.y - r * 0.4, 15.0, WHITE);
             if p as usize == self.point {
@@ -535,6 +638,7 @@ impl Editor {
         }
         self.doc.step_point_level(self.point, change);
         y += 32.0;
+        y = self.door_rows(y);
         // the ways out of the point
         draw_text(tr(self.es, "Paths (pad > point)", "Caminos (cruceta > punto)"), 10.0, y + 12.0, 15.0, col(2));
         y += 18.0;
@@ -600,8 +704,8 @@ impl Editor {
         } else {
             tr(
                 self.es,
-                "Click a point on the map to choose it; with - + choose the level it opens. Its paths are drawn in yellow. New path draws one from it; New point puts one on the world map (the game has 6 numbers free). Saved into the edited copy; Play (F5) tries it in the game. The road drawn under the paths is changed in the Picture tab.",
-                "Haz clic en un punto del mapa para elegirlo; con - + elige el nivel que abre. Sus caminos se ven en amarillo. Nuevo camino dibuja uno desde el; Nuevo punto pone uno en el mapa del mundo (el juego tiene 6 numeros libres). Se guarda en la copia editada; Jugar (F5) lo prueba en el juego. El camino pintado bajo los caminos se cambia en la ficha Dibujo.",
+                "Click a point on the map to choose it; with - + choose the level it opens. Door: a world point can enter a zone (A or START on it). Exit to: a zone's exit leads to a world point or straight into another zone; Make it the exit moves it to the chosen zone point. Paths are drawn in yellow; New path draws one, New point puts one on the world map (6 numbers free). Play (F5) saves and tries it.",
+                "Haz clic en un punto del mapa para elegirlo; con - + elige el nivel que abre. Puerta: un punto del mundo puede entrar en una zona (A o START sobre el). Sale a: la salida de una zona lleva a un punto del mundo o directamente a otra zona; Hacer salida aqui la mueve al punto elegido de la zona. Los caminos se ven en amarillo; Nuevo camino dibuja uno, Nuevo punto pone uno en el mundo (6 numeros libres). Jugar (F5) guarda y lo prueba.",
             )
         };
         for (i, line) in wrap(note, 36).iter().enumerate() {
