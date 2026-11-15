@@ -130,3 +130,130 @@ pub fn looks(rom_path: &Path, level: usize, png: &Path) {
         eprintln!("{e}");
     }
 }
+
+/// Enter `level` from the point that opens it, leave it as if cleared, and picture the
+/// map the game comes back to (for finding the zone maps).
+pub fn map_after(rom_path: &Path, level: u8, png: &Path, at_point: Option<u8>) {
+    use cart_model::ram_map::{GAME_MODE, MAP_POINT};
+    let Some(mut gb) = load(rom_path) else { return };
+    gb.boot_to_map();
+    let entered = gb.enter_level_anywhere(level);
+    let point = gb.read(MAP_POINT);
+    for _ in 0..60 {
+        gb.run_frame();
+    }
+    if let Some(p) = at_point {
+        gb.write(MAP_POINT, p);
+    }
+    gb.back_to_map();
+    let mut modes = Vec::new();
+    for f in 0..600 {
+        gb.run_frame();
+        let m = gb.read(GAME_MODE);
+        if modes.last().map(|&(_, x)| x != m).unwrap_or(true) {
+            modes.push((f, m));
+        }
+    }
+    println!(
+        "level {level:02}: entered={entered} from point {point:02x}; back on point {:02x} at ({:02x},{:02x}); modes {:02x?}",
+        gb.read(MAP_POINT),
+        gb.read(0xA842),
+        gb.read(0xA843),
+        modes
+    );
+    host::png_out::save_png(&gb, png);
+}
+
+/// For every map point: leave a level as if standing on it and note where the game puts
+/// Mario and which map it shows (maps told apart by their background tile map; one
+/// picture per map in `dir`).
+pub fn map_scan(rom_path: &Path, dir: &Path) {
+    use cart_model::ram_map::{GAME_MODE, MAP_POINT};
+    use cart_model::world::POINT_COUNT;
+    let Some(mut base) = load(rom_path) else { return };
+    base.boot_to_map();
+    base.enter_level_anywhere(1);
+    for _ in 0..60 {
+        base.run_frame();
+    }
+    let mut maps: Vec<Vec<u8>> = Vec::new();
+    for p in 0..POINT_COUNT as u8 {
+        let mut gb = base.clone();
+        gb.write(MAP_POINT, p);
+        gb.back_to_map();
+        let mut trail = Vec::new();
+        for _ in 0..600 {
+            gb.run_frame();
+            gb.clear_audio();
+            let m = gb.read(GAME_MODE);
+            if trail.last() != Some(&m) {
+                trail.push(m);
+            }
+        }
+        let bg = gb.video().vram()[0x1800..0x2000].to_vec();
+        let id = maps.iter().position(|m| *m == bg).unwrap_or_else(|| {
+            maps.push(bg);
+            host::png_out::save_png(&gb, &dir.join(format!("map{}.png", maps.len() - 1)));
+            find_rows(gb.cart().rom(), &maps[maps.len() - 1], maps.len() - 1);
+            maps.len() - 1
+        });
+        let world = on_world_picture(&mut gb);
+        println!(
+            "point {p:02x}: map {id} point {:02x} at ({:02x},{:02x}) scroll ({},{}) world {:?} modes {:02x?}",
+            gb.read(MAP_POINT),
+            gb.read(0xA842),
+            gb.read(0xA843),
+            gb.read(0xFF43),
+            gb.read(0xFF42),
+            world,
+            trail
+        );
+    }
+}
+
+/// Where in the ROM the rows of a background tile map appear as plain bytes (12-byte
+/// pieces of each row; pieces made of one repeated tile are skipped).
+fn find_rows(rom: &[u8], bg: &[u8], id: usize) {
+    let mut hits = Vec::new();
+    for row in 0..32 {
+        for col in [0usize, 10, 20] {
+            let piece = &bg[row * 32 + col..row * 32 + col + 12];
+            if piece.iter().all(|&b| b == piece[0]) {
+                continue;
+            }
+            if let Some(at) = rom.windows(12).position(|w| w == piece) {
+                hits.push(format!("r{row}c{col}@{:02x}:{:04x}", at / 0x4000, 0x4000 + at % 0x4000));
+            }
+        }
+    }
+    println!("map {id}: {} plain rows {}", hits.len(), hits.iter().take(8).cloned().collect::<Vec<_>>().join(" "));
+}
+
+/// Where the middle of the screen is on the 512x512 world picture (pixels), when the
+/// screen shows the world picture (the background matches it around the middle).
+fn on_world_picture(gb: &mut gb_core::Gb) -> Option<(i32, i32)> {
+    use cart_model::world;
+    let pic = world::read(gb.cart().rom());
+    let bg = gb.video().vram()[0x1800..0x2000].to_vec();
+    let (bx, by) = ((gb.read(0xFF43) as usize + 80) % 256, (gb.read(0xFF42) as usize + 72) % 256);
+    let (vc, vr) = (bx / 8, by / 8);
+    let mut best = (0, 0, 0);
+    for a in 0..2 {
+        for b in 0..2 {
+            let (x, y) = (vc + 32 * b, vr + 32 * a);
+            let mut same = 0;
+            for dy in 0..9usize {
+                for dx in 0..9usize {
+                    let v = bg[((vr + 28 + dy) % 32) * 32 + (vc + 28 + dx) % 32];
+                    if v == pic[((y + 60 + dy) % 64) * 64 + (x + 60 + dx) % 64] {
+                        same += 1;
+                    }
+                }
+            }
+            if same > best.0 {
+                best = (same, x, y);
+            }
+        }
+    }
+    (best.0 >= 70).then(|| ((best.1 * 8 + bx % 8) as i32, (best.2 * 8 + by % 8) as i32))
+}

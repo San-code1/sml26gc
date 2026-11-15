@@ -74,14 +74,21 @@ const COMMANDS: &[(&str, Run)] = &[
     ("find", |r, a| memory::find_player(r, &a.s(1))),
     ("watch", |r, a| memory::watch(r, &a.s(1), &a.list(2), a.num(3), a.num(4))),
     ("trace", |r, a| memory::trace(r, &a.s(1), &a.list(2), a.num(3), a.num(4))),
+    ("mapafter", |r, a| rom_views::map_after(r, a.num(1) as u8, &a.path(2), (!a.s(3).is_empty()).then(|| a.hex(3) as u8))),
+    ("mapscan", |r, a| rom_views::map_scan(r, &a.path(1))),
 ];
 
-const USAGE: &str = "research: disasm BANK ADDR N | table OFF LEN ROW | find SCRIPT | watch SCRIPT ADDRS FROM TO | trace SCRIPT ADDRS FROM TO\n\
+const USAGE: &str = "research [--with-save]: disasm BANK ADDR N | table OFF LEN ROW | find SCRIPT | watch SCRIPT ADDRS FROM TO | trace SCRIPT ADDRS FROM TO\n\
                      \x20         poke | leave | cmpmap | diff | worldshot | looks | worldcheck | objcheck | objects | reads | free | storecheck | levels | modes\n\
                      (customcheck and menushots belong to the game: game --research ...)";
 
 fn main() {
-    let args = Args(std::env::args().skip(1).collect());
+    let mut v: Vec<String> = std::env::args().skip(1).collect();
+    if let Some(i) = v.iter().position(|a| a == "--with-save") {
+        v.remove(i);
+        console::use_battery_save(true);
+    }
+    let args = Args(v);
     let rom = host::require_rom(None).unwrap_or_else(|e| {
         eprintln!("{e}");
         std::process::exit(1)
@@ -101,6 +108,6 @@ mod tests {
         let a = Args(["watch", "x", "ffc2,a200-a202", "0x10", "12"].map(String::from).to_vec());
         assert_eq!(a.list(2), vec![0xFFC2, 0xA200, 0xA201, 0xA202]);
         assert_eq!((a.hex(3), a.big(3), a.num(4), a.num(9)), (0x10, 0x10, 12, 0));
-        assert_eq!(COMMANDS.len(), 19);
+        assert_eq!(COMMANDS.len(), 21);
     }
 }
