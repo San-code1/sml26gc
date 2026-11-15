@@ -146,40 +146,41 @@ Principios aplicados:
 - Tests: teclas, ajustes, seguimiento de niveles, menú con teclado falso y una sesión
   completa (encender → nivel → menú → pantalla completa → guardar) con puertos falsos.
 
-## 5. `editor/`: el editor (hexagonal)
+## 5. `editor/`: el editor (hexagonal) ✅
 
-Hoy: `editor.rs` de 1.733 líneas con un único `struct Editor` de ~45 campos que hace interfaz,
-lógica de edición, deshacer, guardado, captura de gráficos y lanzamiento del juego.
+Antes: `editor.rs` de 1.726 líneas con un único `struct Editor` de ~45 campos que hacía
+interfaz, lógica de edición, deshacer, guardado, captura de gráficos y lanzamiento del juego.
 
 ```
 editor/src/
-├─ domain/
-│  ├─ document.rs     EditorDocument: ROM original + copia, 32 niveles (mapa, objetos),
-│  │                  mapa del mundo, puntos, mapa propio, marcas de "sin guardar"
-│  ├─ history.rs      History<T>: deshacer/rehacer genérico (reutilizado en niveles y mapa)
-│  ├─ tools.rs        trait Tool { press, drag, release } → Pencil, BoxFill, Picker...
-│  │                  (añadir herramientas = nueva impl, sin tocar el resto)
-│  └─ space.rs        Cálculo de espacio libre por zona / objetos
+├─ domain/            Sin ventana ni ficheros
+│  ├─ document.rs     EditorDocument: original + copia en construcción, 32 niveles
+│  │                  (bloques + objetos + historial), mapa del mundo, puntos, mapa propio,
+│  │                  marcas de "sin guardar", espacio libre y commit() a la imagen del cartucho
+│  ├─ history.rs      History<T>: deshacer/rehacer genérico (niveles y mapa del mundo)
+│  └─ tools.rs        trait Tool + GridCanvas → Pencil, BoxFill
+│                     (nueva herramienta = nueva impl; sirve en niveles y en el mapa)
 ├─ application/
-│  ├─ commands.rs     PaintBlocks, FillBox, PlaceObject, MoveObject, DeleteObject,
-│  │                  EditWorldTile, SetPointLevel, EditCustomMap...
-│  ├─ save.rs         Guardar copia editada (usa cart-model::layout/patch)
-│  ├─ art_service.rs  Captura de gráficos y sprites ejecutando la consola en segundo plano
-│  └─ play.rs         Probar nivel (usa el puerto GameLauncher)
-├─ ports.rs           RomRepository, EditedCopyRepository, GameLauncher, ArtCache
-├─ ui/                macroquad, dividido por paneles
-│  ├─ app.rs          Bucle y enrutado de entrada
-│  ├─ level_view.rs   Vista del nivel, zoom, cámara, rejilla, vista general
-│  ├─ palette.rs      Paleta de bloques y de tipos de objeto
-│  ├─ world_view.rs   Editor del mapa del mundo (imagen y puntos)
-│  ├─ custom_view.rs  "Tu mapa"
-│  ├─ status_bar.rs
-│  └─ widgets.rs      button, wrap, texturas
+│  ├─ save.rs         commit + mapa propio + escribir la copia (vía puerto); errores tipados
+│  └─ art_service.rs  Gráficos del juego: consola arrancada al mapa, niveles, tiles, objetos
+├─ ports.rs           EditedCopyStore, GameLauncher
 ├─ adapters/
-│  ├─ fs_repository.rs
-│  └─ process_launcher.rs   Lanza game.exe con --level
+│  ├─ fs_repository.rs     Abrir original + copia (host::paths), guardar, idioma
+│  └─ process_launcher.rs  game.exe <copia> [--level N]
+├─ ui/                macroquad, por paneles (comparten el struct Editor de ui/mod.rs)
+│  ├─ mod.rs          Estado de pantalla, navegación (zoom/cámara), guardar/jugar, textos de estado
+│  ├─ level_view.rs   Vista del nivel, vista general, panel lateral
+│  ├─ objects_view.rs Objetos: poner, arrastrar, cambiar tipo, borrar
+│  ├─ palette.rs      Paletas de bloques y de tipos de objeto
+│  ├─ world_view.rs   Mapa del mundo: dibujo y puntos originales
+│  ├─ custom_view.rs  "Tu mapa"
+│  ├─ status_bar.rs   Mensaje y espacio de zona/objetos
+│  └─ widgets.rs      Colores, botón, wrap, texturas a partir de los gráficos capturados
 └─ main.rs            Raíz de composición
 ```
+
+Tests: historial, herramientas con un lienzo falso, y documento con la ROM real (pintar,
+deshacer/rehacer, objeto, tile, commit y releer como lo hará el juego; restaurar original).
 
 ## 6. Contrato entre juego y editor
 
@@ -218,7 +219,7 @@ cartucho), `battery`, `progress`, `settings_file`, `custom_map_file` y `png_out`
 | 2 ✅ | `cart-model`: `RomImage`, `ram_map`, `GameDriver`, errores tipados, separar ficheros |
 | 3 ✅ | `host`: localizar ROM, rutas, ajustes |
 | 4 ✅ | `game/`: dominio puro + puertos + adaptadores + raíz de composición |
-| 5 | `editor/`: romper el objeto gigante en documento, historial, herramientas, comandos y paneles |
+| 5 ✅ | `editor/`: romper el objeto gigante en documento, historial, herramientas, comandos y paneles |
 | 6 | `tools/research/` |
 | 7 | Puntos de extensión: paletas desde fichero, paletas por capa, sustitución de gráficos, registro de ganchos |
 | 8 | Paridad confirmada → borrar `legacy/` |
