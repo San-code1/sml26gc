@@ -88,6 +88,14 @@ async fn main() {
         if let Some(z) = value("--map").and_then(|v| v.parse::<usize>().ok()).filter(|&z| (1..=ZONES.len()).contains(&z)) {
             ed.show_map(OnMap::Zone(z - 1));
         }
+        // --new-zone: a new zone made from the map shown (not saved)
+        if flag("--new-zone") {
+            ed.new_zone();
+        }
+        // --choose: choose on the maps where the chosen point's door or exit leads
+        if flag("--choose") {
+            ed.choose_target();
+        }
     }
     if shot.is_some() && ed.mode == Mode::Objects {
         ed.capture_level_looks();

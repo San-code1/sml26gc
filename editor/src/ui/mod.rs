@@ -6,10 +6,12 @@ mod files_view;
 mod grid_edit;
 mod level_view;
 mod menu;
+mod names_view;
 mod objects_view;
 mod palette;
 mod shortcuts;
 mod status_bar;
+mod target_picker;
 mod widgets;
 mod world_view;
 
@@ -98,10 +100,16 @@ pub struct Editor {
     route_draw: Option<Vec<(i32, i32)>>,
     /// The next click on the world map puts a new point there.
     placing_point: bool,
+    /// A new zone's point being dragged with the mouse.
+    drag_point: Option<u8>,
     dialogs: Box<dyn FileDialogs>,
     text_files: Box<dyn TextFiles>,
     /// A file action waiting for the keys and buttons to be let go (see `run_pending_file`).
     pending_file: Option<Action>,
+    /// A new level's or zone's name being typed.
+    naming: Option<names_view::Naming>,
+    /// Where a door or exit leads, being chosen on the maps.
+    picker: Option<target_picker::Picker>,
     menu: Box<dyn MenuBar>,
     /// Each File menu entry's state as last set (None: not set yet).
     menu_enabled: [Option<bool>; menu::FILE_MENU_LEN],
@@ -196,10 +204,13 @@ impl Editor {
             world_cam: Vec2::ZERO,
             route_draw: None,
             placing_point: false,
+            drag_point: None,
             level_cam: Vec2::ZERO,
             dialogs,
             text_files,
             pending_file: None,
+            naming: None,
+            picker: None,
             menu,
             menu_enabled: [None; menu::FILE_MENU_LEN],
         };
@@ -210,8 +221,10 @@ impl Editor {
     /// One frame: the menu, shortcuts, input, then drawing.
     pub fn frame(&mut self) {
         self.update_menu();
-        for a in shortcuts::pressed(self.ctx()) {
-            self.run(a);
+        if !self.update_naming() {
+            for a in shortcuts::pressed(self.ctx()) {
+                self.run(a);
+            }
         }
         self.run_pending_file();
         self.panel = self.fitted_panel();
@@ -274,8 +287,8 @@ impl Editor {
             Action::PrevMap => self.step_map(-1),
             Action::NextMap => self.step_map(1),
             Action::SwitchTab => self.world_tab = if self.world_tab == TAB_PICTURE { TAB_POINTS } else { TAB_PICTURE },
-            Action::Original if self.in_world => self.doc.restore_world(),
-            Action::Original => self.restore_original(),
+            Action::Restore if self.in_world => self.restore_map(),
+            Action::Restore => self.restore_original(),
             Action::ZoomOut => self.palette_zoom(-1),
             Action::ZoomIn => self.palette_zoom(1),
             Action::Copy => self.copy_selection(false),
@@ -361,7 +374,9 @@ impl Editor {
         }
         let view = vec2(screen_width() - self.panel, screen_height() - STATUS_H) / self.scale();
         let max = (size - view).max(Vec2::ZERO);
-        self.cam = self.cam.clamp(Vec2::ZERO, max);
+        // room over the map for the tabs while choosing a target
+        let min = vec2(0.0, -self.picker_tabs_h() / self.scale());
+        self.cam = self.cam.clamp(min, max);
         (space, view, max)
     }
 
@@ -394,6 +409,10 @@ impl Editor {
         match self.world_map {
             OnMap::World => self.world_atlas = self.art.world().map(make_world_atlas),
             OnMap::Zone(z) => self.zone_atlases[z] = self.art.zone(z).map(make_world_atlas),
+            OnMap::NewZone(k) => {
+                let z = self.doc.new_zones[k].base;
+                self.zone_atlases[z] = self.art.zone(z).map(make_world_atlas);
+            }
         }
     }
 
@@ -402,6 +421,7 @@ impl Editor {
         match self.world_map {
             OnMap::World => self.world_atlas.as_ref(),
             OnMap::Zone(z) => self.zone_atlases[z].as_ref(),
+            OnMap::NewZone(k) => self.zone_atlases[self.doc.new_zones.get(k)?.base].as_ref(),
         }
     }
 
@@ -429,7 +449,7 @@ impl Editor {
         self.overview_stale = true;
         let shared = self.doc.sharing(l);
         self.status = if shared.is_empty() {
-            format!("{} {:02}", tr(self.es, "Level", "Nivel"), l)
+            format!("{} {:02} {}", tr(self.es, "Level", "Nivel"), l, self.doc.level_name(l))
         } else {
             format!("{} {:02}: {} {:?}", tr(self.es, "Level", "Nivel"), l, tr(self.es, "its map is also used by level(s)", "su mapa tambien lo usa(n) el/los nivel(es)"), shared)
         };
@@ -516,7 +536,12 @@ impl Editor {
         self.doc.restore_level(self.cur);
         self.sel_obj = None;
         self.overview_stale = true;
-        self.status = tr(self.es, "Level restored to the original (save to keep it).", "Nivel restaurado al original (guarda para conservarlo).").into();
+        let l = self.cur;
+        self.status = if l >= LEVELS {
+            format!("{} {l:02} {} {:02} {}", tr(self.es, "Level", "Nivel"), tr(self.es, "restored as its base level", "restaurado como su nivel base"), self.doc.base_of(l), tr(self.es, "is in the game (save to keep it; undo brings it back).", "esta en el juego (guarda para conservarlo; deshacer lo recupera)."))
+        } else {
+            format!("{} {l:02} {}", tr(self.es, "Level", "Nivel"), tr(self.es, "restored as it is in the game (save to keep it; undo brings it back).", "restaurado como esta en el juego (guarda para conservarlo; deshacer lo recupera)."))
+        };
     }
 
     /// Save the edited copy; the status bar says what happened.
@@ -537,6 +562,7 @@ impl Editor {
                         Saved::Doors => tr(es, "doors", "puertas").to_string(),
                         Saved::Routes(n) => format!("{} ({n} bytes)", tr(es, "map paths", "caminos del mapa")),
                         Saved::NewLevels(n, used) => format!("{n} {} {used} bytes", tr(es, "new levels", "niveles nuevos")),
+                        Saved::NewZones(n, used) => format!("{n} {} {used} bytes", tr(es, "new zones", "zonas nuevas")),
                     })
                     .collect();
                 self.status = format!(

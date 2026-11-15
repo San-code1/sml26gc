@@ -19,7 +19,9 @@
 //!
 //! Storage: twins of banks nothing reads from ($38-$3F, `STORE`). The first holds a
 //! directory: "XLV1", the count, then per level the base, the header, where its map is
-//! (bank, address, length) and where its objects are (bank, address); the data follows.
+//! (bank, address, length) and where its objects are (bank, address); then "XLN1" and each
+//! level's name (`NAME_MAX` bytes, zero-padded; a copy without them has no names); the data
+//! follows.
 use crate::error::CartError;
 use crate::levels::{self, decode, encode, MAP_TABLE};
 use crate::objects::{self, Obj};
@@ -35,7 +37,11 @@ pub const MAX: usize = 64;
 const STORE: [usize; 8] = [0x3F, 0x3E, 0x3D, 0x3C, 0x3B, 0x3A, 0x39, 0x38];
 const MAGIC: &[u8; 4] = b"XLV1";
 const ENTRY: usize = 29;
-const DIRECTORY: usize = 5 + MAX * ENTRY;
+const NAMES_MAGIC: &[u8; 4] = b"XLN1";
+const NAMES: usize = 5 + MAX * ENTRY;
+const DIRECTORY: usize = NAMES + 4 + MAX * NAME_MAX;
+/// The longest name a new level or zone can have (printable ASCII).
+pub const NAME_MAX: usize = 24;
 /// Where a new level's map goes while it is played, and the room it has there.
 const MAP_AT: u16 = 0x4310;
 pub const MAP_ROOM: usize = 0x8000 - MAP_AT as usize;
@@ -49,6 +55,17 @@ pub struct Extra {
     pub header: [u8; 20],
     pub map: Vec<u8>,
     pub objs: Vec<Obj>,
+    /// Given in the editor; empty: none.
+    pub name: String,
+}
+
+/// `name` as the copy can keep it: printable ASCII, at most `NAME_MAX` characters.
+pub fn clean_name(name: &str) -> String {
+    name.chars().filter(|c| c.is_ascii() && !c.is_ascii_control()).take(NAME_MAX).collect()
+}
+
+pub(crate) fn name_from(bytes: &[u8]) -> String {
+    clean_name(&String::from_utf8_lossy(bytes.split(|&b| b == 0).next().unwrap_or_default()))
 }
 
 /// A new level that starts as a copy of level `base`.
@@ -57,7 +74,7 @@ pub fn based_on(rom: &[u8], base: u8) -> Extra {
     let (_, start) = levels::map_location(rom, h);
     let mut header = [0u8; 20];
     header.copy_from_slice(&rom[h.at..h.at + 20]);
-    Extra { base, header, map: decode(rom, start).0, objs: objects::read(rom, base as usize).0 }
+    Extra { base, header, map: decode(rom, start).0, objs: objects::read(rom, base as usize).0, name: String::new() }
 }
 
 fn dir() -> usize {
@@ -71,6 +88,7 @@ pub fn read(rom: &[u8]) -> Vec<Extra> {
     }
     let d = dir();
     let n = (rom[d + 4] as usize).min(MAX);
+    let named = &rom[d + NAMES..d + NAMES + 4] == NAMES_MAGIC;
     (0..n)
         .map(|k| {
             let e = d + 5 + k * ENTRY;
@@ -84,7 +102,8 @@ pub fn read(rom: &[u8]) -> Vec<Extra> {
                 objs.push(Obj::from_bytes(rom[i], rom[i + 1], rom[i + 2]));
                 i += 3;
             }
-            Extra { base: rom[e], header, map: decode(rom, map_at).0, objs }
+            let name = if named { name_from(&rom[d + NAMES + 4 + k * NAME_MAX..][..NAME_MAX]) } else { String::new() };
+            Extra { base: rom[e], header, map: decode(rom, map_at).0, objs, name }
         })
         .collect()
 }
@@ -143,6 +162,12 @@ pub fn store(rom: &mut [u8], extras: &[Extra]) -> Result<usize, CartError> {
     let d = dir();
     rom[d..d + 4].copy_from_slice(MAGIC);
     rom[d + 4] = extras.len() as u8;
+    rom[d + NAMES..d + NAMES + 4].copy_from_slice(NAMES_MAGIC);
+    rom[d + NAMES + 4..d + DIRECTORY].fill(0);
+    for (k, e) in extras.iter().enumerate() {
+        let name = clean_name(&e.name);
+        rom[d + NAMES + 4 + k * NAME_MAX..][..name.len()].copy_from_slice(name.as_bytes());
+    }
     for (k, (e, ((m, o), (map, objs)))) in extras.iter().zip(writes.iter().zip(&datas)).enumerate() {
         let en = d + 5 + k * ENTRY;
         rom[en] = e.base;

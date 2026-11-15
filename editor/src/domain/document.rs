@@ -1,8 +1,12 @@
 //! Everything being edited: the cartridge being built (the edited copy), the untouched
 //! original it is checked against, the 32 levels (blocks and objects) and the new ones
 //! after them (`extra_levels`) with their undo history, the world map picture, the level
-//! each map point opens and the paths between points (`map_routes`). What has changed since
-//! the last save is tracked here; the files are not.
+//! each map point opens and the paths between points (`map_routes`), and the new zones
+//! (`zones`). What has changed since the last save is tracked here; the files are not.
+mod restore;
+mod zones;
+
+pub use zones::{ZonePoints, ZoneRefusal};
 use super::files::{self, FileError, LevelFile, ProjectFile};
 use super::history::History;
 use super::stamp::{Area, Stamp};
@@ -13,7 +17,7 @@ use cart_model::doors::{self, Doors, Leads};
 use cart_model::map_routes::{self, MapRoutes, Place, Way};
 use cart_model::objects::{self, Obj};
 use cart_model::original_points::OnMap;
-use cart_model::{layout, patch, world, zone_maps, CartError};
+use cart_model::{layout, new_zones, patch, world, zone_maps, CartError};
 
 /// What a painting tool works on: a level's blocks or a map picture's tiles.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -37,6 +41,8 @@ pub struct LevelContent {
     pub objs: Vec<Obj>,
     /// None for the 32 levels of the cartridge.
     pub stand_in: Option<StandIn>,
+    /// A new level's name (empty: none).
+    pub name: String,
 }
 
 pub struct LevelDoc {
@@ -64,6 +70,8 @@ pub enum Saved {
     Objects(ObjectsUsage),
     /// The new levels: how many, bytes used.
     NewLevels(usize, usize),
+    /// The new zones: how many, bytes used.
+    NewZones(usize, usize),
 }
 
 pub struct EditorDocument {
@@ -73,7 +81,8 @@ pub struct EditorDocument {
     pub levels: Vec<LevelDoc>,
     /// A new level was added or removed.
     pub extras_dirty: bool,
-    /// The world map picture (64 x 64 tiles) and the zone maps' (20 x 18 each).
+    /// The world map picture (64 x 64 tiles) and the zone maps' (20 x 18 each): the game's
+    /// eight, then the new zones'.
     pub world: Vec<u8>,
     pub zones: Vec<Vec<u8>>,
     /// Any map picture changed.
@@ -88,13 +97,26 @@ pub struct EditorDocument {
     /// Doors between the world map and the zones.
     pub doors: Doors,
     pub doors_dirty: bool,
-    /// Undo of the Points tab: the levels the points open, the paths and the doors, together.
-    points_history: History<(Vec<u8>, MapRoutes, Doors)>,
+    /// The new zones' points, paths, exits and doors (`zones`).
+    pub new_zones: Vec<ZonePoints>,
+    pub new_zones_dirty: bool,
+    /// The point each zone a door enters is entered on (`doors::INTO` order).
+    pub entries: Vec<u8>,
+    /// Undo of the Points tab: the levels the points open, the paths, the doors, the new
+    /// zones' points and the zones' entry points, together.
+    points_history: History<PointsState>,
+}
+
+type PointsState = (Vec<u8>, MapRoutes, Doors, Vec<ZonePoints>, Vec<u8>);
+
+/// The point each zone a door enters is entered on in `rom`.
+fn entries_of(rom: &[u8]) -> Vec<u8> {
+    doors::INTO.iter().map(|d| new_zones::entry_point(rom, d.zone).unwrap_or(doors::NONE)).collect()
 }
 
 fn level_from(rom: &[u8], l: usize) -> LevelContent {
     let (_, start) = levels::map_location(rom, levels::header(rom, l));
-    LevelContent { map: levels::decode(rom, start).0, objs: objects::read(rom, l).0, stand_in: None }
+    LevelContent { map: levels::decode(rom, start).0, objs: objects::read(rom, l).0, stand_in: None, name: String::new() }
 }
 
 impl EditorDocument {
@@ -111,19 +133,34 @@ impl EditorDocument {
         let doc = |content| LevelDoc { content, blocks_dirty: false, objects_dirty: false, history: History::default() };
         let mut levels: Vec<LevelDoc> = (0..LEVELS).map(|l| doc(level_from(&rom, l))).collect();
         let stored = extra_levels::read(&rom);
-        levels.extend(stored.into_iter().map(|e| doc(LevelContent { map: e.map, objs: e.objs, stand_in: Some(StandIn { base: e.base, header: e.header }) })));
+        levels.extend(stored.into_iter().map(|e| doc(LevelContent { map: e.map, objs: e.objs, stand_in: Some(StandIn { base: e.base, header: e.header }), name: e.name })));
+        let mut zones: Vec<Vec<u8>> = (0..zone_maps::ZONES.len()).map(|z| zone_maps::read(&rom, z)).collect();
+        let (new_zones, pictures): (Vec<ZonePoints>, Vec<Vec<u8>>) = new_zones::read(&rom).into_iter().map(ZonePoints::from).unzip();
+        zones.extend(pictures);
+        // the copy keeps an exit into a new zone as one to its door
+        let mut doors = doors::read(&rom);
+        for e in &mut doors.exits {
+            if let Leads::World(p) = e.1 {
+                if let Some(k) = new_zones.iter().position(|z| z.door == p && p != doors::NONE) {
+                    e.1 = Leads::NewZone(k);
+                }
+            }
+        }
         EditorDocument {
             extras_dirty: false,
             world: world::read(&rom),
-            zones: zone_maps::ZONES.iter().enumerate().map(|(z, _)| zone_maps::read(&rom, z)).collect(),
+            zones,
             world_dirty: false,
             world_history: History::default(),
             points: world::point_levels(&rom),
             points_dirty: false,
             routes,
             routes_dirty,
-            doors: doors::read(&rom),
+            doors,
             doors_dirty: false,
+            new_zones,
+            new_zones_dirty: false,
+            entries: entries_of(&rom),
             points_history: History::default(),
             original,
             rom,
@@ -174,12 +211,15 @@ impl EditorDocument {
     }
 
     /// The level as the original cartridge has it (undoable); a new level, as its base level
-    /// is there.
+    /// is there (header too), keeping its name.
     pub fn restore_level(&mut self, l: usize) {
         self.snapshot(l);
-        let mut content = level_from(&self.original, self.base_of(l));
+        let base = self.base_of(l);
+        let mut content = level_from(&self.original, base);
+        let at = levels::header(&self.original, base).at;
         let lv = &mut self.levels[l];
-        content.stand_in = lv.content.stand_in;
+        content.stand_in = lv.content.stand_in.map(|s| StandIn { header: self.original[at..at + 20].try_into().unwrap_or(s.header), ..s });
+        content.name = std::mem::take(&mut lv.content.name);
         lv.content = content;
         lv.blocks_dirty = true;
         lv.objects_dirty = true;
@@ -231,12 +271,12 @@ impl EditorDocument {
             let at = levels::header(&self.rom, l).at;
             StandIn { base: l as u8, header: self.rom[at..at + 20].try_into().unwrap_or([0; 20]) }
         });
-        LevelFile { stand_in, map: c.map.clone(), objs: c.objs.clone() }
+        LevelFile { stand_in, map: c.map.clone(), objs: c.objs.clone(), name: c.name.clone() }
     }
 
     /// A new level after the others from a level file; None when there is no room.
     pub fn import_level(&mut self, f: LevelFile) -> Option<usize> {
-        self.push_level(LevelContent { map: f.map, objs: f.objs, stand_in: Some(f.stand_in) })
+        self.push_level(LevelContent { map: f.map, objs: f.objs, stand_in: Some(f.stand_in), name: f.name })
     }
 
     /// Replace new level `l` whole with a level file (undoable). The 32 are never replaced.
@@ -246,10 +286,26 @@ impl EditorDocument {
         }
         self.snapshot(l);
         let lv = &mut self.levels[l];
-        lv.content = LevelContent { map: f.map, objs: f.objs, stand_in: Some(f.stand_in) };
+        lv.content = LevelContent { map: f.map, objs: f.objs, stand_in: Some(f.stand_in), name: f.name };
         lv.blocks_dirty = true;
         lv.objects_dirty = true;
         true
+    }
+
+    /// Name new level `l` (undoable); the 32 have the game's numbers only.
+    pub fn rename_level(&mut self, l: usize, name: &str) {
+        let name = cart_model::extra_levels::clean_name(name);
+        if l < LEVELS || l >= self.levels.len() || self.levels[l].content.name == name {
+            return;
+        }
+        self.snapshot(l);
+        self.levels[l].content.name = name;
+        self.extras_dirty = true;
+    }
+
+    /// The name of level `l` (empty: none).
+    pub fn level_name(&self, l: usize) -> &str {
+        self.levels.get(l).map_or("", |lv| &lv.content.name)
     }
 
     /// Everything being edited, as a project file keeps it.
@@ -258,10 +314,12 @@ impl EditorDocument {
             cartridge: files::cartridge_id(&self.original),
             levels: (0..self.levels.len()).map(|l| self.level_file(l)).collect(),
             world: self.world.clone(),
-            zones: self.zones.clone(),
+            zones: self.zones[..zone_maps::ZONES.len()].to_vec(),
             points: self.points.clone(),
             routes: self.routes.clone(),
             doors: self.doors.clone(),
+            new_zones: (0..self.new_zones.len()).map(|k| self.new_zone(k)).collect(),
+            entries: self.entries.clone(),
         }
     }
 
@@ -276,13 +334,24 @@ impl EditorDocument {
             .levels
             .into_iter()
             .enumerate()
-            .map(|(l, f)| LevelDoc { content: LevelContent { map: f.map, objs: f.objs, stand_in: (l >= LEVELS).then_some(f.stand_in) }, blocks_dirty: true, objects_dirty: true, history: History::default() })
+            .map(|(l, f)| LevelDoc { content: LevelContent { map: f.map, objs: f.objs, stand_in: (l >= LEVELS).then_some(f.stand_in), name: if l >= LEVELS { f.name } else { String::new() } }, blocks_dirty: true, objects_dirty: true, history: History::default() })
             .collect();
         self.extras_dirty = true;
         (self.world, self.zones) = (p.world, p.zones);
         self.world_dirty = true;
         self.world_history = History::default();
         (self.points, self.routes, self.doors) = (p.points, p.routes, p.doors);
+        self.entries = if p.entries.len() == doors::INTO.len() { p.entries } else { entries_of(&self.original) };
+        self.new_zones_dirty = !self.new_zones.is_empty() || !p.new_zones.is_empty();
+        let count = p.new_zones.len();
+        let (zones, pictures): (Vec<ZonePoints>, Vec<Vec<u8>>) = p.new_zones.into_iter().map(|z| ZonePoints::from(zones::settled(z, count))).unzip();
+        self.new_zones = zones;
+        self.zones.extend(pictures);
+        for e in &mut self.doors.exits {
+            if matches!(e.1, Leads::NewZone(j) if j >= count) {
+                e.1 = Leads::World(doors::NONE);
+            }
+        }
         self.points_dirty = true;
         self.routes_dirty = true;
         self.doors_dirty = true;
@@ -312,7 +381,7 @@ impl EditorDocument {
     fn extras_now(&self) -> Vec<Extra> {
         self.levels[LEVELS..]
             .iter()
-            .filter_map(|lv| lv.content.stand_in.map(|s| Extra { base: s.base, header: s.header, map: lv.content.map.clone(), objs: lv.content.objs.clone() }))
+            .filter_map(|lv| lv.content.stand_in.map(|s| Extra { base: s.base, header: s.header, map: lv.content.map.clone(), objs: lv.content.objs.clone(), name: lv.content.name.clone() }))
             .collect()
     }
 
@@ -391,7 +460,7 @@ impl EditorDocument {
     pub fn map_size(map: OnMap) -> (usize, usize) {
         match map {
             OnMap::World => (world::W, world::H),
-            OnMap::Zone(_) => (zone_maps::W, zone_maps::H),
+            OnMap::Zone(_) | OnMap::NewZone(_) => (zone_maps::W, zone_maps::H),
         }
     }
 
@@ -399,6 +468,7 @@ impl EditorDocument {
         match map {
             OnMap::World => &self.world,
             OnMap::Zone(z) => &self.zones[z],
+            OnMap::NewZone(k) => &self.zones[zone_maps::ZONES.len() + k],
         }
     }
 
@@ -407,6 +477,7 @@ impl EditorDocument {
         let pic = match map {
             OnMap::World => &mut self.world,
             OnMap::Zone(z) => &mut self.zones[z],
+            OnMap::NewZone(k) => &mut self.zones[zone_maps::ZONES.len() + k],
         };
         if pic[i] != t {
             pic[i] = t;
@@ -495,23 +566,8 @@ impl EditorDocument {
         }
     }
 
-    /// Every map picture and the level points as the original has them (the pictures
-    /// undoable).
-    pub fn restore_world(&mut self) {
-        self.world_snapshot();
-        self.world = world::read(&self.original);
-        self.zones = (0..zone_maps::ZONES.len()).map(|z| zone_maps::read(&self.original, z)).collect();
-        self.points_record();
-        self.points = world::point_levels(&self.original);
-        self.routes = map_routes::read(&self.original);
-        self.doors = doors::read(&self.original);
-        self.doors_dirty = true;
-        self.world_dirty = true;
-        self.points_dirty = true;
-        self.routes_dirty = true;
-    }
-
     /// Does map point `point` open a level (one of the 32 or a new one)?
+    #[cfg(test)]
     pub fn point_level(&self, point: usize) -> Option<usize> {
         let l = self.points[point] as usize;
         (l < self.levels.len()).then_some(l)
@@ -534,20 +590,22 @@ impl EditorDocument {
     }
 
     fn points_record(&mut self) {
-        self.points_history.record((self.points.clone(), self.routes.clone(), self.doors.clone()));
+        self.points_history.record((self.points.clone(), self.routes.clone(), self.doors.clone(), self.new_zones.clone(), self.entries.clone()));
     }
 
     fn points_swap(&mut self, undo: bool) -> bool {
-        let mut now = (std::mem::take(&mut self.points), std::mem::take(&mut self.routes), std::mem::take(&mut self.doors));
+        let mut now = (std::mem::take(&mut self.points), std::mem::take(&mut self.routes), std::mem::take(&mut self.doors), std::mem::take(&mut self.new_zones), std::mem::take(&mut self.entries));
         let done = if undo { self.points_history.undo(&mut now) } else { self.points_history.redo(&mut now) };
-        (self.points, self.routes, self.doors) = now;
+        (self.points, self.routes, self.doors, self.new_zones, self.entries) = now;
         self.points_dirty |= done;
         self.routes_dirty |= done;
         self.doors_dirty |= done;
+        self.new_zones_dirty |= done;
         done
     }
 
-    /// Make world point `p` enter zone `zone` (`doors::INTO` index) or nothing, undoable.
+    /// Make world point `p` enter zone `zone` (`doors::INTO` index) or nothing, undoable; a
+    /// door into a new zone there is taken out.
     pub fn set_door(&mut self, p: u8, zone: Option<usize>) {
         if self.doors.into.is_empty() || self.doors.door_of(p) == zone {
             return;
@@ -555,6 +613,12 @@ impl EditorDocument {
         self.points_record();
         self.doors.set_door(p, zone);
         self.doors_dirty = true;
+        if zone.is_some() {
+            for z in self.new_zones.iter_mut().filter(|z| z.door == p) {
+                z.door = doors::NONE;
+                self.new_zones_dirty = true;
+            }
+        }
     }
 
     /// Set where exit `i` (`doors::EXITS` index) is and leads, undoable.
@@ -601,11 +665,8 @@ impl EditorDocument {
         let way = Way::through(corners, to);
         let dir = first_dir(&way)?;
         self.points_record();
-        let end = *way.track().last()?;
-        let back_corners: Vec<(i32, i32)> = corners.iter().rev().skip(1).map(|c| (c.0 - end.0, c.1 - end.1)).chain(std::iter::once((-end.0, -end.1))).collect();
-        let back = Way::through(&back_corners, from as u8);
         let mut back_dir = None;
-        if let Some(bd) = first_dir(&back) {
+        if let Some((back, bd)) = way_back(&way, corners, from as u8) {
             let t = to as usize;
             if t < map_routes::POINTS && self.routes.ways[t][bd].is_none() {
                 self.put_way(t, bd, Some(back));
@@ -682,6 +743,7 @@ impl EditorDocument {
     /// written if a later one doesn't fit.
     pub fn commit(&mut self) -> Result<Vec<Saved>, CartError> {
         let mut notes = Vec::new();
+        let pictures_changed = self.world_dirty;
         let mut banks: Vec<u8> = (0..LEVELS).filter(|&l| self.levels[l].blocks_dirty).map(|l| levels::header(&self.rom, l).bank).collect();
         banks.sort();
         banks.dedup();
@@ -705,7 +767,7 @@ impl EditorDocument {
         }
         if self.world_dirty {
             world::write(&mut self.rom, &self.world);
-            for (z, pic) in self.zones.iter().enumerate() {
+            for (z, pic) in self.zones.iter().enumerate().take(zone_maps::ZONES.len()) {
                 zone_maps::write(&mut self.rom, z, pic);
             }
             self.world_dirty = false;
@@ -716,9 +778,19 @@ impl EditorDocument {
             self.points_dirty = false;
             notes.push(Saved::LevelPoints);
         }
+        let stored_zones: Vec<new_zones::NewZone> = (0..self.new_zones.len()).map(|k| self.new_zone(k)).collect();
         if self.doors_dirty {
-            if doors::write(&mut self.rom, &self.doors) {
+            let mut d = self.doors.clone();
+            for e in &mut d.exits {
+                e.1 = new_zones::resolve(e.1, &stored_zones);
+            }
+            if doors::write(&mut self.rom, &d) {
                 notes.push(Saved::Doors);
+            }
+            for (i, &p) in self.entries.iter().enumerate() {
+                if p != doors::NONE && new_zones::entry_point(&self.rom, doors::INTO[i].zone) != Some(p) {
+                    new_zones::set_entry(&mut self.rom, doors::INTO[i].zone, p, self.routes.places[p as usize])?;
+                }
             }
             self.doors_dirty = false;
         }
@@ -751,8 +823,25 @@ impl EditorDocument {
             self.extras_dirty = false;
             notes.push(Saved::NewLevels(self.new_levels(), used));
         }
+        if self.new_zones_dirty || (pictures_changed && !stored_zones.is_empty()) {
+            let mut rom = self.rom.clone();
+            let used = new_zones::store(&mut rom, &stored_zones)?;
+            self.rom = rom;
+            self.new_zones_dirty = false;
+            notes.push(Saved::NewZones(stored_zones.len(), used));
+        }
         Ok(notes)
     }
+}
+
+/// The way back from the end of `way` (drawn from `from` through `corners`) the same road,
+/// and the direction it starts in.
+fn way_back(way: &Way, corners: &[(i32, i32)], from: u8) -> Option<(Way, usize)> {
+    let end = *way.track().last()?;
+    let back_corners: Vec<(i32, i32)> = corners.iter().rev().skip(1).map(|c| (c.0 - end.0, c.1 - end.1)).chain(std::iter::once((-end.0, -end.1))).collect();
+    let back = Way::through(&back_corners, from);
+    let d = first_dir(&back)?;
+    Some((back, d))
 }
 
 /// The pad direction a way starts in (0 right, 1 left, 2 up, 3 down): its first step's;
@@ -867,9 +956,16 @@ mod tests {
         doc.world_undo();
         assert_eq!(doc.tile(zone, 3, 3), before, "zone maps are undone with the world map");
         doc.world_redo();
-        doc.restore_world();
-        assert_eq!(doc.points, world::point_levels(&doc.original));
+        let world_tile = doc.tile(OnMap::World, 5, 5);
+        doc.world_snapshot();
+        doc.set_tile(OnMap::World, 5, 5, world_tile ^ 1);
+        assert!(doc.restore_map(zone));
         assert_eq!(doc.tile(zone, 3, 3), before);
+        assert_eq!(doc.points[0], world::point_levels(&doc.original)[0] + 1, "a zone's restore leaves the world map's points");
+        assert_eq!(doc.tile(OnMap::World, 5, 5), world_tile ^ 1, "and its picture");
+        assert!(doc.restore_map(OnMap::World));
+        assert_eq!(doc.points, world::point_levels(&doc.original));
+        assert_eq!(doc.tile(OnMap::World, 5, 5), world_tile);
     }
 
     #[test]

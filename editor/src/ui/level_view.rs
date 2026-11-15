@@ -1,5 +1,6 @@
 //! The level view: blocks drawn with the game's own graphics, zoom and camera, grid, the
 //! whole-level overview, painting with the chosen tool, and the side panel.
+use super::names_view::Named;
 use super::shortcuts::{with_keys, Action};
 use super::widgets::*;
 use super::{Editor, Mode, LEVEL_SIZE};
@@ -192,6 +193,8 @@ impl Editor {
             y += 28.0;
             let t = format!("{} {:02}", tr(es, "plays as level", "se juega como el nivel"), self.doc.base_of(self.cur));
             draw_text(&t, 14.0, y + 14.0, 16.0, col(2));
+            y += 22.0;
+            self.name_field(Rect::new(10.0, y, 276.0, 24.0), Named::Level(self.cur));
             y += 4.0;
         }
         y += 28.0;
@@ -219,7 +222,7 @@ impl Editor {
         b(Rect::new(col2(1), y, w2, 26.0), tr(es, "Redo", "Rehacer"), Action::Redo, false);
         y += 30.0;
         b(Rect::new(col3(0), y, w3, 26.0), tr(es, "Grid", "Rejilla"), Action::Grid, self.grid);
-        b(Rect::new(col3(1), y, 276.0 - w3 - 4.0, 26.0), "Original", Action::Original, false);
+        b(Rect::new(col3(1), y, 276.0 - w3 - 4.0, 26.0), tr(es, "Restore", "Restaurar"), Action::Restore, false);
         y += 30.0;
         b(Rect::new(col2(0), y, w2, 28.0), tr(es, "Save", "Guardar"), Action::Save, false);
         b(Rect::new(col2(1), y, w2, 28.0), tr(es, "Play", "Jugar"), Action::Play, false);
