@@ -23,7 +23,7 @@ host = { path = "crates/host" }
 macroquad = "0.4"
 cpal = "0.15"
 png = "0.17"
-windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging"] }
+windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_UI_Controls_Dialogs"] }
 
 # The emulator is too slow to play unoptimised, so even debug builds are optimised.
 [profile.dev]

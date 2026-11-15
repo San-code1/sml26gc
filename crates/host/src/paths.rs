@@ -3,6 +3,7 @@
 //!
 //! Next to the executables:
 //!   settings.cfg                      the game's settings (the editor reads the language)
+//!   last_cartridge.txt                the cartridge file chosen last at the game's start
 //!   saves\<cartridge>.sav             battery save
 //!   saves\<cartridge>.progress.txt    levels cleared on the editor-made map
 //!   edits\<cartridge> (edit).gb       the editor's copy of the cartridge
@@ -17,6 +18,11 @@ pub fn exe_dir() -> PathBuf {
 
 fn stem(rom: &Path) -> String {
     rom.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| "game".into())
+}
+
+/// The cartridge file chosen last at the game's start screen.
+pub fn last_cartridge_path() -> PathBuf {
+    exe_dir().join("last_cartridge.txt")
 }
 
 pub fn settings_path() -> PathBuf {

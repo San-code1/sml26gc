@@ -64,3 +64,23 @@ pub fn require_rom(arg: Option<PathBuf>) -> Result<PathBuf, String> {
         None => Err(NO_CARTRIDGE.to_string()),
     }
 }
+
+/// The cartridge file chosen last at the game's start screen, if it is still there.
+pub fn last_rom() -> Option<PathBuf> {
+    let text = std::fs::read_to_string(crate::paths::last_cartridge_path()).ok()?;
+    let p = PathBuf::from(text.trim());
+    p.is_file().then_some(p)
+}
+
+/// The cartridge file the remembered one points to, even if it is gone (to say so).
+pub fn last_rom_named() -> Option<PathBuf> {
+    let text = std::fs::read_to_string(crate::paths::last_cartridge_path()).ok()?;
+    let t = text.trim();
+    (!t.is_empty()).then(|| PathBuf::from(t))
+}
+
+/// Remember the cartridge file the game started with, for next time.
+pub fn remember_rom(rom: &Path) -> std::io::Result<()> {
+    let full = std::path::absolute(rom).unwrap_or_else(|_| rom.to_path_buf());
+    std::fs::write(crate::paths::last_cartridge_path(), full.to_string_lossy().as_bytes())
+}
