@@ -454,3 +454,36 @@ pub fn route_check(rom_path: &Path) {
         println!();
     }
 }
+
+/// Leaving a zone on an edited copy: the zone exit point follows its entrance's paths.
+/// From zone point `from` press `first` (out of the zone), then `then` on the world map.
+pub fn exit_check(rom_path: &Path, from: u8, first: &str, then: &str) {
+    use cart_model::map_routes::{read, write};
+    use cart_model::ram_map::MAP_POINT;
+    let Some(gb) = load(rom_path) else { return };
+    let mut rom = gb.cart().rom().to_vec();
+    let mut r = read(&rom);
+    println!("exits follow their entrance: changed {}", r.sync_exits());
+    if cart_model::map_routes::can_write(&rom) {
+        println!("write: {}", shown(&write(&mut rom, &r).map(|n| format!("{n} bytes"))));
+    }
+    let Ok(mut g) = Gb::new(rom, 44100) else { return };
+    if !g.boot_to_map() {
+        println!("could not reach the map");
+        return;
+    }
+    g.show_map_at(from);
+    let pad = |s: &str| match s { "R" => Buttons::RIGHT, "L" => Buttons::LEFT, "U" => Buttons::UP, _ => Buttons::DOWN };
+    let mut trail = vec![g.read(MAP_POINT)];
+    for b in [pad(first), pad(then)] {
+        for f in 0..400u32 {
+            g.run_frame_with(if f < 6 { b } else { Buttons::NONE });
+            g.clear_audio();
+            let a = g.read(MAP_POINT);
+            if trail.last() != Some(&a) {
+                trail.push(a);
+            }
+        }
+    }
+    println!("points: {}", trail.iter().map(|t| format!("{t:02x}")).collect::<Vec<_>>().join(" "));
+}

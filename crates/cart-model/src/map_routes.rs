@@ -197,6 +197,18 @@ impl MapRoutes {
         FREE_POINTS.iter().copied().find(|p| !self.added.contains(p))
     }
 
+    /// Give each zone exit the ways of its entrance. True if any changed.
+    pub fn sync_exits(&mut self) -> bool {
+        let mut changed = false;
+        for (a, b) in ZONE_EXITS {
+            if self.ways.len() > b as usize && self.ways[b as usize] != self.ways[a as usize] {
+                self.ways[b as usize] = self.ways[a as usize].clone();
+                changed = true;
+            }
+        }
+        changed
+    }
+
     /// Take out a new point and every way to it.
     pub fn remove_point(&mut self, p: u8) {
         self.added.retain(|&a| a != p);
@@ -347,6 +359,15 @@ pub fn write(rom: &mut [u8], r: &MapRoutes) -> Result<usize, CartError> {
 
 fn moved_code(rom: &[u8]) -> bool {
     word(rom, offset(0x0F, WAYS_REF)) == NEW_WAYS
+}
+
+/// A zone's entrance on the world map and the point Mario stands on when he walks out of
+/// the zone: the same place, and the same ways out (the game keeps them twice).
+pub const ZONE_EXITS: [(u8, u8); 6] = [(0x02, 0x19), (0x05, 0x1A), (0x06, 0x1B), (0x09, 0x1C), (0x0B, 0x1D), (0x0C, 0x1E)];
+
+/// The other point of an entrance / zone exit pair.
+pub fn twin(p: u8) -> Option<u8> {
+    ZONE_EXITS.iter().find_map(|&(a, b)| if a == p { Some(b) } else if b == p { Some(a) } else { None })
 }
 
 /// Point numbers the game never uses (no level, no flag, no ways in or out, no code of its
