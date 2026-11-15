@@ -34,7 +34,7 @@ pub fn dump(rom: Option<&Path>, dir: &Path, script: &str, frames: u32, every: u3
     }
 }
 
-/// Movement rules read from the cartridge's own code (bank 0, see MECHANICS.md).
+/// Movement rules read from the cartridge's own code (bank 0, see `legacy/gb_port/MECHANICS.md`).
 pub struct RomRules {
     pub accel: i32,
     pub friction: i32,

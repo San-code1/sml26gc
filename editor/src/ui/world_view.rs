@@ -387,8 +387,7 @@ impl Editor {
         }
     }
 
-    /// Undo in the tab shown: the pictures, which level each original point opens, or
-    /// Your map.
+    /// Undo in the tab shown: the map pictures, or the points (levels, paths, doors).
     fn world_undo(&mut self) {
         let done = match self.world_tab {
             TAB_PICTURE => {

@@ -115,8 +115,6 @@ impl EditorDocument {
         }
     }
 
-    // ------------------------------------------------------------ levels
-
     /// Remember level `l` before a change, for undo.
     pub fn snapshot(&mut self, l: usize) {
         let lv = &mut self.levels[l];
@@ -177,8 +175,6 @@ impl EditorDocument {
         }
         levels::sharing(&self.rom, l)
     }
-
-    // ------------------------------------------------------------ new levels
 
     /// The level of the 32 that level `l` is played as (itself for those): its graphics,
     /// blocks, music and time.
@@ -244,8 +240,6 @@ impl EditorDocument {
         (c0, near.first().copied().unwrap_or(0), near.last().copied().unwrap_or(12))
     }
 
-    // ------------------------------------------------------------ objects
-
     /// Add an object; returns its index.
     pub fn add_object(&mut self, l: usize, o: Obj) -> usize {
         let lv = &mut self.levels[l];
@@ -284,8 +278,6 @@ impl EditorDocument {
         lv.objects_dirty = true;
         true
     }
-
-    // ------------------------------------------------------------ world map
 
     /// Remember every map picture before a change, for undo.
     pub fn world_snapshot(&mut self) {
@@ -392,8 +384,6 @@ impl EditorDocument {
         done
     }
 
-    // ------------------------------------------------------------ doors
-
     /// Make world point `p` enter zone `zone` (`doors::INTO` index) or nothing, undoable.
     pub fn set_door(&mut self, p: u8, zone: Option<usize>) {
         if self.doors.into.is_empty() || self.doors.door_of(p) == zone {
@@ -421,8 +411,6 @@ impl EditorDocument {
     pub fn points_redo(&mut self) -> bool {
         self.points_swap(false)
     }
-
-    // ------------------------------------------------------------ paths and new points
 
     /// Set or take out the way from `point` in direction `dir` (0 right, 1 left, 2 up,
     /// 3 down), undoable. A zone's entrance and the point Mario leaves the zone on change
@@ -492,8 +480,6 @@ impl EditorDocument {
         self.points_dirty = true;
         true
     }
-
-    // ------------------------------------------------------------ space and saving
 
     /// The edited maps of one bank: (map number, blocks), one per map.
     pub fn bank_edits(&self, bank: u8) -> Vec<(u8, &[u8])> {

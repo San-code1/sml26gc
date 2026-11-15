@@ -1,5 +1,5 @@
 //! Where every file lives. The game and the editor both use these, so they always agree
-//! (this is part of the contract between them, see docs/ARCHITECTURE.md §6).
+//! (this is part of the contract between them, see docs/ARCHITECTURE.md, "Contract between game and editor").
 //!
 //! Next to the executables:
 //!   settings.cfg                      the game's settings (the editor reads the language)
