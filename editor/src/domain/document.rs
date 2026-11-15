@@ -63,6 +63,8 @@ pub struct EditorDocument {
     pub points_dirty: bool,
     pub custom: CustomMap,
     pub custom_dirty: bool,
+    custom_history: History<CustomMap>,
+    points_history: History<Vec<u8>>,
 }
 
 fn level_from(rom: &[u8], l: usize) -> LevelContent {
@@ -93,6 +95,8 @@ impl EditorDocument {
             points_dirty: false,
             custom,
             custom_dirty: false,
+            custom_history: History::default(),
+            points_history: History::default(),
             original,
             rom,
             levels,
@@ -335,16 +339,69 @@ impl EditorDocument {
         self.points_dirty = true;
     }
 
-    /// Step the level a game map point opens: no level, 0, 1, ... 31, no level.
+    /// Step the level a game map point opens: no level, 0, 1, ... 31, no level (undoable).
     pub fn step_point_level(&mut self, point: usize, step: i32) {
         let cur = self.points[point];
         if step == 0 || !(cur < 32 || cur == world::NO_LEVEL) {
             return;
         }
+        self.points_history.record(self.points.clone());
         let i = if cur == world::NO_LEVEL { 32 } else { cur as i32 };
         let n = (i + step).rem_euclid(33);
         self.points[point] = if n == 32 { world::NO_LEVEL } else { n as u8 };
         self.points_dirty = true;
+    }
+
+    pub fn points_undo(&mut self) -> bool {
+        let done = self.points_history.undo(&mut self.points);
+        self.points_dirty |= done;
+        done
+    }
+
+    pub fn points_redo(&mut self) -> bool {
+        let done = self.points_history.redo(&mut self.points);
+        self.points_dirty |= done;
+        done
+    }
+
+    // ------------------------------------------------------------ the editor-made map
+
+    /// Remember the editor-made map before a change, for undo.
+    pub fn custom_snapshot(&mut self) {
+        self.custom_history.record(self.custom.clone());
+    }
+
+    /// Remember the editor-made map as it was before a change already made (a drag that
+    /// moved a point).
+    pub fn custom_record(&mut self, before: CustomMap) {
+        self.custom_history.record(before);
+    }
+
+    pub fn custom_undo(&mut self) -> bool {
+        let done = self.custom_history.undo(&mut self.custom);
+        self.custom_dirty |= done;
+        done
+    }
+
+    pub fn custom_redo(&mut self) -> bool {
+        let done = self.custom_history.redo(&mut self.custom);
+        self.custom_dirty |= done;
+        done
+    }
+
+    /// Remove every point and path of the editor-made map (undoable).
+    pub fn clear_custom(&mut self) {
+        self.custom_snapshot();
+        self.custom = CustomMap::default();
+        self.custom_dirty = true;
+    }
+
+    /// Make the editor-made map the game's own map again, as `original_points` has it with
+    /// the levels the points open now; whatever was there goes (undoable).
+    pub fn restore_original_map(&mut self) {
+        self.custom_snapshot();
+        self.custom = CustomMap::from_original(&self.points);
+        self.custom_dirty = true;
     }
 
     /// Add the game's own map (its points where it draws them, with the levels they open now,
@@ -562,6 +619,35 @@ mod tests {
         assert_eq!(doc.custom.paths.len(), paths, "the paths come too");
         assert_eq!(doc.add_original_points(), 0, "points already there are not added twice");
         assert_eq!(doc.custom.paths.len(), paths);
+    }
+
+    #[test]
+    fn your_map_and_the_point_levels_undo() {
+        let Some(mut doc) = open() else {
+            eprintln!("no cartridge found: document test skipped");
+            return;
+        };
+        doc.restore_original_map();
+        let original = doc.custom.clone();
+        assert!(original.points.len() > 60 && !original.paths.is_empty());
+        doc.custom.points[0].x += 8; // a change made through the snapshot of a drag
+        doc.custom_record(original.clone());
+        doc.clear_custom();
+        assert!(doc.custom.points.is_empty() && doc.custom.paths.is_empty());
+        assert!(doc.custom_undo());
+        assert_eq!(doc.custom.points[0].x, original.points[0].x + 8);
+        assert!(doc.custom_undo());
+        assert_eq!(doc.custom, original);
+        assert!(doc.custom_redo() && doc.custom_redo() && doc.custom.points.is_empty());
+        doc.restore_original_map();
+        assert_eq!(doc.custom, original, "the game's map comes back however it was changed");
+
+        let before = doc.points.clone();
+        doc.step_point_level(0, 2);
+        assert_eq!(doc.points[0], before[0] + 2);
+        assert!(doc.points_undo());
+        assert_eq!(doc.points, before);
+        assert!(doc.points_redo() && doc.points[0] == before[0] + 2);
     }
 
     #[test]

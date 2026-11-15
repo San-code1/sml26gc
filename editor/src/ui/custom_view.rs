@@ -23,6 +23,17 @@ impl Editor {
             .map(|(i, _)| i)
     }
 
+    /// Undo (or redo) a change to Your map; the selection is dropped (points may be gone).
+    pub(super) fn custom_undone(&mut self, undo: bool) -> bool {
+        let done = if undo { self.doc.custom_undo() } else { self.doc.custom_redo() };
+        if done {
+            self.sel_point = None;
+            self.link_from = None;
+            self.drag_point = false;
+        }
+        done
+    }
+
     pub(super) fn update_custom(&mut self, m: Vec2) {
         if self.world_cell(m).is_none() {
             return;
@@ -36,6 +47,7 @@ impl Editor {
             self.link_from = self.sel_point;
         }
         if (is_key_pressed(KeyCode::Delete) || is_key_pressed(KeyCode::Backspace)) && self.sel_point.is_some() {
+            self.doc.custom_snapshot();
             self.doc.custom.remove_point(self.sel_point.unwrap());
             self.sel_point = None;
             self.doc.custom_dirty = true;
@@ -44,6 +56,7 @@ impl Editor {
             match (self.point_at(m), self.link_from) {
                 (Some(b), Some(a)) => {
                     // joining mode: the second point toggles a path
+                    self.doc.custom_snapshot();
                     self.doc.custom.toggle_path(a, b);
                     self.link_from = None;
                     self.sel_point = Some(b);
@@ -52,9 +65,12 @@ impl Editor {
                 (Some(i), None) => {
                     self.sel_point = Some(i);
                     self.drag_point = true;
+                    self.drag_before = Some(self.doc.custom.clone());
                 }
                 (None, _) => {
                     // a new point, joined to the selected one so a route is drawn click by click
+                    self.doc.custom_snapshot();
+                    self.drag_before = None;
                     let map = &mut self.doc.custom;
                     map.points.push(Point { x: snap_x(w.x), y: snap_y(w.y), level: None, map: on });
                     let n = map.points.len() - 1;
@@ -77,6 +93,9 @@ impl Editor {
                         p.x = x;
                         p.y = y;
                         self.doc.custom_dirty = true;
+                        if let Some(before) = self.drag_before.take() {
+                            self.doc.custom_record(before);
+                        }
                     }
                 }
             } else {
@@ -85,6 +104,7 @@ impl Editor {
         }
         if is_mouse_button_pressed(MouseButton::Right) {
             if let Some(i) = self.point_at(m) {
+                self.doc.custom_snapshot();
                 self.doc.custom.remove_point(i);
                 self.doc.custom_dirty = true;
             }
@@ -176,6 +196,7 @@ impl Editor {
                 change = 1;
             }
             if change != 0 {
+                self.doc.custom_snapshot();
                 // cycle: nothing, 0, 1, ... the last level (new ones too), nothing
                 let count = self.doc.levels.len() as i32;
                 let idx = cur.map(|l| l as i32).unwrap_or(count);
@@ -184,7 +205,8 @@ impl Editor {
                 self.doc.custom_dirty = true;
             }
             y += 32.0;
-            if button(Rect::new(10.0, y, 136.0, 26.0), tr(es, "Mario starts here", "Mario empieza aqui"), self.doc.custom.start == i, 14.0) {
+            if button(Rect::new(10.0, y, 136.0, 26.0), tr(es, "Mario starts here", "Mario empieza aqui"), self.doc.custom.start == i, 14.0) && self.doc.custom.start != i {
+                self.doc.custom_snapshot();
                 self.doc.custom.start = i;
                 self.doc.custom_dirty = true;
             }
@@ -193,6 +215,7 @@ impl Editor {
             }
             y += 30.0;
             if button(Rect::new(10.0, y, 136.0, 26.0), tr(es, "Delete point", "Borrar punto"), false, 14.0) {
+                self.doc.custom_snapshot();
                 self.doc.custom.remove_point(i);
                 self.sel_point = None;
                 self.doc.custom_dirty = true;
@@ -205,15 +228,23 @@ impl Editor {
             act = Some(6);
         }
         y += 32.0;
-        if button(Rect::new(10.0, y, 276.0, 26.0), tr(es, "Add the game's own points", "Anadir los puntos originales"), false, 15.0) {
-            let added = self.doc.add_original_points();
-            self.status = format!("{} {added}", tr(es, "Original points added:", "Puntos originales anadidos:"));
+        if button(Rect::new(10.0, y, 160.0, 26.0), tr(es, "Game's map (restore)", "Mapa original (restaurar)"), false, 14.0) {
+            self.doc.restore_original_map();
+            self.sel_point = None;
+            self.link_from = None;
+            self.status = tr(es, "Your map is the game's own map again (Ctrl+Z to undo).", "Tu mapa vuelve a ser el mapa original del juego (Ctrl+Z para deshacer).").into();
+        }
+        if button(Rect::new(174.0, y, 112.0, 26.0), tr(es, "Clear all", "Borrar todo"), false, 14.0) {
+            self.doc.clear_custom();
+            self.sel_point = None;
+            self.link_from = None;
+            self.status = tr(es, "All points and paths removed (Ctrl+Z to undo).", "Puntos y caminos borrados (Ctrl+Z para deshacer).").into();
         }
         y += 36.0;
         let help = tr(
             es,
-            "Click empty map: new point, joined to the selected one. Drag: move. Right click: delete. Join to... then click another point: add or remove a path; change map with < > before the second click to make a door to a zone. In the game, the d-pad walks the paths, A or Start enters the point's level, B goes through a door (A too where there is no level). The pause menu switches between this map and the original.",
-            "Clic en el mapa vacio: punto nuevo, unido al elegido. Arrastrar: mover. Clic derecho: borrar. Unir con... y clic en otro punto: pone o quita un camino; cambia de mapa con < > antes del segundo clic para hacer una puerta a una zona. En el juego, la cruceta recorre los caminos, A o Start entra en el nivel del punto, B cruza la puerta (A tambien si no hay nivel). El menu de pausa cambia entre este mapa y el original.",
+            "Click empty map: new point, joined to the selected one. Drag: move. Right click: delete. Ctrl+Z / Ctrl+Y: undo / redo. Join to... then click another point: add or remove a path; change map with < > before the second click to make a door to a zone. In the game, the d-pad walks the paths, A or Start enters the point's level, B goes through a door (A too where there is no level). The pause menu switches between this map and the original.",
+            "Clic en el mapa vacio: punto nuevo, unido al elegido. Arrastrar: mover. Clic derecho: borrar. Ctrl+Z / Ctrl+Y: deshacer / rehacer. Unir con... y clic en otro punto: pone o quita un camino; cambia de mapa con < > antes del segundo clic para hacer una puerta a una zona. En el juego, la cruceta recorre los caminos, A o Start entra en el nivel del punto, B cruza la puerta (A tambien si no hay nivel). El menu de pausa cambia entre este mapa y el original.",
         );
         for (k, line) in wrap(help, 38).iter().enumerate() {
             draw_text(line, 10.0, y + k as f32 * 16.0, 15.0, col(2));

@@ -77,6 +77,8 @@ pub struct Editor {
     pub(crate) sel_point: Option<usize>,
     link_from: Option<usize>,
     drag_point: bool,
+    /// Your map as it was when a drag started (recorded for undo once the point moves).
+    drag_before: Option<cart_model::custom_map::CustomMap>,
 }
 
 /// Painting blocks into the level shown.
@@ -167,6 +169,7 @@ impl Editor {
             sel_point: None,
             link_from: None,
             drag_point: false,
+            drag_before: None,
         }
     }
 
