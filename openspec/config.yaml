@@ -1,0 +1,13 @@
+schema: spec-driven
+
+context: |
+  Language: English
+  All artifacts must be written in English.
+  Keep OpenSpec structural headings and SHALL/MUST keywords in English.
+  Project rules (code style, architecture, docs, git workflow) are in AGENTS.md at the
+  repository root; architecture is in docs/ARCHITECTURE.md.
+
+rules:
+  tasks:
+    - Running the tests (cargo test --release --workspace) is the last task, done once the user validates the change; no test runs inside earlier tasks.
+    - The change is implemented on its own feature/<name> branch from develop.
