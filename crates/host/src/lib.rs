@@ -7,5 +7,5 @@ pub mod rom_locator;
 pub mod settings_file;
 
 pub use battery::{load_gb, write_battery_save};
-pub use paths::{edited_copy_path, editor_settings_path, exe_dir, exports_dir, game_exe, save_path, settings_path};
+pub use paths::{edited_copy_path, editor_settings_path, exe_dir, exports_dir, game_exe, save_path, settings_path, zones_path};
 pub use rom_locator::{find_rom, last_rom, last_rom_named, remember_rom, require_rom, NO_CARTRIDGE};

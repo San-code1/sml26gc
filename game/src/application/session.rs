@@ -1,12 +1,13 @@
 //! One play session: the emulated console plus everything the port adds around it (pause
-//! menu, the editor's new levels, battery saves, the start-up hint). Each call to `frame`
+//! menu, the editor's new levels and zones, battery saves, the start-up hint). Each call to `frame`
 //! is one frame of the window.
 use super::preferences::Preferences;
+use super::zones::ZoneSwap;
 use crate::domain::keys::{self, Key};
 use crate::domain::menu::{Action, Menu};
 use crate::domain::overlay::draw_hint;
 use crate::domain::settings::Settings;
-use crate::ports::{AudioOut, Keyboard, SaveStore};
+use crate::ports::{AudioOut, Keyboard, SaveStore, ZoneProgressStore};
 use cart_model::extra_levels;
 use cart_model::ram_map::{GAME_MODE, LEVEL_NUMBER};
 use cart_model::{GameDriver, GameMode};
@@ -54,6 +55,7 @@ fn take_new_level(g: &mut Gb, extra: &mut Option<(u8, Undo)>) {
 pub struct SessionParts {
     pub prefs: Preferences,
     pub saves: Box<dyn SaveStore>,
+    pub zones: Box<dyn ZoneProgressStore>,
     /// Go straight into this level (the level editor's Play button).
     pub start_level: Option<u8>,
     /// Unattended run for a check: no menu, faster, no hint.
@@ -78,10 +80,12 @@ pub struct GameSession {
     /// The new level being played (its number, and how to put its base level back once
     /// Mario is on the map again).
     extra: Option<(u8, Undo)>,
+    zones: ZoneSwap,
 }
 
 impl GameSession {
     pub fn new(mut gb: Gb, parts: SessionParts) -> GameSession {
+        let zones = ZoneSwap::new(&mut gb, parts.zones);
         let mut extra = None;
         if let Some(n) = parts.start_level {
             if gb.boot_to_map() {
@@ -106,6 +110,7 @@ impl GameSession {
             prev_mode: GameMode::Other(0),
             screen,
             extra,
+            zones,
         }
     }
 
@@ -230,6 +235,7 @@ impl GameSession {
             self.start_tap -= 1;
             b |= Buttons::START;
         }
+        b |= self.zones.buttons();
         g.set_buttons(b);
         let fast = input.held(Key::LeftControl) || input.held(Key::RightControl);
         self.acc += dt.min(0.1) as f64;
@@ -253,7 +259,7 @@ impl GameSession {
         audio.push(g.audio(), st.volume as f32 / 10.0);
         g.clear_audio();
         self.save_timer += dt;
-        if self.save_timer > 5.0 {
+        if self.zones.update(g) || self.save_timer > 5.0 {
             self.save_timer = 0.0;
             self.saves.save(g);
         }
@@ -263,6 +269,7 @@ impl GameSession {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::zone_progress::ZoneProgress;
     use crate::ports::{SettingsStore, Window};
     use std::cell::{Cell, RefCell};
     use std::rc::Rc;
@@ -306,6 +313,7 @@ mod tests {
         settings_saved: Rc<RefCell<Vec<Settings>>>,
         fullscreen: Rc<Cell<bool>>,
         battery_saves: Rc<Cell<u32>>,
+        zones: Rc<RefCell<Option<ZoneProgress>>>,
     }
     impl SettingsStore for Record {
         fn load(&self) -> Settings {
@@ -318,6 +326,14 @@ mod tests {
     impl Window for Record {
         fn set_fullscreen(&mut self, on: bool) {
             self.fullscreen.set(on);
+        }
+    }
+    impl ZoneProgressStore for Record {
+        fn load(&self) -> Option<ZoneProgress> {
+            self.zones.borrow().clone()
+        }
+        fn save(&self, p: &ZoneProgress) {
+            *self.zones.borrow_mut() = Some(p.clone());
         }
     }
     impl SaveStore for Record {
@@ -339,6 +355,7 @@ mod tests {
         let parts = SessionParts {
             prefs,
             saves: Box::new(rec.clone()),
+            zones: Box::new(rec.clone()),
             start_level: None,
             checking: false,
         };
@@ -417,6 +434,7 @@ mod tests {
         let parts = SessionParts {
             prefs: Preferences::new(Box::new(rec.clone()), Box::new(rec.clone())),
             saves: Box::new(rec.clone()),
+            zones: Box::new(rec.clone()),
             start_level: None,
             checking: false,
         };
@@ -441,5 +459,126 @@ mod tests {
         }
         assert_eq!(s.gb.mode(), GameMode::Map);
         assert!(s.extra.is_none() && s.gb.cart().rom() == &copy[..], "the base level is back");
+    }
+
+    /// Clear the level of the point Mario stands on as at a goal (mode $09), then play on
+    /// until the map has been up for a while.
+    fn clear_level(g: &mut Gb) -> bool {
+        let mut playing = false;
+        for f in 0..900u32 {
+            g.run_frame_with(if f % 30 < 4 { Buttons::START } else { Buttons::NONE });
+            if g.mode() == GameMode::Playing {
+                playing = true;
+                break;
+            }
+        }
+        for _ in 0..30 {
+            g.run_frame_with(Buttons::NONE);
+        }
+        g.write(GAME_MODE, 0x09);
+        let mut on_map = 0;
+        for f in 0..6000u32 {
+            let mode = g.read(GAME_MODE);
+            let tap = match f % 240 {
+                0..=2 => Buttons::A,
+                120..=122 => Buttons::START,
+                _ => Buttons::NONE,
+            };
+            g.run_frame_with(if mode != 0x0C && mode != 0x14 { tap } else { Buttons::NONE });
+            on_map = if g.read(GAME_MODE) == 0x0C { on_map + 1 } else { 0 };
+            if on_map > 300 {
+                break;
+            }
+        }
+        g.clear_audio();
+        playing
+    }
+
+    /// A new zone made from the Tree Zone, entered from world point $07: its own picture and
+    /// a level cleared with its own flag; saved inside and resumed there; left by its exit,
+    /// after which the cartridge and the Tree Zone's flags are the game's again; then entered
+    /// by the Tree Zone's exit.
+    #[test]
+    fn a_new_zone_is_played_saved_and_left() {
+        use cart_model::new_zones;
+        use cart_model::ram_map::MAP_POINT;
+        let Some(rom) = host::find_rom(None) else {
+            eprintln!("no cartridge found: session test skipped");
+            return;
+        };
+        let mut copy = cart_model::patch::expand(&std::fs::read(rom).unwrap()).unwrap();
+        let mut z = new_zones::based_on(&copy, 0).unwrap();
+        for t in z.picture.iter_mut().take(60) {
+            *t ^= 1;
+        }
+        z.points.retain(|p| p.number == 0x23);
+        z.points[0].ways = Default::default();
+        z.exits[0].1 = cart_model::doors::Leads::World(0x07);
+        z.door = 0x07;
+        new_zones::store(&mut copy, std::slice::from_ref(&z)).unwrap();
+        // the Tree Zone's own exit leads into the new zone (to its door)
+        let mut d = cart_model::doors::read(&copy);
+        d.exits[0].1 = cart_model::doors::Leads::World(0x07);
+        assert!(cart_model::doors::write(&mut copy, &d));
+        let rec = Record::default();
+        let session = |gb: Gb| {
+            let parts = SessionParts {
+                prefs: Preferences::new(Box::new(rec.clone()), Box::new(rec.clone())),
+                saves: Box::new(rec.clone()),
+                zones: Box::new(rec.clone()),
+                start_level: None,
+                checking: false,
+            };
+            GameSession::new(gb, parts)
+        };
+        let run = |s: &mut GameSession, keys: &mut FakeKeys, held: &[Key], n: u32| {
+            for f in 0..n {
+                keys.set(if f < 6 { held } else { &[] });
+                s.frame(FRAME_SECONDS as f32, keys, &Silence);
+            }
+        };
+        let picture = |g: &mut Gb| (0..360).map(|i| g.read(0x9800 + ((i / 20) * 32 + i % 20) as u16)).collect::<Vec<u8>>();
+        let mut keys = FakeKeys::default();
+
+        let mut s = session(Gb::new(copy.clone(), 44100).unwrap());
+        assert!(s.gb.boot_to_map() && s.gb.show_map_at(0x07));
+        run(&mut s, &mut keys, &[], 10);
+        assert_eq!(s.zones.inside(), Some(0), "at the door the new zone is in place");
+        run(&mut s, &mut keys, &[Key::X], 400);
+        assert_eq!(s.gb.read(MAP_POINT), 0x23);
+        assert_eq!(picture(&mut s.gb), z.picture, "its own picture");
+        assert!(clear_level(&mut s.gb));
+        run(&mut s, &mut keys, &[], 10);
+        assert_eq!(s.gb.read(0xA849), 0x80, "its point is cleared");
+        s.finish();
+
+        // resumed: the battery save and the kept progress put Mario back in the new zone
+        let ram = s.gb.cart().ram().to_vec();
+        let mut gb = Gb::new(copy.clone(), 44100).unwrap();
+        gb.cart_mut().set_ram(ram);
+        let mut s = session(gb);
+        assert_eq!(s.zones.inside(), Some(0));
+        assert!(s.gb.boot_to_map());
+        run(&mut s, &mut keys, &[], 10);
+        assert_eq!(s.gb.read(MAP_POINT), 0x23);
+        assert_eq!(picture(&mut s.gb), z.picture);
+        assert_eq!(s.gb.read(0xA849), 0x80);
+
+        // out by its exit to the door, then away from it: the game's own again
+        run(&mut s, &mut keys, &[Key::Down], 600);
+        assert_eq!(s.gb.read(MAP_POINT), 0x07);
+        assert!(s.gb.show_map_at(0x02));
+        run(&mut s, &mut keys, &[], 10);
+        assert_eq!(s.zones.inside(), None);
+        assert!(s.gb.cart().rom() == &copy[..], "the Tree Zone is back");
+        assert_eq!(s.gb.read(0xA849), 0x00, "the Tree Zone's flag is its own");
+        assert_eq!(rec.zones.borrow().as_ref().unwrap().kept[&(0, 0)][0], 0x80, "the new zone's progress is kept");
+
+        // out of the Tree Zone into the new zone: the port presses A on its door
+        run(&mut s, &mut keys, &[Key::X], 400);
+        assert_eq!((s.gb.read(MAP_POINT), s.zones.inside()), (0x23, None), "in the Tree Zone");
+        run(&mut s, &mut keys, &[Key::Down], 900);
+        assert_eq!((s.gb.read(MAP_POINT), s.zones.inside()), (0x23, Some(0)));
+        assert_eq!(picture(&mut s.gb), z.picture, "in the new zone");
     }
 }

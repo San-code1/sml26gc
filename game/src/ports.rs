@@ -3,6 +3,7 @@
 //! for checks and tests.
 use crate::domain::keys::Key;
 use crate::domain::settings::Settings;
+use crate::domain::zone_progress::ZoneProgress;
 use gb_core::Gb;
 
 /// The keyboard as seen during one frame.
@@ -37,4 +38,10 @@ pub trait SettingsStore {
 /// The cartridge's battery-backed memory (the game's own save slots).
 pub trait SaveStore {
     fn save(&self, gb: &mut Gb);
+}
+
+/// Progress in the editor's new zones, kept next to the battery save.
+pub trait ZoneProgressStore {
+    fn load(&self) -> Option<ZoneProgress>;
+    fn save(&self, progress: &ZoneProgress);
 }

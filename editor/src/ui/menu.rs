@@ -5,10 +5,23 @@ use super::widgets::tr;
 use super::Editor;
 use crate::ports::MenuEntry;
 use cart_model::levels::LEVELS;
+use cart_model::original_points::OnMap;
 
 /// The File menu, top to bottom (None: a separator). An entry's id is its place here + 1.
-const FILE_MENU: [Option<Action>; 8] =
-    [Some(Action::Save), None, Some(Action::ExportLevel), Some(Action::ImportLevel), Some(Action::ReplaceLevel), None, Some(Action::ExportProject), Some(Action::ImportProject)];
+const FILE_MENU: [Option<Action>; 12] = [
+    Some(Action::Save),
+    None,
+    Some(Action::ExportLevel),
+    Some(Action::ImportLevel),
+    Some(Action::ReplaceLevel),
+    None,
+    Some(Action::ExportZone),
+    Some(Action::ImportZone),
+    Some(Action::ReplaceZone),
+    None,
+    Some(Action::ExportProject),
+    Some(Action::ImportProject),
+];
 
 fn label(es: bool, a: Action) -> &'static str {
     match a {
@@ -16,6 +29,9 @@ fn label(es: bool, a: Action) -> &'static str {
         Action::ExportLevel => tr(es, "Export level...", "Exportar nivel..."),
         Action::ImportLevel => tr(es, "Import level as a new level...", "Importar nivel como nivel nuevo..."),
         Action::ReplaceLevel => tr(es, "Replace this level from a file...", "Reemplazar este nivel con un fichero..."),
+        Action::ExportZone => tr(es, "Export zone...", "Exportar zona..."),
+        Action::ImportZone => tr(es, "Import zone as a new zone...", "Importar zona como zona nueva..."),
+        Action::ReplaceZone => tr(es, "Replace this zone from a file...", "Reemplazar esta zona con un fichero..."),
         Action::ExportProject => tr(es, "Export project...", "Exportar proyecto..."),
         Action::ImportProject => tr(es, "Import project...", "Importar proyecto..."),
         _ => "",
@@ -47,6 +63,9 @@ impl Editor {
             let on = match a {
                 Action::ExportLevel | Action::ImportLevel => !self.in_world,
                 Action::ReplaceLevel => !self.in_world && self.cur >= LEVELS,
+                Action::ExportZone => self.in_world && self.zone_exportable(),
+                Action::ImportZone => self.in_world,
+                Action::ReplaceZone => self.in_world && matches!(self.world_map, OnMap::NewZone(_)),
                 _ => true,
             };
             if self.menu_enabled[i] != Some(on) {

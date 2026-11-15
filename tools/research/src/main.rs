@@ -11,6 +11,7 @@ mod disasm;
 mod memory;
 mod probe;
 mod rom_views;
+mod zones;
 
 use std::path::{Path, PathBuf};
 
@@ -88,6 +89,11 @@ const COMMANDS: &[(&str, Run)] = &[
     ("clearscan", |r, _| rom_views::clear_scan(r)),
     ("cleardiff", |r, a| rom_views::clear_diff(r, a.num(1) as u8)),
     ("modetry", |r, a| rom_views::mode_try(r, a.num(1) as u8, a.hex(2) as u8, &a.s(3))),
+    ("zonetry", |r, _| zones::zone_try(r)),
+    ("zoneplaces", |r, _| zones::zone_places(r)),
+    ("clearram", |r, _| zones::clear_ram(r)),
+    ("newzonecheck", |r, _| zones::new_zone_check(r)),
+    ("sparecheck", |r, _| zones::spare_check(r)),
 ];
 
 const USAGE: &str = "research [--with-save]: disasm BANK ADDR N | table OFF LEN ROW | find SCRIPT | watch SCRIPT ADDRS FROM TO | trace SCRIPT ADDRS FROM TO\n\
@@ -121,6 +127,6 @@ mod tests {
         let a = Args(["watch", "x", "ffc2,a200-a202", "0x10", "12"].map(String::from).to_vec());
         assert_eq!(a.list(2), vec![0xFFC2, 0xA200, 0xA201, 0xA202]);
         assert_eq!((a.hex(3), a.big(3), a.num(4), a.num(9)), (0x10, 0x10, 12, 0));
-        assert_eq!(COMMANDS.len(), 33);
+        assert_eq!(COMMANDS.len(), 38);
     }
 }

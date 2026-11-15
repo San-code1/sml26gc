@@ -1,11 +1,13 @@
-//! Level and project files from the panels: the file actions, run once the keys are let go,
+//! Level, zone and project files from the panels: the file actions, run once the keys are let go,
 //! and what the status bar says about each.
 use super::shortcuts::Action;
 use super::widgets::tr;
 use super::Editor;
 use crate::application::exchange::{self, ExchangeError};
+use crate::domain::document::ZoneRefusal;
 use crate::domain::files::FileError;
 use cart_model::levels::LEVELS;
+use cart_model::original_points::OnMap;
 use macroquad::prelude::*;
 
 impl Editor {
@@ -16,7 +18,24 @@ impl Editor {
             self.status = tr(self.es, "Only new levels (32 and up) can be replaced from a file; the game's 32 are only edited.", "Solo los niveles nuevos (32 en adelante) se pueden reemplazar con un fichero; los 32 del juego solo se editan.").into();
             return;
         }
+        if a == Action::ReplaceZone && !matches!(self.world_map, OnMap::NewZone(_)) {
+            self.status = tr(self.es, "Only new zones can be replaced from a file; the game's zones are only edited.", "Solo las zonas nuevas se pueden reemplazar con un fichero; las zonas del juego solo se editan.").into();
+            return;
+        }
+        if a == Action::ExportZone && !self.zone_exportable() {
+            self.status = tr(self.es, "Show a new zone, or the Tree, Pumpkin, Macro, Space or Mario zone, to export it.", "Muestra una zona nueva, o la Zona Arbol, Calabaza, Macro, Espacial o Mario, para exportarla.").into();
+            return;
+        }
         self.pending_file = Some(a);
+    }
+
+    /// Does the map shown make a zone file (a new zone, or a zone a door enters)?
+    pub(super) fn zone_exportable(&self) -> bool {
+        match self.world_map {
+            OnMap::Zone(z) => cart_model::new_zones::base_of(z).is_some(),
+            OnMap::NewZone(_) => true,
+            OnMap::World => false,
+        }
     }
 
     pub(super) fn run_pending_file(&mut self) {
@@ -60,6 +79,29 @@ impl Editor {
                     other => other.map(|_| None),
                 }
             }
+            Action::ExportZone => {
+                let name = format!("{} {}", self.cartridge_name(), self.map_name(self.world_map));
+                exchange::export_zone(&self.doc, self.world_map, &name, dialogs, files).map(|p| p.map(|p| format!("{} {}", tr(es, "Zone exported to", "Zona exportada a"), p.display())))
+            }
+            Action::ImportZone => match exchange::import_zone(&mut self.doc, dialogs, files) {
+                Ok(Some(k)) => {
+                    self.clipboard = None;
+                    self.show_map(OnMap::NewZone(k));
+                    self.point = self.doc.new_zones[k].entry as usize;
+                    Ok(Some(format!("{} {}. {}", self.map_name(OnMap::NewZone(k)), tr(es, "from the file; it has no door yet", "desde el fichero; aun no tiene puerta"), tr(es, "Save to keep it.", "Guarda para conservarla."))))
+                }
+                other => other.map(|_| None),
+            },
+            Action::ReplaceZone => match exchange::replace_zone(&mut self.doc, self.world_map, dialogs, files) {
+                Ok(Some(())) => {
+                    self.clipboard = None;
+                    if let OnMap::NewZone(k) = self.world_map {
+                        self.point = self.doc.new_zones[k].entry as usize;
+                    }
+                    Ok(Some(format!("{} {}", self.map_name(self.world_map), tr(es, "replaced from the file; it keeps its door. Save to keep it.", "reemplazada con el fichero; conserva su puerta. Guarda para conservarla."))))
+                }
+                other => other.map(|_| None),
+            },
             Action::ExportProject => exchange::export_project(&self.doc, &self.cartridge_name(), dialogs, files).map(|p| p.map(|p| format!("{} {}", tr(es, "Project exported to", "Proyecto exportado a"), p.display()))),
             Action::ImportProject => match exchange::import_project(&mut self.doc, dialogs, files) {
                 Ok(Some(())) => {
@@ -91,9 +133,14 @@ impl Editor {
         match e {
             ExchangeError::Io(e) => format!("{}: {e}", tr(es, "The file could not be read or written", "No se pudo leer o escribir el fichero")),
             ExchangeError::NoRoom => tr(es, "There can't be more levels.", "No caben mas niveles.").into(),
+            ExchangeError::Zone(ZoneRefusal::TooManyZones(max)) => format!("{} {max}.", tr(es, "No more new zones: there can be", "No caben mas zonas nuevas: puede haber")),
+            ExchangeError::Zone(_) => tr(es, "New zones are made from the Tree, Pumpkin, Macro, Space or Mario zone.", "Las zonas nuevas se hacen de la Zona Arbol, Calabaza, Macro, Espacial o Mario.").into(),
+            ExchangeError::ProtectedZone => tr(es, "Only new zones can be replaced from a file.", "Solo las zonas nuevas se pueden reemplazar con un fichero.").into(),
             ExchangeError::Protected => tr(es, "Only new levels (32 and up) can be replaced from a file.", "Solo los niveles nuevos (32 en adelante) se pueden reemplazar con un fichero.").into(),
             ExchangeError::File(f) => match f {
                 FileError::NotLevel => tr(es, "This is not a level file.", "Este no es un fichero de nivel.").into(),
+                FileError::NotZone => tr(es, "This is not a zone file.", "Este no es un fichero de zona.").into(),
+                FileError::NotABase(z) => format!("{} {z}.", tr(es, "The file's zone is made from a zone no door enters:", "La zona del fichero se hace de una zona en la que no entra ninguna puerta:")),
                 FileError::NotProject => tr(es, "This is not a project file.", "Este no es un fichero de proyecto.").into(),
                 FileError::Newer => tr(es, "This file was made by a newer editor.", "Este fichero lo hizo un editor mas nuevo.").into(),
                 FileError::Damaged(line) => format!("{} {line}).", tr(es, "The file is damaged or incomplete (line", "El fichero esta danado o incompleto (linea")),

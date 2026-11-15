@@ -6,6 +6,7 @@
 //! | `rom` | Banks and words in the ROM file |
 //! | `levels` | Level headers, map locations, the map compression (decode/encode) |
 //! | `extra_levels` | Levels beyond the 32, played in place of a base level |
+//! | `new_zones` | Zones beyond the eight, played in place of a base zone |
 //! | `objects` | Object lists per level: 3-byte format, reading, re-packing |
 //! | `world` | World map picture and which level each map point opens |
 //! | `doors` | Doors between the world map and the zones (which point enters which zone, where exits lead) |
@@ -28,6 +29,7 @@ pub mod layout;
 pub mod levels;
 pub mod live;
 pub mod map_routes;
+pub mod new_zones;
 pub mod objects;
 pub mod original_points;
 pub mod patch;

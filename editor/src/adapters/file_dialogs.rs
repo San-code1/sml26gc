@@ -15,6 +15,7 @@ impl SystemDialogs {
         let pick = |en, sp| if es { sp } else { en };
         match kind {
             FileKind::Level => (pick("Level file", "Fichero de nivel"), pick("Export level", "Exportar nivel"), pick("Import level", "Importar nivel")),
+            FileKind::Zone => (pick("Zone file", "Fichero de zona"), pick("Export zone", "Exportar zona"), pick("Import zone", "Importar zona")),
             FileKind::Project => (pick("Project file", "Fichero de proyecto"), pick("Export project", "Exportar proyecto"), pick("Import project", "Importar proyecto")),
         }
     }

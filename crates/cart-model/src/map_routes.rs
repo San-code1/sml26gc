@@ -102,11 +102,11 @@ const MARIO_Y: i32 = 0x4C;
 const FEET: i32 = 4;
 
 impl Place {
-    fn from(b: &[u8]) -> Place {
+    pub(crate) fn from(b: &[u8]) -> Place {
         Place { cam_x: (b[0] as u16) << 8 | b[1] as u16, cam_y: (b[2] as u16) << 8 | b[3] as u16, x: b[4], y: b[5], rest: [b[6], b[7]] }
     }
 
-    fn bytes(&self) -> [u8; 8] {
+    pub(crate) fn bytes(&self) -> [u8; 8] {
         [(self.cam_x >> 8) as u8, self.cam_x as u8, (self.cam_y >> 8) as u8, self.cam_y as u8, self.x, self.y, self.rest[0], self.rest[1]]
     }
 
@@ -174,7 +174,7 @@ impl Way {
         Way { steps, to }
     }
 
-    fn bytes(&self) -> Vec<u8> {
+    pub(crate) fn bytes(&self) -> Vec<u8> {
         let mut v: Vec<u8> = self.steps.iter().map(|&s| if s == 0 { RIGHT } else { s }).collect();
         v.push(0);
         v.push(self.to);

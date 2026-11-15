@@ -35,7 +35,7 @@ pub enum Action {
     PrevMap,
     NextMap,
     SwitchTab,
-    Original,
+    Restore,
     ZoomOut,
     ZoomIn,
     Copy,
@@ -48,8 +48,7 @@ pub enum Action {
     NextPoint,
     PrevOpens,
     NextOpens,
-    PrevDoor,
-    NextDoor,
+    ChooseTarget,
     MakeExit1,
     MakeExit2,
     DeletePathRight,
@@ -59,9 +58,15 @@ pub enum Action {
     NewPath,
     NewPoint,
     DeletePoint,
+    MakeEntry,
+    NewZone,
+    DeleteZone,
     ExportLevel,
     ImportLevel,
     ReplaceLevel,
+    ExportZone,
+    ImportZone,
+    ReplaceZone,
     ExportProject,
     ImportProject,
 }
@@ -69,7 +74,7 @@ pub enum Action {
 impl Action {
     /// Actions that open a file dialog.
     pub fn uses_files(self) -> bool {
-        matches!(self, ExportLevel | ImportLevel | ReplaceLevel | ExportProject | ImportProject)
+        matches!(self, ExportLevel | ImportLevel | ReplaceLevel | ExportZone | ImportZone | ReplaceZone | ExportProject | ImportProject)
     }
 }
 
@@ -103,7 +108,7 @@ pub const TABLE: &[Shortcut] = &[
     s(Save, ALL, true, false, &[K::S], "Ctrl+S"),
     s(Play, ALL, false, false, &[K::F5], "F5"),
     s(WorldEditor, ALL, false, false, &[K::F2], "F2"),
-    s(Original, ALL, true, true, &[K::O], "Ctrl+Shift+O"),
+    s(Restore, ALL, true, true, &[K::R], "Ctrl+Shift+R"),
     s(Grid, PALETTES, false, false, &[K::G], "G"),
     s(Pencil, PAINT, false, false, &[K::B], "B"),
     s(BoxFill, PAINT, false, false, &[K::R], "R"),
@@ -126,6 +131,9 @@ pub const TABLE: &[Shortcut] = &[
     s(ExportLevel, LEVEL, true, false, &[K::E], "Ctrl+E"),
     s(ImportLevel, LEVEL, true, true, &[K::N], "Ctrl+Shift+N"),
     s(ReplaceLevel, LEVEL, true, false, &[K::I], "Ctrl+I"),
+    s(ExportZone, WORLD, true, false, &[K::E], "Ctrl+E"),
+    s(ImportZone, WORLD, true, true, &[K::N], "Ctrl+Shift+N"),
+    s(ReplaceZone, WORLD, true, false, &[K::I], "Ctrl+I"),
     s(DeleteObject, &[Objects], false, false, &[K::Delete, K::Backspace], "Del"),
     s(PrevMap, WORLD, false, false, &[K::PageUp], "PgUp"),
     s(NextMap, WORLD, false, false, &[K::PageDown], "PgDn"),
@@ -134,8 +142,7 @@ pub const TABLE: &[Shortcut] = &[
     s(NextPoint, &[Points], false, false, &[K::Period], "."),
     s(PrevOpens, &[Points], false, false, &[K::J], "J"),
     s(NextOpens, &[Points], false, false, &[K::K], "K"),
-    s(PrevDoor, &[Points], false, false, &[K::U], "U"),
-    s(NextDoor, &[Points], false, false, &[K::I], "I"),
+    s(ChooseTarget, &[Points], false, false, &[K::U], "U"),
     s(MakeExit1, &[Points], false, false, &[K::T], "T"),
     s(MakeExit2, &[Points], false, true, &[K::T], "Shift+T"),
     s(DeletePathRight, &[Points], false, true, &[K::Right], "Shift+Right"),
@@ -145,6 +152,9 @@ pub const TABLE: &[Shortcut] = &[
     s(NewPath, &[Points], false, false, &[K::P], "P"),
     s(NewPoint, &[Points], false, false, &[K::N], "N"),
     s(DeletePoint, &[Points], false, false, &[K::Delete], "Del"),
+    s(MakeEntry, &[Points], false, false, &[K::H], "H"),
+    s(NewZone, WORLD, true, false, &[K::N], "Ctrl+N"),
+    s(DeleteZone, WORLD, true, false, &[K::Delete], "Ctrl+Del"),
 ];
 
 /// The actions whose keys went down this frame.

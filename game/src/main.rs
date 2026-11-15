@@ -13,7 +13,7 @@ mod ports;
 mod selftest;
 
 use adapters::cpal_audio::Audio;
-use adapters::fs_stores::{BatteryFile, DefaultSettings, SettingsFile};
+use adapters::fs_stores::{BatteryFile, DefaultSettings, NoZoneProgress, SettingsFile, ZoneFile};
 use adapters::macroquad_display::{save_window_png, MacroquadDisplay, MacroquadWindow};
 use adapters::macroquad_keyboard::MacroquadKeyboard;
 use adapters::macroquad_picker::{Choice, Picker};
@@ -21,7 +21,7 @@ use adapters::win32;
 use application::preferences::Preferences;
 use application::session::{Flow, GameSession, SessionParts};
 use domain::keys::Key;
-use ports::{AudioOut, Keyboard, SettingsStore};
+use ports::{AudioOut, Keyboard, SettingsStore, ZoneProgressStore};
 use std::path::PathBuf;
 
 #[derive(Default)]
@@ -122,8 +122,10 @@ fn start(args: &Args, found: Result<PathBuf, String>, checking: bool, audio: &dy
         Ok(g) => g,
         Err(e) => return Err((prefs, e)),
     };
+    let zones: Box<dyn ZoneProgressStore> = if checking { Box::new(NoZoneProgress) } else { Box::new(ZoneFile { rom: rom.clone() }) };
     let parts = SessionParts {
         prefs,
+        zones,
         saves: Box::new(BatteryFile { rom }),
         start_level: args.level,
         checking,

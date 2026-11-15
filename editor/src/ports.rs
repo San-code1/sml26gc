@@ -24,6 +24,7 @@ pub trait GameLauncher {
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum FileKind {
     Level,
+    Zone,
     Project,
 }
 
@@ -31,6 +32,7 @@ impl FileKind {
     pub fn extension(self) -> &'static str {
         match self {
             FileKind::Level => "nmblevel",
+            FileKind::Zone => "nmbzone",
             FileKind::Project => "nmbproject",
         }
     }

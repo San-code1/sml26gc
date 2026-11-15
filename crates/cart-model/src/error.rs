@@ -17,6 +17,16 @@ pub enum CartError {
     LevelsFull { need: usize, capacity: usize },
     /// The map's changed ways don't fit in the space kept for them.
     RoutesFull { need: usize, capacity: usize },
+    /// More new zones than the copy keeps.
+    TooManyZones { max: usize },
+    /// The new zones don't fit in the space kept for them.
+    ZonesFull { need: usize, capacity: usize },
+    /// A new zone has more pass points than its base zone has entries for.
+    TooManyPassPoints { max: usize },
+    /// A new zone's entry is not one of its points.
+    NoEntryPoint,
+    /// A new zone's point has a number outside its base zone's numbers.
+    PointOutsideZone { point: u8 },
 }
 
 impl fmt::Display for CartError {
@@ -39,6 +49,11 @@ impl fmt::Display for CartError {
             CartError::LevelTooBig { level, need, capacity } => write!(f, "level {level} needs {need} bytes but has {capacity}; use longer rows of the same block or fewer objects"),
             CartError::LevelsFull { need, capacity } => write!(f, "the new levels need {need} bytes but the cartridge has {capacity} for them; remove a level"),
             CartError::RoutesFull { need, capacity } => write!(f, "the map's paths need {need} bytes but the cartridge has {capacity} for them; shorten or remove a path"),
+            CartError::TooManyZones { max } => write!(f, "there can be {max} new zones at most"),
+            CartError::ZonesFull { need, capacity } => write!(f, "the new zones need {need} bytes but the cartridge has {capacity} for them; remove a zone or shorten its paths"),
+            CartError::TooManyPassPoints { max } => write!(f, "this zone can have {max} pass points at most"),
+            CartError::NoEntryPoint => write!(f, "a new zone's entry is not one of its points"),
+            CartError::PointOutsideZone { point } => write!(f, "point {point:02X} is not one of its zone's numbers"),
         }
     }
 }

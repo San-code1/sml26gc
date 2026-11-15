@@ -50,6 +50,7 @@ Each module documents the ROM addresses and formats it relies on.
 | `patch` | The 1 MB edited copy (twin banks $20-$3F) that gives levels and objects more room |
 | `layout` | Each zone's space for its maps and packing edited maps back |
 | `extra_levels` | Levels 32+, stored in banks $38-$3F and played in place of a base level |
+| `new_zones` | New zones, stored in bank $31 and played in place of a base zone (point numbers, entry code, progress kept apart) |
 | `world` | World map picture and the level each map point opens |
 | `zone_maps` | The zones' one-screen map pictures |
 | `original_points` | Where the game draws its map points (measured) |
@@ -65,8 +66,9 @@ Each module documents the ROM addresses and formats it relies on.
 ```
 game/src/
 ├─ domain/        keys, settings (text format), i18n, overlay (bitmap font), pause menu
-├─ application/   preferences (settings + saving), session (one frame of play; new levels)
-├─ ports.rs       Keyboard, AudioOut, Window, SettingsStore, SaveStore
+├─ application/   preferences (settings + saving), session (one frame of play; new levels),
+│                 zones (new zones swapped in and out, their progress)
+├─ ports.rs       Keyboard, AudioOut, Window, SettingsStore, SaveStore, ZoneProgressStore
 ├─ adapters/      macroquad keyboard/display/picker, cpal audio, file stores, Win32
 ├─ checks.rs, selftest.rs   headless checks (--research, --self-test, --dump)
 └─ main.rs        composition root
@@ -82,27 +84,29 @@ editor/src/
 ├─ domain/        document (everything being edited, dirty flags, commit to the ROM image),
 │                 history (generic undo/redo), tools (Tool trait: pencil, box, select, paste),
 │                 stamp (a rectangle of cells: brush and clipboard), prefs (editor.cfg text),
-│                 files (level and project files: text format)
+│                 files (level, zone and project files: text format); document/zones
+│                 (new zones) and document/restore
 ├─ application/   save (commit + write through a port), art_service (captured graphics),
-│                 exchange (level and project files through the dialogs)
+│                 exchange (level, zone and project files through the dialogs)
 ├─ ports.rs       EditedCopyStore, GameLauncher, PrefsStore, FileDialogs, TextFiles, MenuBar
 ├─ adapters/      file repository (edited copy, editor.cfg, text files), Win32 file dialogs
 │                 and menu bar, game.exe launcher
 ├─ ui/            macroquad panels: level, objects, palettes, world map, status bar, widgets;
 │                 grid_edit (painting and clipboard shared by both views), shortcuts (one
 │                 table for keys and button labels), menu (the File menu), files_view
-│                 (file actions and their messages)
+│                 (file actions and their messages), names_view (naming new levels and
+│                 zones), target_picker (where a door or exit leads, chosen on the maps)
 └─ main.rs        composition root
 ```
 
-The world map editor has two tabs: Picture (paint the world and zone maps) and Points (the
-level each point opens, paths, new points, doors).
+The world map editor has two tabs: Picture (paint the world, zone and new zone maps) and
+Points (the level each point opens, paths, new points, doors, exits, entries).
 
 ## `tools/research/`
 
 A table of commands (`COMMANDS` in `main.rs`) over the cartridge: disassembly, memory watch and
 trace, ROM views, and checks that play the edited data in the emulator (`routecheck`,
-`doorcheck`...). `all_commands.sh` runs a fixed set and saves the output to compare builds.
+`doorcheck`, `newzonecheck`, `sparecheck`...). `all_commands.sh` runs a fixed set and saves the output to compare builds.
 
 ## Contract between game and editor
 
@@ -111,10 +115,11 @@ trace, ROM views, and checks that play the edited data in the emulator (`routech
 | Start the game | `game.exe <rom> [--level N]` (no rom: start screen to choose one) |
 | Edited copy | `edits/<name> (edit).gb` |
 | Battery saves | `saves/<name>.sav` |
+| New zone progress (game only) | `saves/<name>.zones` |
 | Last cartridge chosen | `last_cartridge.txt` |
 | Settings (the editor reads the language) | `settings.cfg` |
 | Editor settings (palette zoom) | `editor.cfg` |
-| Level and project files (editor only) | `exports/*.nmblevel`, `exports/*.nmbproject` |
+| Level, zone and project files (editor only) | `exports/*.nmblevel`, `exports/*.nmbzone`, `exports/*.nmbproject` |
 
 Paths and names live in `host::paths`, so both programs compute them the same way.
 
