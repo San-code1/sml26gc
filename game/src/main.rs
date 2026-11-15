@@ -3,7 +3,8 @@
 //!
 //! Layers: `domain` (rules, no I/O) ← `application` (session use case) ← `ports` (traits)
 //! ← `adapters` (macroquad, cpal, files, Win32). This file is the composition root: it
-//! reads the command line, picks the adapters and starts the window loop.
+//! reads the command line, picks the adapters and starts the window loop. Opened without
+//! a cartridge file, it first shows the start screen to choose one (`macroquad_picker`).
 mod adapters;
 mod application;
 mod checks;
@@ -12,14 +13,14 @@ mod ports;
 mod selftest;
 
 use adapters::cpal_audio::Audio;
-use adapters::fs_stores::{BatteryFile, DefaultSettings, ProgressFile, SettingsFile};
+use adapters::fs_stores::{BatteryFile, DefaultSettings, SettingsFile};
 use adapters::macroquad_display::{save_window_png, MacroquadDisplay, MacroquadWindow};
 use adapters::macroquad_keyboard::MacroquadKeyboard;
+use adapters::macroquad_picker::{Choice, Picker};
 use adapters::win32;
 use application::preferences::Preferences;
 use application::session::{Flow, GameSession, SessionParts};
 use domain::keys::Key;
-use domain::map_view::MapView;
 use ports::{AudioOut, Keyboard, SettingsStore};
 use std::path::PathBuf;
 
@@ -32,7 +33,8 @@ struct Args {
     script: String,
     frames: u32,
     every: u32,
-    /// Start straight in this level (0..=31), as the level editor's Play button asks.
+    /// Start straight in this level (32 and up: the editor's new levels), as the level
+    /// editor's Play button asks.
     level: Option<u8>,
 }
 
@@ -120,17 +122,20 @@ fn start(args: &Args, found: Result<PathBuf, String>, checking: bool, audio: &dy
         Ok(g) => g,
         Err(e) => return Err((prefs, e)),
     };
-    let progress = ProgressFile::for_rom(&rom);
-    let map_view = if checking { None } else { host::load_custom_map(&rom).map(|m| MapView::new(m, progress.load())) };
     let parts = SessionParts {
         prefs,
         saves: Box::new(BatteryFile { rom }),
-        progress: Box::new(progress),
-        map_view,
         start_level: args.level,
         checking,
     };
     Ok(GameSession::new(gb, parts))
+}
+
+/// What the window shows: the start screen, the game, or why it could not start.
+enum App {
+    Pick(Picker),
+    Run(GameSession),
+    Fail(Preferences, String),
 }
 
 async fn run(args: Args, found: Result<PathBuf, String>, checking: bool, title: String) {
@@ -138,7 +143,15 @@ async fn run(args: Args, found: Result<PathBuf, String>, checking: bool, title: 
     let audio = if checking { Audio::silent() } else { Audio::new() };
     let keyboard = MacroquadKeyboard;
     let mut display = MacroquadDisplay::new();
-    let mut app = start(&args, found, checking, &audio);
+    // no cartridge on the command line: choose one first (checks keep finding it themselves)
+    let mut app = if args.rom.is_none() && !checking {
+        App::Pick(Picker::new(SettingsFile.load().lang))
+    } else {
+        match start(&args, found, checking, &audio) {
+            Ok(s) => App::Run(s),
+            Err((prefs, e)) => App::Fail(prefs, e),
+        }
+    };
     let mut render_frames = 0u32;
 
     loop {
@@ -146,19 +159,48 @@ async fn run(args: Args, found: Result<PathBuf, String>, checking: bool, title: 
             win32::send_to_back(&title);
         }
         let dt = macroquad::time::get_frame_time();
+        let mut next = None;
         match &mut app {
-            Ok(session) => {
+            App::Pick(picker) => {
+                let chosen = match picker.frame() {
+                    Choice::Wait => None,
+                    Choice::Quit => break,
+                    Choice::Play(p) => Some(p),
+                    Choice::Browse => {
+                        let (t, kind) = picker.dialog_texts();
+                        win32::pick_cartridge(&title, picker.start_dir().as_deref(), t, kind)
+                    }
+                };
+                if let Some(rom) = chosen {
+                    match start(&args, Ok(rom.clone()), checking, &audio) {
+                        Ok(s) => {
+                            // it starts: remembered for next time
+                            let _ = host::remember_rom(&rom);
+                            next = Some(App::Run(s));
+                        }
+                        Err((_, e)) => {
+                            picker.offer = Some(rom);
+                            picker.remembered = false;
+                            picker.error = Some(e);
+                        }
+                    }
+                }
+            }
+            App::Run(session) => {
                 if session.frame(dt, &keyboard, &audio) == Flow::Quit {
                     break;
                 }
                 display.present(session.screen(), session.palette(), session.settings().integer_scale);
             }
-            Err((prefs, error)) => {
+            App::Fail(prefs, error) => {
                 if keyboard.pressed(Key::F11) {
                     prefs.toggle_fullscreen();
                 }
                 display.show_error(error);
             }
+        }
+        if let Some(n) = next {
+            app = n;
         }
 
         if let Some(out) = &args.screenshot {
@@ -174,7 +216,7 @@ async fn run(args: Args, found: Result<PathBuf, String>, checking: bool, title: 
         }
         macroquad::window::next_frame().await;
     }
-    if let Ok(session) = &mut app {
+    if let App::Run(session) = &mut app {
         session.finish();
     }
 }

@@ -1,9 +1,8 @@
-//! Settings, battery saves and map progress kept in files (where: `host::paths`), plus
+//! Settings and battery saves kept in files (where: `host::paths`), plus
 //! stores that keep nothing, for unattended checks.
 use crate::domain::settings::Settings;
-use crate::ports::{ProgressStore, SaveStore, SettingsStore};
+use crate::ports::{SaveStore, SettingsStore};
 use gb_core::Gb;
-use std::collections::HashSet;
 use std::path::PathBuf;
 
 /// `settings.cfg` next to the programs.
@@ -38,25 +37,5 @@ impl SaveStore for BatteryFile {
         if let Err(e) = host::write_battery_save(gb, &self.rom) {
             eprintln!("could not write the save file: {e}");
         }
-    }
-}
-
-/// `saves/<cartridge>.progress.txt`.
-pub struct ProgressFile {
-    pub path: PathBuf,
-}
-
-impl ProgressFile {
-    pub fn for_rom(rom: &std::path::Path) -> ProgressFile {
-        ProgressFile { path: host::progress_path(rom) }
-    }
-    pub fn load(&self) -> HashSet<u8> {
-        host::progress::load(&self.path)
-    }
-}
-
-impl ProgressStore for ProgressFile {
-    fn save(&self, cleared: &HashSet<u8>) {
-        let _ = host::progress::save(&self.path, cleared);
     }
 }

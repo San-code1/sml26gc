@@ -28,8 +28,6 @@ pub enum Action {
     Quit,
     BackToMap,
     FileSelect,
-    /// Switch between the editor-made world map and the cartridge's own.
-    ToggleWorld,
 }
 
 // Main menu items (indexes into Texts::main).
@@ -42,32 +40,21 @@ const IT_PAUSE: usize = 5;
 const IT_QUIT: usize = 6;
 const IT_MAP: usize = 7;
 const IT_FILES: usize = 8;
-const IT_WORLD: usize = 9;
 
 pub struct Menu {
     screen: Screen,
     sel: usize,
     blink: u32,
     items: Vec<usize>,
-    /// Some(on) when an editor-made world map exists for this cartridge.
-    world: Option<bool>,
 }
 
 impl Menu {
     fn label<'a>(&self, t: &'a Texts, item: usize) -> &'a str {
-        if item == IT_WORLD {
-            if self.world == Some(true) {
-                t.map_custom
-            } else {
-                t.map_original
-            }
-        } else {
-            t.main[item]
-        }
+        t.main[item]
     }
 
     /// `mode` is the screen the game is on (a level, the map...).
-    pub fn new(mode: GameMode, world: Option<bool>) -> Menu {
+    pub fn new(mode: GameMode) -> Menu {
         let in_level = mode == GameMode::Playing;
         let on_map = mode == GameMode::Map;
         // No "continue" item: Esc (or B) closes the menu. In a level the game's own pause comes first.
@@ -82,11 +69,8 @@ impl Menu {
         if in_level || on_map {
             items.push(IT_FILES);
         }
-        if world.is_some() {
-            items.push(IT_WORLD);
-        }
         items.push(IT_QUIT);
-        Menu { screen: Screen::Main, sel: 0, blink: 0, items, world }
+        Menu { screen: Screen::Main, sel: 0, blink: 0, items }
     }
 
     fn pos(&self, item: usize) -> usize {
@@ -104,7 +88,7 @@ impl Menu {
             "confirm" => Screen::Confirm(IT_MAP),
             _ => Screen::Main,
         };
-        let mut m = Menu::new(GameMode::Playing, Some(true));
+        let mut m = Menu::new(GameMode::Playing);
         m.screen = screen;
         m
     }
@@ -184,10 +168,6 @@ impl Menu {
                         IT_SOUND => self.go(Screen::Sound, 0),
                         IT_LANGUAGE => self.go(Screen::Language, st.lang),
                         IT_PAUSE => return Action::PressStart,
-                        IT_WORLD => {
-                            self.world = self.world.map(|on| !on);
-                            return Action::ToggleWorld;
-                        }
                         // "No" is selected first, so a stray key press never leaves the level.
                         item => self.go(Screen::Confirm(item), 1),
                     }
@@ -428,7 +408,7 @@ mod tests {
     #[test]
     fn change_palette_rebind_and_leave() {
         let mut st = Settings::default();
-        let mut m = Menu::new(GameMode::Playing, None);
+        let mut m = Menu::new(GameMode::Playing);
         // Original pause, Controls, Display...
         step(&mut m, &mut st, Key::Down);
         step(&mut m, &mut st, Key::Down);
@@ -452,7 +432,7 @@ mod tests {
     #[test]
     fn leaving_the_level_asks_first() {
         let mut st = Settings::default();
-        let mut m = Menu::new(GameMode::Playing, None);
+        let mut m = Menu::new(GameMode::Playing);
         for _ in 0..5 {
             step(&mut m, &mut st, Key::Down); // ... Language, Back to map
         }

@@ -69,20 +69,40 @@ const COMMANDS: &[(&str, Run)] = &[
     ("reads", |r, a| memory::reads(r, &a.s(1), a.hex(2) as usize, a.hex(3), a.hex(4), a.num(5), a.num(6))),
     ("free", |r, _| rom_views::free_space(r)),
     ("storecheck", |r, _| checks::store_check(r)),
+    ("extracheck", |r, _| checks::extra_check(r)),
+    ("routecheck", |r, _| checks::route_check(r)),
+    ("doortry", |r, a| checks::door_try(r, &a.s(1), a.hex(2) as u8, &a.s(3), &a.path(4))),
+    ("doorcheck", |r, _| checks::door_check(r)),
+    ("exitcheck", |r, a| checks::exit_check(r, a.hex(1) as u8, &a.s(2), &a.s(3))),
     ("levels", |r, _| checks::levels_check(r)),
     ("modes", |r, a| memory::modes(r, &a.s(1), &a.s(2))),
     ("find", |r, a| memory::find_player(r, &a.s(1))),
     ("watch", |r, a| memory::watch(r, &a.s(1), &a.list(2), a.num(3), a.num(4))),
     ("trace", |r, a| memory::trace(r, &a.s(1), &a.list(2), a.num(3), a.num(4))),
+    ("mapafter", |r, a| rom_views::map_after(r, a.num(1) as u8, &a.path(2), (!a.s(3).is_empty()).then(|| a.hex(3) as u8))),
+    ("mapscan", |r, a| rom_views::map_scan(r, &a.path(1))),
+    ("savediff", |r, _| memory::save_diff(r)),
+    ("pathscan", |r, a| rom_views::path_scan(r, &a.s(1))),
+    ("unlock", |r, a| rom_views::unlock(r, a.hex(1) as u8, a.hex(2), a.hex(3))),
+    ("walk", |r, a| rom_views::walk_test(r, (a.s(1) != "-").then(|| a.hex(1) as u8), &a.s(2), a.num(3))),
+    ("clearscan", |r, _| rom_views::clear_scan(r)),
+    ("cleardiff", |r, a| rom_views::clear_diff(r, a.num(1) as u8)),
+    ("modetry", |r, a| rom_views::mode_try(r, a.num(1) as u8, a.hex(2) as u8, &a.s(3))),
 ];
 
-const USAGE: &str = "research: disasm BANK ADDR N | table OFF LEN ROW | find SCRIPT | watch SCRIPT ADDRS FROM TO | trace SCRIPT ADDRS FROM TO\n\
-                     \x20         poke | leave | cmpmap | diff | worldshot | looks | worldcheck | objcheck | objects | reads | free | storecheck | levels | modes\n\
+const USAGE: &str = "research [--with-save]: disasm BANK ADDR N | table OFF LEN ROW | find SCRIPT | watch SCRIPT ADDRS FROM TO | trace SCRIPT ADDRS FROM TO\n\
+                     \x20         poke | leave | cmpmap | diff | worldshot | looks | worldcheck | objcheck | objects | reads | free | storecheck | extracheck | routecheck | levels | modes
+\n                               (RESEARCH_ROM=<file> uses that cartridge file)\n\
                      (customcheck and menushots belong to the game: game --research ...)";
 
 fn main() {
-    let args = Args(std::env::args().skip(1).collect());
-    let rom = host::require_rom(None).unwrap_or_else(|e| {
+    let mut v: Vec<String> = std::env::args().skip(1).collect();
+    if let Some(i) = v.iter().position(|a| a == "--with-save") {
+        v.remove(i);
+        console::use_battery_save(true);
+    }
+    let args = Args(v);
+    let rom = host::require_rom(std::env::var_os("RESEARCH_ROM").map(std::path::PathBuf::from)).unwrap_or_else(|e| {
         eprintln!("{e}");
         std::process::exit(1)
     });
@@ -101,6 +121,6 @@ mod tests {
         let a = Args(["watch", "x", "ffc2,a200-a202", "0x10", "12"].map(String::from).to_vec());
         assert_eq!(a.list(2), vec![0xFFC2, 0xA200, 0xA201, 0xA202]);
         assert_eq!((a.hex(3), a.big(3), a.num(4), a.num(9)), (0x10, 0x10, 12, 0));
-        assert_eq!(COMMANDS.len(), 19);
+        assert_eq!(COMMANDS.len(), 33);
     }
 }

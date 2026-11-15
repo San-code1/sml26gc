@@ -43,7 +43,7 @@ impl Editor {
     pub(super) fn block_palette(&mut self, mut y: f32) {
         draw_text(&format!("{} #{:02X}", tr(self.es, "BLOCKS  selected", "BLOQUES  elegido"), self.block), 10.0, y + 12.0, 18.0, col(3));
         y += 18.0;
-        let Some(atlas) = &self.atlases[self.cur] else { return };
+        let Some(atlas) = &self.atlases[self.doc.base_of(self.cur)] else { return };
         let cell: f32 = 34.0;
         let avail = screen_height() - y - 8.0;
         let cell = cell.min(avail / 16.0);

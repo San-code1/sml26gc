@@ -34,10 +34,11 @@ impl Editor {
     pub(super) fn update_level(&mut self) {
         let m: Vec2 = mouse_position().into();
         let ctrl = is_key_down(KeyCode::LeftControl) || is_key_down(KeyCode::RightControl);
-        if ctrl && is_key_pressed(KeyCode::Z) {
+        let (undo, redo) = undo_keys(ctrl);
+        if undo {
             self.undo();
         }
-        if ctrl && is_key_pressed(KeyCode::Y) {
+        if redo {
             self.redo();
         }
         if ctrl && is_key_pressed(KeyCode::S) {
@@ -87,7 +88,7 @@ impl Editor {
         let s = self.scale() * BLOCK;
         let (cw, ch) = (screen_width() - PANEL, screen_height() - STATUS_H);
         // --- the level
-        if let Some(atlas) = &self.atlases[self.cur] {
+        if let Some(atlas) = &self.atlases[self.doc.base_of(self.cur)] {
             let c0 = (self.cam.x / BLOCK).floor() as i32;
             let r0 = (self.cam.y / BLOCK).floor() as i32;
             let ncol = (cw / s).ceil() as i32 + 1;
@@ -175,6 +176,8 @@ impl Editor {
             }
             5 => self.play(),
             9 => self.enter_world(true),
+            10 => self.new_level(),
+            11 => self.delete_level(),
             _ => {}
         }
         if let Some(l) = pick {
@@ -188,7 +191,7 @@ impl Editor {
             return;
         }
         if self.overview_stale || self.overview.is_none() {
-            if let Some(art) = self.art.level(self.cur) {
+            if let Some(art) = self.art.level(self.doc.base_of(self.cur)) {
                 self.overview = Some(make_overview(art, &self.doc.levels[self.cur].content.map));
                 self.overview_stale = false;
             }
@@ -213,16 +216,31 @@ impl Editor {
         draw_text(tr(self.es, "LEVEL EDITOR", "EDITOR DE NIVELES"), 10.0, 22.0, 24.0, col(3));
         let mut y = 34.0;
         let mut pick = None;
-        for l in 0..LEVELS {
+        let count = self.doc.levels.len();
+        for l in 0..count {
             let (cx, cy) = (10.0 + (l % 8) as f32 * 35.0, y + (l / 8) as f32 * 25.0);
             let label = format!("{:02}{}", l, if self.doc.levels[l].dirty() { "*" } else { "" });
             if button(Rect::new(cx, cy, 33.0, 23.0), &label, l == self.cur, 16.0) {
                 pick = Some(l);
             }
         }
-        y += 4.0 * 25.0 + 4.0;
+        y += count.div_ceil(8) as f32 * 25.0 + 4.0;
         let bw = 92.0;
         let mut act = 0;
+        // new levels: a copy of this one, played in place of the level it is based on
+        if button(Rect::new(10.0, y, 136.0, 24.0), tr(self.es, "New level (copy)", "Nivel nuevo (copia)"), false, 15.0) {
+            act = 10;
+        }
+        if self.cur >= LEVELS {
+            if button(Rect::new(150.0, y, 136.0, 24.0), tr(self.es, "Delete level", "Borrar nivel"), false, 15.0) {
+                act = 11;
+            }
+            y += 28.0;
+            let t = format!("{} {:02}", tr(self.es, "plays as level", "se juega como el nivel"), self.doc.base_of(self.cur));
+            draw_text(&t, 14.0, y + 14.0, 16.0, col(2));
+            y += 4.0;
+        }
+        y += 28.0;
         if button(Rect::new(10.0, y, 276.0, 24.0), tr(self.es, "World map editor", "Editor del mapa de mundos"), false, 16.0) {
             act = 9;
         }

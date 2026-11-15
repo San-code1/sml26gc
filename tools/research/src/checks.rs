@@ -319,3 +319,260 @@ fn best_window_match(win: &[u8], pic: &[u8]) -> usize {
         .max()
         .unwrap_or(0)
 }
+
+/// New levels (beyond the 32): store two in an expanded copy, play each in place of its
+/// base level and compare what the game loaded; then the base level must load as before.
+pub fn extra_check(rom_path: &Path) {
+    use cart_model::extra_levels::{apply, based_on, read, store, writes_for};
+    use cart_model::levels::{decode, header, map_location, COLS};
+    use cart_model::live::{map_in_memory, objects_in_memory};
+    use cart_model::objects::Obj;
+    let Some(gb) = load(rom_path) else { return };
+    let Ok(mut rom) = cart_model::patch::expand(gb.cart().rom()) else { return };
+    let mut a = based_on(&rom, 0);
+    for r in 20..30 {
+        for c in 10..120 {
+            a.map[r * COLS + c] = if (r + c) % 3 == 0 { 0x01 } else { 0x00 };
+        }
+    }
+    a.objs.truncate(3);
+    a.objs.push(Obj { x: 200, y: 296, kind: 5, flag: false });
+    a.objs.sort_by_key(|o| o.x); // stored left to right, as the game keeps them
+    let mut b = based_on(&rom, 25);
+    b.map.iter_mut().take(COLS * 4).for_each(|v| *v = 0);
+    b.objs.clear();
+    println!("store: {}", shown(&store(&mut rom, &[a.clone(), b.clone()]).map(|n| format!("{n} bytes"))));
+    println!("read back the same: {}", read(&rom) == vec![a.clone(), b.clone()]);
+    if let Ok(out) = std::env::var("EXTRA_OUT") {
+        let _ = std::fs::write(out, &rom); // the copy with the two new levels, to look at
+    }
+    let Ok(mut g0) = Gb::new(rom.clone(), 44100) else { return };
+    println!("boots: {}", g0.boot_to_map());
+    for (n, e) in [(32, &a), (33, &b)] {
+        let mut g = g0.clone();
+        let undo = apply(g.cart_mut().rom_mut(), &writes_for(&rom, e));
+        let entered = g.enter_level(e.base);
+        let mut want = e.objs.clone();
+        want.sort_by_key(|o| o.x);
+        let map_ok = map_in_memory(&g) == e.map;
+        let objs_ok = objects_in_memory(&g, want.len()) == want;
+        println!("level {n} (base {}): entered={entered} map={map_ok} objects={objs_ok}", e.base);
+        if !objs_ok {
+            println!("  want {want:?}
+  got  {:?}", objects_in_memory(&g, want.len() + 1));
+        }
+        // back to the map: the base level is itself again
+        g.back_to_map();
+        for _ in 0..600 {
+            g.run_frame_with(Buttons::NONE);
+            if g.mode() == cart_model::GameMode::Map {
+                break;
+            }
+        }
+        apply(g.cart_mut().rom_mut(), &undo);
+        let same_rom = g.cart().rom() == &rom[..];
+        let (_, s) = map_location(&rom, header(&rom, e.base as usize));
+        let again = g.enter_level_anywhere(e.base) && map_in_memory(&g) == decode(&rom, s).0;
+        println!("  then base level {} loads as before: {again} (ROM restored: {same_rom})", e.base);
+    }
+}
+
+/// The map's paths moved to bank $36: read back the same, and the game walks a changed way
+/// to a new point, stands on it and enters its level. ROUTE_OUT writes the changed copy.
+pub fn route_check(rom_path: &Path) {
+    use cart_model::map_routes::{read, write, Place, Way, FREE_POINTS};
+    use cart_model::ram_map::{GAME_MODE, LEVEL_NUMBER, MAP_POINT};
+    use cart_model::world;
+    let Some(gb) = load(rom_path) else { return };
+    let Ok(mut rom) = cart_model::patch::expand(gb.cart().rom()) else { return };
+    let r = read(&rom);
+    println!("move: {}", shown(&write(&mut rom, &r).map(|n| format!("{n} bytes added"))));
+    println!("read back the same: {}", read(&rom) == r);
+    let same = rom.clone();
+    // a new point 4 steps above point 04, way up from 04 and back down, opening level 7
+    let p = FREE_POINTS[0];
+    let mut c = r.clone();
+    let (x, y) = c.places[4].on_world();
+    c.ways[4][2] = Some(Way::through(&[(0, -32)], p));
+    c.ways[p as usize][3] = Some(Way::through(&[(0, 32)], 4));
+    c.places[p as usize] = Place::at_world(x, y - 32);
+    c.added.push(p);
+    println!("change: {}", shown(&write(&mut rom, &c).map(|n| format!("{n} bytes added"))));
+    println!("read back the same: {}", read(&rom) == c);
+    let mut lv = world::point_levels(&rom);
+    lv[p as usize] = 7;
+    world::write_point_levels(&mut rom, &lv);
+    if let Ok(out) = std::env::var("ROUTE_OUT") {
+        let _ = std::fs::write(out, &rom);
+    }
+    for (name, image) in [("moved", same), ("changed", rom)] {
+        let Ok(mut g) = Gb::new(image, 44100) else { return };
+        if !g.boot_to_map() {
+            println!("{name}: could not reach the map");
+            continue;
+        }
+        g.show_map_at(4);
+        print!("{name}: on {:02x}; ", g.read(MAP_POINT));
+        let walk = |g: &mut Gb, b: Buttons| {
+            for f in 0..240u32 {
+                g.run_frame_with(if f < 6 { b } else { Buttons::NONE });
+                g.clear_audio();
+            }
+            g.read(MAP_POINT)
+        };
+        let down = walk(&mut g.clone(), Buttons::LEFT);
+        let up = walk(&mut g, Buttons::UP);
+        print!("from 04 left to {down:02x}, up to {up:02x}");
+        if up == p {
+            let back = walk(&mut g.clone(), Buttons::DOWN);
+            let mut modes = Vec::new();
+            for f in 0..300u32 {
+                g.run_frame_with(if f < 6 { Buttons::A } else { Buttons::NONE });
+                g.clear_audio();
+                let m = g.read(GAME_MODE);
+                if modes.last() != Some(&m) {
+                    modes.push(m);
+                }
+            }
+            print!(", back down to {back:02x}, A: modes {modes:02x?} level {}", g.read(LEVEL_NUMBER));
+            g.back_to_map();
+            for _ in 0..300 {
+                g.run_frame_with(Buttons::NONE);
+                g.clear_audio();
+            }
+            let cam = (g.read(0xFF43), g.read(0xFF42));
+            let want = c.places[p as usize];
+            print!(
+                "; back on the map at {:02x}, Mario ({:02x},{:02x}) scroll {cam:?} (place {:?})",
+                g.read(MAP_POINT),
+                g.read(0xA842),
+                g.read(0xA843),
+                want
+            );
+            print!(", then down to {:02x}", walk(&mut g, Buttons::DOWN));
+        }
+        println!();
+    }
+}
+
+/// Leaving a zone on an edited copy: the zone exit point follows its entrance's paths.
+/// From zone point `from` press `first` (out of the zone), then `then` on the world map.
+pub fn exit_check(rom_path: &Path, from: u8, first: &str, then: &str) {
+    use cart_model::map_routes::{read, write};
+    use cart_model::ram_map::MAP_POINT;
+    let Some(gb) = load(rom_path) else { return };
+    let mut rom = gb.cart().rom().to_vec();
+    let mut r = read(&rom);
+    println!("exits follow their entrance: changed {}", r.sync_exits());
+    if cart_model::map_routes::can_write(&rom) {
+        println!("write: {}", shown(&write(&mut rom, &r).map(|n| format!("{n} bytes"))));
+    }
+    let Ok(mut g) = Gb::new(rom, 44100) else { return };
+    if !g.boot_to_map() {
+        println!("could not reach the map");
+        return;
+    }
+    g.show_map_at(from);
+    let pad = |s: &str| match s { "R" => Buttons::RIGHT, "L" => Buttons::LEFT, "U" => Buttons::UP, _ => Buttons::DOWN };
+    let mut trail = vec![g.read(MAP_POINT)];
+    for b in [pad(first), pad(then)] {
+        for f in 0..400u32 {
+            g.run_frame_with(if f < 6 { b } else { Buttons::NONE });
+            g.clear_audio();
+            let a = g.read(MAP_POINT);
+            if trail.last() != Some(&a) {
+                trail.push(a);
+            }
+        }
+    }
+    println!("points: {}", trail.iter().map(|t| format!("{t:02x}")).collect::<Vec<_>>().join(" "));
+}
+
+/// Try a map change: patch the ROM (`patches` "BB:AAAA=hexbytes,..."), show the map at
+/// `point`, press `pads` one after another (R L U D A), and say where Mario ends up: the
+/// point, the map ($A68B, 0 = world) and a picture `png`.
+pub fn door_try(rom_path: &Path, patches: &str, point: u8, pads: &str, png: &Path) {
+    use cart_model::ram_map::{GAME_MODE, MAP_POINT};
+    let Some(gb) = load(rom_path) else { return };
+    let mut rom = gb.cart().rom().to_vec();
+    for p in patches.split(',').filter(|s| !s.is_empty()) {
+        let (at, bytes) = p.split_once('=').unwrap();
+        let (b, a) = at.split_once(':').unwrap();
+        let o = cart_model::rom::offset(usize::from_str_radix(b, 16).unwrap(), u16::from_str_radix(a, 16).unwrap());
+        for (i, k) in (0..bytes.len()).step_by(2).enumerate() {
+            rom[o + i] = u8::from_str_radix(&bytes[k..k + 2], 16).unwrap();
+        }
+    }
+    let Ok(mut g) = Gb::new(rom, 44100) else { return };
+    if !g.boot_to_map() {
+        println!("could not reach the map");
+        return;
+    }
+    g.show_map_at(point);
+    let mut trail = vec![(g.read(MAP_POINT), g.read(0xA68B), g.read(GAME_MODE))];
+    for c in pads.chars() {
+        let b = match c { 'R' => Buttons::RIGHT, 'L' => Buttons::LEFT, 'U' => Buttons::UP, 'D' => Buttons::DOWN, _ => Buttons::A };
+        for f in 0..500u32 {
+            g.run_frame_with(if f < 6 { b } else { Buttons::NONE });
+            g.clear_audio();
+            let now = (g.read(MAP_POINT), g.read(0xA68B), g.read(GAME_MODE));
+            if trail.last() != Some(&now) {
+                trail.push(now);
+            }
+        }
+    }
+    println!("(point, map, mode): {}", trail.iter().map(|t| format!("({:02x},{},{:02x})", t.0, t.1, t.2)).collect::<Vec<_>>().join(" "));
+    println!("Mario ({:02x},{:02x})", g.read(0xA842), g.read(0xA843));
+    host::png_out::save_png(&g, png);
+}
+
+/// Show the map at `point`, press `pads` (R L U D A), return (point, zone $A68B) as they change.
+fn pads_trail(rom: Vec<u8>, point: u8, pads: &str) -> Vec<(u8, u8)> {
+    use cart_model::ram_map::MAP_POINT;
+    let Ok(mut g) = Gb::new(rom, 44100) else { return vec![] };
+    if !g.boot_to_map() {
+        return vec![];
+    }
+    g.show_map_at(point);
+    let mut trail = vec![(g.read(MAP_POINT), g.read(0xA68B))];
+    for c in pads.chars() {
+        let b = match c { 'R' => Buttons::RIGHT, 'L' => Buttons::LEFT, 'U' => Buttons::UP, 'D' => Buttons::DOWN, _ => Buttons::A };
+        for f in 0..500u32 {
+            g.run_frame_with(if f < 6 { b } else { Buttons::NONE });
+            g.clear_audio();
+            let now = (g.read(MAP_POINT), g.read(0xA68B));
+            if trail.last() != Some(&now) {
+                trail.push(now);
+            }
+        }
+    }
+    trail
+}
+
+/// Doors changed through `cart_model::doors`, tried in the game.
+pub fn door_check(rom_path: &Path) {
+    use cart_model::doors::{read, write, Leads};
+    let Some(gb) = load(rom_path) else { return };
+    let rom = gb.cart().rom().to_vec();
+    let d = read(&rom);
+    println!("known: {}  into {:02x?}", cart_model::doors::known(&rom), d.into);
+    println!("exits {:02x?}", d.exits);
+    let show = |t: Vec<(u8, u8)>| t.iter().map(|(p, z)| format!("{p:02x}/{z}")).collect::<Vec<_>>().join(" ");
+    let tries: Vec<(&str, Box<dyn Fn(&mut cart_model::doors::Doors)>, u8, &str)> = vec![
+        ("as the game is: Tree Zone out", Box::new(|_| {}), 0x23, "D"),
+        ("Tree Zone out into Macro Zone", Box::new(|d| d.exits[0].1 = Leads::Zone(2)), 0x23, "D"),
+        ("Macro Zone out into Tree Zone", Box::new(|d| d.exits[4].1 = Leads::Zone(0)), 0x32, "L"),
+        ("Tree Zone out to world point 07", Box::new(|d| d.exits[0].1 = Leads::World(0x07)), 0x23, "D"),
+        ("07 opens Pumpkin Zone", Box::new(|d| d.set_door(0x07, Some(1))), 0x07, "A"),
+        ("02 no longer opens Tree Zone", Box::new(|d| d.set_door(0x02, None)), 0x02, "A"),
+        ("Tree Zone exit moved to 22", Box::new(|d| d.exits[0].0 = 0x22), 0x22, "D"),
+        ("Space Zone out into Mario Zone", Box::new(|d| d.exits[5].1 = Leads::Zone(4)), 0x3C, "D"),
+    ];
+    for (name, change, point, pads) in tries {
+        let mut r = rom.clone();
+        let mut dd = d.clone();
+        change(&mut dd);
+        write(&mut r, &dd);
+        println!("{name}: {}", show(pads_trail(r, point, pads)));
+    }
+}

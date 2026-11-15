@@ -4,6 +4,13 @@ use cart_model::art::{LevelArt, Look, WorldArt};
 use cart_model::levels::{COLS, ROWS};
 use macroquad::prelude::*;
 
+/// Ctrl+Z: undo; Ctrl+Y or Ctrl+Shift+Z: redo. Returns (undo, redo) pressed this frame.
+pub fn undo_keys(ctrl: bool) -> (bool, bool) {
+    let shift = is_key_down(KeyCode::LeftShift) || is_key_down(KeyCode::RightShift);
+    let z = ctrl && is_key_pressed(KeyCode::Z);
+    (z && !shift, (z && shift) || (ctrl && is_key_pressed(KeyCode::Y)))
+}
+
 pub const PAL: [u32; 4] = [0xC4CFA1, 0x8B956D, 0x4D533C, 0x1F1F1F];
 pub const PANEL: f32 = 300.0;
 pub const STATUS_H: f32 = 26.0;

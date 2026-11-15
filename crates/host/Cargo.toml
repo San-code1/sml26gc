@@ -6,5 +6,4 @@ edition.workspace = true
 
 [dependencies]
 gb-core.workspace = true
-cart-model.workspace = true
 png.workspace = true
