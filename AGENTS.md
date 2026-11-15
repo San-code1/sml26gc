@@ -20,8 +20,18 @@ Layout and dependency rules: `docs/ARCHITECTURE.md`.
 - Names should make the code self-explanatory. Write a comment only when the code cannot say
   it: ROM addresses, reverse-engineered formats, non-obvious constraints. Keep it short. No
   comments that repeat the code, section banners or history ("before", "now", "changed").
-- Every change keeps `cargo test --release --workspace` passing, including the golden
-  fingerprint in `regression/`.
+
+## OpenSpec
+
+OpenSpec files (`openspec/`: specs and changes) live in this repository, and the change is
+implemented here, on its feature branch.
+
+## Tests
+
+Tests are the last task of a feature, with or without OpenSpec: do not run them after every
+edit. Once the user validates the work (the feature is done, or the OpenSpec change is ready to
+archive), run `cargo test --release --workspace` (it includes the golden fingerprint in
+`regression/`), fix what fails, then commit and close the feature.
 
 ## Language
 
