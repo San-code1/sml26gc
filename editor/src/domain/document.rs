@@ -82,6 +82,9 @@ impl EditorDocument {
             .filter(|r| r.len() == original.len() || patch::is_expanded(r))
             .unwrap_or_else(|| patch::expand(&original).unwrap_or_else(|_| original.clone()));
         patch::upgrade(&mut rom); // copies made before the object patch get it now
+        let mut routes = map_routes::read(&rom);
+        // copies saved before zone exits followed their entrance get it now
+        let routes_dirty = routes.sync_exits();
         let doc = |content| LevelDoc { content, blocks_dirty: false, objects_dirty: false, history: History::default() };
         let mut levels: Vec<LevelDoc> = (0..LEVELS).map(|l| doc(level_from(&rom, l))).collect();
         let stored = extra_levels::read(&rom);
@@ -95,8 +98,8 @@ impl EditorDocument {
             world_history: History::default(),
             points: world::point_levels(&rom),
             points_dirty: false,
-            routes: map_routes::read(&rom),
-            routes_dirty: false,
+            routes,
+            routes_dirty,
             points_history: History::default(),
             original,
             rom,
@@ -389,12 +392,20 @@ impl EditorDocument {
     // ------------------------------------------------------------ paths and new points
 
     /// Set or take out the way from `point` in direction `dir` (0 right, 1 left, 2 up,
-    /// 3 down), undoable.
+    /// 3 down), undoable. A zone's entrance and the point Mario leaves the zone on change
+    /// together.
     pub fn set_way(&mut self, point: usize, dir: usize, way: Option<Way>) {
         if point >= map_routes::POINTS || self.routes.ways[point][dir] == way {
             return;
         }
         self.points_record();
+        self.put_way(point, dir, way);
+    }
+
+    fn put_way(&mut self, point: usize, dir: usize, way: Option<Way>) {
+        if let Some(t) = map_routes::twin(point as u8) {
+            self.routes.ways[t as usize][dir] = way.clone();
+        }
         self.routes.ways[point][dir] = way;
         self.routes_dirty = true;
     }
@@ -413,12 +424,11 @@ impl EditorDocument {
         if let Some(bd) = first_dir(&back) {
             let t = to as usize;
             if t < map_routes::POINTS && self.routes.ways[t][bd].is_none() {
-                self.routes.ways[t][bd] = Some(back);
+                self.put_way(t, bd, Some(back));
                 back_dir = Some(bd);
             }
         }
-        self.routes.ways[from][dir] = Some(way);
-        self.routes_dirty = true;
+        self.put_way(from, dir, Some(way));
         Some((dir, back_dir))
     }
 
@@ -715,5 +725,12 @@ mod tests {
         assert_eq!(doc.routes, original);
         assert!(doc.points_redo() && doc.remove_point(p));
         assert_eq!(doc.routes, original, "taking the point out takes its paths");
+        // a path out of a zone's entrance is also the path out of where Mario leaves the zone
+        let (x, y) = doc.routes.places[2].on_world();
+        let q = doc.add_point(x, y + 16).unwrap();
+        doc.set_way(2, 3, None);
+        assert!(doc.draw_path(2, q, &[(0, 16)]).is_some());
+        assert_eq!(doc.routes.ways[0x19], doc.routes.ways[2]);
+        assert_eq!(doc.routes.ways[0x19][3].as_ref().map(|w| w.to), Some(q));
     }
 }
