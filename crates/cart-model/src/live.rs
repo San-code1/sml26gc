@@ -21,12 +21,7 @@ pub fn objects_in_memory(gb: &Gb, count: usize) -> Vec<Obj> {
     (0..count)
         .map(|k| {
             let r = &ram[base + k * 6..base + k * 6 + 6];
-            Obj {
-                x: r[0] as u16 * 256 + r[1] as u16,
-                flag: r[2] != 0,
-                y: r[3] as u16 * 256 + r[4] as u16,
-                kind: r[5] & 0x7F,
-            }
+            Obj { x: r[0] as u16 * 256 + r[1] as u16, flag: r[2] != 0, y: r[3] as u16 * 256 + r[4] as u16, kind: r[5] & 0x7F }
         })
         .collect()
 }

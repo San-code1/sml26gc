@@ -22,14 +22,7 @@ use std::path::PathBuf;
 use ui::{col, Editor, Mode, TAB_CUSTOM, TAB_POINTS};
 
 fn conf() -> Conf {
-    Conf {
-        window_title: "Level Editor (Rust)".into(),
-        window_width: 1280,
-        window_height: 820,
-        window_resizable: true,
-        high_dpi: false,
-        ..Default::default()
-    }
+    Conf { window_title: "Level Editor (Rust)".into(), window_width: 1280, window_height: 820, window_resizable: true, high_dpi: false, ..Default::default() }
 }
 
 /// Show a message until the window is closed.
@@ -47,17 +40,10 @@ async fn show_forever(text: &str, size: f32, line: f32) -> ! {
 async fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let flag = |f: &str| args.iter().any(|a| a == f);
-    let value = |f: &str| {
-        args.iter()
-            .position(|a| a == f)
-            .and_then(|i| args.get(i + 1))
-    };
+    let value = |f: &str| args.iter().position(|a| a == f).and_then(|i| args.get(i + 1));
     let shot = value("--screenshot").map(PathBuf::from);
     let level = value("--level").and_then(|v| v.parse::<usize>().ok());
-    let rom_arg = args
-        .iter()
-        .find(|a| !a.starts_with("--") && a.to_lowercase().ends_with(".gb"))
-        .map(PathBuf::from);
+    let rom_arg = args.iter().find(|a| !a.starts_with("--") && a.to_lowercase().ends_with(".gb")).map(PathBuf::from);
 
     clear_background(col(3));
     draw_text("Loading...", 40.0, 60.0, 30.0, col(0));
@@ -71,13 +57,7 @@ async fn main() {
         Ok(o) => o,
         Err(e) => show_forever(&e, 26.0, 0.0).await,
     };
-    let mut ed = Editor::new(
-        opened.doc,
-        Box::new(opened.store),
-        Box::new(GameProcess),
-        opened.had_copy,
-        fs_repository::spanish(),
-    );
+    let mut ed = Editor::new(opened.doc, Box::new(opened.store), Box::new(GameProcess), opened.had_copy, fs_repository::spanish());
 
     ed.select_level(level.unwrap_or(0).min(LEVELS - 1));
     if flag("--objects") {
@@ -89,10 +69,7 @@ async fn main() {
             ed.world_tab = TAB_POINTS;
         }
         // --map N: zone map N-1 (0 = the world map)
-        if let Some(z) = value("--map")
-            .and_then(|v| v.parse::<usize>().ok())
-            .filter(|&z| (1..=ZONES.len()).contains(&z))
-        {
+        if let Some(z) = value("--map").and_then(|v| v.parse::<usize>().ok()).filter(|&z| (1..=ZONES.len()).contains(&z)) {
             ed.show_map(OnMap::Zone(z - 1));
         }
         if flag("--custom") {

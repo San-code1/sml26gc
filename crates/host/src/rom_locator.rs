@@ -12,12 +12,7 @@ fn is_rom(p: &Path) -> bool {
 }
 
 fn first_rom_in(dir: &Path) -> Option<PathBuf> {
-    let mut v: Vec<PathBuf> = std::fs::read_dir(dir)
-        .ok()?
-        .flatten()
-        .map(|e| e.path())
-        .filter(|p| is_rom(p))
-        .collect();
+    let mut v: Vec<PathBuf> = std::fs::read_dir(dir).ok()?.flatten().map(|e| e.path()).filter(|p| is_rom(p)).collect();
     v.sort();
     v.into_iter().next()
 }
@@ -43,12 +38,9 @@ pub fn find_rom(arg: Option<PathBuf>) -> Option<PathBuf> {
             d = dir.parent().map(|p| p.to_path_buf());
         }
     }
-    let home = std::env::var("USERPROFILE")
-        .or_else(|_| std::env::var("HOME"))
-        .ok()?;
+    let home = std::env::var("USERPROFILE").or_else(|_| std::env::var("HOME")).ok()?;
     let games = Path::new(&home).join("Games");
-    if let Some(r) = first_rom_in(&games.join("Super Mario Land 2 - 6 Golden Coins (USA, Europe)"))
-    {
+    if let Some(r) = first_rom_in(&games.join("Super Mario Land 2 - 6 Golden Coins (USA, Europe)")) {
         return Some(r);
     }
     for e in std::fs::read_dir(&games).ok()?.flatten() {
@@ -68,10 +60,7 @@ pub fn find_rom(arg: Option<PathBuf>) -> Option<PathBuf> {
 pub fn require_rom(arg: Option<PathBuf>) -> Result<PathBuf, String> {
     match find_rom(arg) {
         Some(p) if p.is_file() => Ok(p),
-        Some(p) => Err(format!(
-            "The cartridge file was not found:\n{}",
-            p.display()
-        )),
+        Some(p) => Err(format!("The cartridge file was not found:\n{}", p.display())),
         None => Err(NO_CARTRIDGE.to_string()),
     }
 }

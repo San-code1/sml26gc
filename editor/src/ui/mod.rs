@@ -110,8 +110,7 @@ impl GridCanvas for WorldCanvas<'_> {
         self.doc.world_snapshot();
     }
     fn paint(&mut self, x: i32, y: i32) {
-        self.doc
-            .set_tile(self.map, x as usize, y as usize, self.tile);
+        self.doc.set_tile(self.map, x as usize, y as usize, self.tile);
     }
 }
 
@@ -124,21 +123,11 @@ fn left_button() -> Pointer {
 }
 
 impl Editor {
-    pub fn new(
-        doc: EditorDocument,
-        store: Box<dyn EditedCopyStore>,
-        launcher: Box<dyn GameLauncher>,
-        had_copy: bool,
-        es: bool,
-    ) -> Editor {
+    pub fn new(doc: EditorDocument, store: Box<dyn EditedCopyStore>, launcher: Box<dyn GameLauncher>, had_copy: bool, es: bool) -> Editor {
         let status = if !had_copy {
             tr(es, "Original cartridge opened. Saving makes an edited copy; the original is never changed.", "Cartucho original abierto. Al guardar se crea una copia editada; el original no se toca.").to_string()
         } else {
-            format!(
-                "{} {}",
-                tr(es, "Edited copy opened:", "Copia editada abierta:"),
-                store.path().display()
-            )
+            format!("{} {}", tr(es, "Edited copy opened:", "Copia editada abierta:"), store.path().display())
         };
         Editor {
             es,
@@ -242,16 +231,11 @@ impl Editor {
         }
         self.cam += d;
         let space = is_key_down(KeyCode::Space);
-        if m.x >= PANEL
-            && (is_mouse_button_pressed(MouseButton::Middle)
-                || (space && is_mouse_button_pressed(MouseButton::Left)))
-        {
+        if m.x >= PANEL && (is_mouse_button_pressed(MouseButton::Middle) || (space && is_mouse_button_pressed(MouseButton::Left))) {
             self.pan = Some((m, self.cam));
         }
         if let Some((m0, c0)) = self.pan {
-            if is_mouse_button_down(MouseButton::Middle)
-                || (space && is_mouse_button_down(MouseButton::Left))
-            {
+            if is_mouse_button_down(MouseButton::Middle) || (space && is_mouse_button_down(MouseButton::Left)) {
                 self.cam = c0 - (m - m0) / self.scale();
             } else {
                 self.pan = None;
@@ -282,12 +266,7 @@ impl Editor {
                 return;
             }
             Capture::NotLoaded => {
-                self.status = tr(
-                    self.es,
-                    "The game didn't load this level; its graphics may be wrong.",
-                    "El juego no cargo este nivel; sus graficos pueden no ser correctos.",
-                )
-                .into();
+                self.status = tr(self.es, "The game didn't load this level; its graphics may be wrong.", "El juego no cargo este nivel; sus graficos pueden no ser correctos.").into();
             }
             Capture::Captured => {}
         }
@@ -335,28 +314,14 @@ impl Editor {
         let (c0, r0, r1) = self.doc.content_area(l);
         let view_h = (screen_height() - STATUS_H) / self.scale();
         let content_h = (r1 + 1 - r0) as f32 * BLOCK;
-        let y = if content_h <= view_h {
-            (r1 + 1) as f32 * BLOCK - view_h
-        } else {
-            r0 as f32 * BLOCK
-        };
+        let y = if content_h <= view_h { (r1 + 1) as f32 * BLOCK - view_h } else { r0 as f32 * BLOCK };
         self.cam = vec2(c0 as f32 * BLOCK, y.max(0.0));
         self.overview_stale = true;
         let shared = self.doc.sharing(l);
         self.status = if shared.is_empty() {
             format!("{} {:02}", tr(self.es, "Level", "Nivel"), l)
         } else {
-            format!(
-                "{} {:02}: {} {:?}",
-                tr(self.es, "Level", "Nivel"),
-                l,
-                tr(
-                    self.es,
-                    "its map is also used by level(s)",
-                    "su mapa tambien lo usa(n) el/los nivel(es)"
-                ),
-                shared
-            )
+            format!("{} {:02}: {} {:?}", tr(self.es, "Level", "Nivel"), l, tr(self.es, "its map is also used by level(s)", "su mapa tambien lo usa(n) el/los nivel(es)"), shared)
         };
     }
 
@@ -368,12 +333,7 @@ impl Editor {
             self.level_cam = self.cam;
             self.ensure_world_art();
             self.cam = self.world_cam;
-            self.status = tr(
-                self.es,
-                "World map: paint its tiles, or choose which level each point opens.",
-                "Mapa de mundos: pinta sus tiles o elige que nivel abre cada punto.",
-            )
-            .into();
+            self.status = tr(self.es, "World map: paint its tiles, or choose which level each point opens.", "Mapa de mundos: pinta sus tiles o elige que nivel abre cada punto.").into();
         } else {
             self.world_cam = self.cam;
             self.cam = self.level_cam;
@@ -399,12 +359,7 @@ impl Editor {
         self.doc.restore_level(self.cur);
         self.sel_obj = None;
         self.overview_stale = true;
-        self.status = tr(
-            self.es,
-            "Level restored to the original (save to keep it).",
-            "Nivel restaurado al original (guarda para conservarlo).",
-        )
-        .into();
+        self.status = tr(self.es, "Level restored to the original (save to keep it).", "Nivel restaurado al original (guarda para conservarlo).").into();
     }
 
     /// Save the edited copy; the status bar says what happened.
@@ -422,20 +377,14 @@ impl Editor {
                         Saved::Objects(n) => n.to_string(),
                         Saved::WorldMap => tr(es, "world map", "mapa de mundos").to_string(),
                         Saved::LevelPoints => tr(es, "level points", "puntos de nivel").to_string(),
-                        Saved::CustomMap => {
-                            tr(es, "your world map", "tu mapa de mundos").to_string()
-                        }
+                        Saved::CustomMap => tr(es, "your world map", "tu mapa de mundos").to_string(),
                     })
                     .collect();
                 self.status = format!(
                     "{} {} {}",
                     tr(es, "Saved", "Guardado en"),
                     self.store.path().display(),
-                    if notes.is_empty() {
-                        String::new()
-                    } else {
-                        format!("({})", notes.join(", "))
-                    }
+                    if notes.is_empty() { String::new() } else { format!("({})", notes.join(", ")) }
                 );
                 true
             }
@@ -444,10 +393,7 @@ impl Editor {
                 false
             }
             Err(SaveError::CustomMap(e)) => {
-                self.status = format!(
-                    "{}: {e}",
-                    tr(es, "Could not save the map", "No se pudo guardar el mapa")
-                );
+                self.status = format!("{}: {e}", tr(es, "Could not save the map", "No se pudo guardar el mapa"));
                 false
             }
             Err(SaveError::Write(e)) => {
@@ -463,11 +409,7 @@ impl Editor {
             return;
         }
         self.status = match self.launcher.launch(self.store.path(), Some(self.cur)) {
-            Ok(()) => format!(
-                "{} {:02}",
-                tr(self.es, "Playing level", "Jugando el nivel"),
-                self.cur
-            ),
+            Ok(()) => format!("{} {:02}", tr(self.es, "Playing level", "Jugando el nivel"), self.cur),
             Err(e) => format!("{} {e}", tr(self.es, "Could not start", "No se pudo abrir")),
         };
     }
@@ -478,12 +420,7 @@ impl Editor {
             return;
         }
         self.status = match self.launcher.launch(self.store.path(), None) {
-            Ok(()) => tr(
-                self.es,
-                "Game started with your map.",
-                "Juego abierto con tu mapa.",
-            )
-            .into(),
+            Ok(()) => tr(self.es, "Game started with your map.", "Juego abierto con tu mapa.").into(),
             Err(e) => e,
         };
     }
@@ -501,20 +438,8 @@ impl Editor {
         if !self.doc.custom.points.is_empty() {
             return;
         }
-        for (i, (x, y, l)) in [
-            (120, 120, Some(0u8)),
-            (180, 140, None),
-            (240, 150, Some(1)),
-            (300, 200, Some(2)),
-        ]
-        .iter()
-        .enumerate()
-        {
-            self.doc.custom.points.push(Point {
-                x: *x,
-                y: *y,
-                level: *l,
-            });
+        for (i, (x, y, l)) in [(120, 120, Some(0u8)), (180, 140, None), (240, 150, Some(1)), (300, 200, Some(2))].iter().enumerate() {
+            self.doc.custom.points.push(Point { x: *x, y: *y, level: *l });
             if i > 0 {
                 self.doc.custom.paths.push((i - 1, i));
             }

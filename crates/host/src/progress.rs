@@ -3,9 +3,7 @@ use std::collections::HashSet;
 use std::path::Path;
 
 pub fn load(path: &Path) -> HashSet<u8> {
-    std::fs::read_to_string(path)
-        .map(|t| parse(&t))
-        .unwrap_or_default()
+    std::fs::read_to_string(path).map(|t| parse(&t)).unwrap_or_default()
 }
 
 pub fn save(path: &Path, cleared: &HashSet<u8>) -> std::io::Result<()> {
@@ -16,18 +14,13 @@ pub fn save(path: &Path, cleared: &HashSet<u8>) -> std::io::Result<()> {
 }
 
 fn parse(text: &str) -> HashSet<u8> {
-    text.split_whitespace()
-        .filter_map(|w| w.parse().ok())
-        .collect()
+    text.split_whitespace().filter_map(|w| w.parse().ok()).collect()
 }
 
 fn format(cleared: &HashSet<u8>) -> String {
     let mut v: Vec<u8> = cleared.iter().copied().collect();
     v.sort();
-    v.iter()
-        .map(|l| l.to_string())
-        .collect::<Vec<_>>()
-        .join(" ")
+    v.iter().map(|l| l.to_string()).collect::<Vec<_>>().join(" ")
 }
 
 #[cfg(test)]

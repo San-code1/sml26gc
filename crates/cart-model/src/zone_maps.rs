@@ -26,62 +26,14 @@ pub struct ZoneMap {
 }
 
 pub const ZONES: [ZoneMap; 8] = [
-    ZoneMap {
-        name: "Tree Zone",
-        name_es: "Zona Arbol",
-        bank: 0x0E,
-        addr: 0x7240,
-        point: 0x20,
-    },
-    ZoneMap {
-        name: "Pumpkin Zone",
-        name_es: "Zona Calabaza",
-        bank: 0x0E,
-        addr: 0x7000,
-        point: 0x28,
-    },
-    ZoneMap {
-        name: "Macro Zone",
-        name_es: "Zona Macro",
-        bank: 0x0E,
-        addr: 0x76C0,
-        point: 0x32,
-    },
-    ZoneMap {
-        name: "Space Zone",
-        name_es: "Zona Espacial",
-        bank: 0x0E,
-        addr: 0x7480,
-        point: 0x3C,
-    },
-    ZoneMap {
-        name: "Turtle Zone",
-        name_es: "Zona Tortuga",
-        bank: 0x0E,
-        addr: 0x7900,
-        point: 0x46,
-    },
-    ZoneMap {
-        name: "Mario Zone",
-        name_es: "Zona Mario",
-        bank: 0x0E,
-        addr: 0x7B40,
-        point: 0x50,
-    },
-    ZoneMap {
-        name: "Wario's Castle",
-        name_es: "Castillo de Wario",
-        bank: 0x0E,
-        addr: 0x7D80,
-        point: 0x5C,
-    },
-    ZoneMap {
-        name: "Bonus game",
-        name_es: "Juego de bonus",
-        bank: 0x10,
-        addr: 0x7000,
-        point: 0x6E,
-    },
+    ZoneMap { name: "Tree Zone", name_es: "Zona Arbol", bank: 0x0E, addr: 0x7240, point: 0x20 },
+    ZoneMap { name: "Pumpkin Zone", name_es: "Zona Calabaza", bank: 0x0E, addr: 0x7000, point: 0x28 },
+    ZoneMap { name: "Macro Zone", name_es: "Zona Macro", bank: 0x0E, addr: 0x76C0, point: 0x32 },
+    ZoneMap { name: "Space Zone", name_es: "Zona Espacial", bank: 0x0E, addr: 0x7480, point: 0x3C },
+    ZoneMap { name: "Turtle Zone", name_es: "Zona Tortuga", bank: 0x0E, addr: 0x7900, point: 0x46 },
+    ZoneMap { name: "Mario Zone", name_es: "Zona Mario", bank: 0x0E, addr: 0x7B40, point: 0x50 },
+    ZoneMap { name: "Wario's Castle", name_es: "Castillo de Wario", bank: 0x0E, addr: 0x7D80, point: 0x5C },
+    ZoneMap { name: "Bonus game", name_es: "Juego de bonus", bank: 0x10, addr: 0x7000, point: 0x6E },
 ];
 
 fn at(z: &ZoneMap, x: usize, y: usize) -> usize {
@@ -90,9 +42,7 @@ fn at(z: &ZoneMap, x: usize, y: usize) -> usize {
 
 /// Zone `z`'s picture as 20 x 18 tile numbers, row by row.
 pub fn read(rom: &[u8], z: usize) -> Vec<u8> {
-    (0..W * H)
-        .map(|i| rom[at(&ZONES[z], i % W, i / W)])
-        .collect()
+    (0..W * H).map(|i| rom[at(&ZONES[z], i % W, i / W)]).collect()
 }
 
 /// Write zone `z`'s picture back (same place; the twin bank of an expanded copy too).
@@ -128,12 +78,7 @@ mod tests {
         for (i, a) in ZONES.iter().enumerate() {
             for b in &ZONES[i + 1..] {
                 let (s, t) = (offset(a.bank, a.addr), offset(b.bank, b.addr));
-                assert!(
-                    s + STRIDE * H <= t || t + STRIDE * H <= s,
-                    "{} / {}",
-                    a.name,
-                    b.name
-                );
+                assert!(s + STRIDE * H <= t || t + STRIDE * H <= s, "{} / {}", a.name, b.name);
             }
         }
     }

@@ -260,11 +260,7 @@ impl Ppu {
                     tile &= 0xFE;
                 }
                 let addr = tile * 16 + row as usize * 2;
-                let pal = if attr & 0x10 != 0 {
-                    self.obp1
-                } else {
-                    self.obp0
-                };
+                let pal = if attr & 0x10 != 0 { self.obp1 } else { self.obp0 };
                 for px in 0..8i32 {
                     let sx = x + px;
                     if !(0..W as i32).contains(&sx) {

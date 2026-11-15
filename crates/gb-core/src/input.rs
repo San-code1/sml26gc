@@ -75,10 +75,7 @@ mod tests {
         let b = Buttons::RIGHT | Buttons::A;
         assert!(b.contains(Buttons::A) && !b.contains(Buttons::B));
         assert_eq!(b & !Buttons::RIGHT, Buttons::A);
-        assert_eq!(
-            (Buttons::A | Buttons::B).newly_pressed(Buttons::A),
-            Buttons::B
-        );
+        assert_eq!((Buttons::A | Buttons::B).newly_pressed(Buttons::A), Buttons::B);
         assert_eq!(b.bits(), 0x11);
         assert!(Buttons::NONE.is_empty());
     }

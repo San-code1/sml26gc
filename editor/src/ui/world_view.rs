@@ -13,9 +13,7 @@ use macroquad::prelude::*;
 
 /// The maps in the order the map selector steps through them.
 fn all_maps() -> Vec<OnMap> {
-    std::iter::once(OnMap::World)
-        .chain((0..ZONES.len()).map(OnMap::Zone))
-        .collect()
+    std::iter::once(OnMap::World).chain((0..ZONES.len()).map(OnMap::Zone)).collect()
 }
 
 impl Editor {
@@ -40,26 +38,19 @@ impl Editor {
 
     /// Screen position of a pixel of the shown map picture.
     fn on_screen(&self, x: i32, y: i32) -> Vec2 {
-        vec2(
-            PANEL + (x as f32 - self.cam.x) * self.scale(),
-            (y as f32 - self.cam.y) * self.scale(),
-        )
+        vec2(PANEL + (x as f32 - self.cam.x) * self.scale(), (y as f32 - self.cam.y) * self.scale())
     }
 
     /// The game's own point drawn under the mouse on the shown map.
     fn spot_at(&self, m: Vec2) -> Option<&'static Spot> {
         let w = self.world_pos(m);
-        original_points::on(self.world_map)
-            .find(|s| (vec2(s.x as f32, s.y as f32) - w).length() <= 7.0)
+        original_points::on(self.world_map).find(|s| (vec2(s.x as f32, s.y as f32) - w).length() <= 7.0)
     }
 
     /// Choose one of the game's own points; the map it is drawn on is shown.
     fn select_original_point(&mut self, p: usize) {
         self.point = p;
-        if let Some(s) = original_points::SPOTS
-            .iter()
-            .find(|s| s.point as usize == p)
-        {
+        if let Some(s) = original_points::SPOTS.iter().find(|s| s.point as usize == p) {
             self.show_map(s.map);
         }
     }
@@ -114,16 +105,8 @@ impl Editor {
                 self.tile = self.doc.tile(self.world_map, x, y);
             }
         }
-        let mut canvas = WorldCanvas {
-            doc: &mut self.doc,
-            map: self.world_map,
-            tile: self.tile,
-        };
-        self.tool.handle(
-            &mut canvas,
-            cell.map(|(x, y)| (x as i32, y as i32)),
-            left_button(),
-        );
+        let mut canvas = WorldCanvas { doc: &mut self.doc, map: self.world_map, tile: self.tile };
+        self.tool.handle(&mut canvas, cell.map(|(x, y)| (x as i32, y as i32)), left_button());
     }
 
     pub(super) fn draw_world(&mut self) {
@@ -146,12 +129,7 @@ impl Editor {
                         p.y.floor(),
                         WHITE,
                         DrawTextureParams {
-                            source: Some(Rect::new(
-                                (t % 16) as f32 * 8.0,
-                                (t / 16) as f32 * 8.0,
-                                8.0,
-                                8.0,
-                            )),
+                            source: Some(Rect::new((t % 16) as f32 * 8.0, (t / 16) as f32 * 8.0, 8.0, 8.0)),
                             dest_size: Some(vec2(s.ceil(), s.ceil())),
                             ..Default::default()
                         },
@@ -183,25 +161,14 @@ impl Editor {
                     p.y,
                     Color::new(1.0, 1.0, 1.0, 0.6),
                     DrawTextureParams {
-                        source: Some(Rect::new(
-                            (self.tile % 16) as f32 * 8.0,
-                            (self.tile / 16) as f32 * 8.0,
-                            8.0,
-                            8.0,
-                        )),
+                        source: Some(Rect::new((self.tile % 16) as f32 * 8.0, (self.tile / 16) as f32 * 8.0, 8.0, 8.0)),
                         dest_size: Some(vec2(s, s)),
                         ..Default::default()
                     },
                 );
                 draw_rectangle_lines(p.x, p.y, s, s, 2.0, WHITE);
                 let t = self.doc.tile(self.world_map, x, y);
-                draw_text(
-                    &format!("{x},{y}  #{t:02X}"),
-                    PANEL + 8.0,
-                    ch - 8.0,
-                    20.0,
-                    WHITE,
-                );
+                draw_text(&format!("{x},{y}  #{t:02X}"), PANEL + 8.0, ch - 8.0, 20.0, WHITE);
             }
         }
         let (act, y) = self.world_panel_top();
@@ -235,21 +202,10 @@ impl Editor {
     fn world_panel_top(&mut self) -> (u32, f32) {
         draw_rectangle(0.0, 0.0, PANEL, screen_height(), col(0));
         draw_rectangle(PANEL - 3.0, 0.0, 3.0, screen_height(), col(3));
-        draw_text(
-            tr(self.es, "WORLD MAP EDITOR", "EDITOR DEL MAPA"),
-            10.0,
-            22.0,
-            24.0,
-            col(3),
-        );
+        draw_text(tr(self.es, "WORLD MAP EDITOR", "EDITOR DEL MAPA"), 10.0, 22.0, 24.0, col(3));
         let mut y = 34.0;
         let mut act = 0;
-        if button(
-            Rect::new(10.0, y, 276.0, 26.0),
-            tr(self.es, "Back to the levels", "Volver a los niveles"),
-            false,
-            16.0,
-        ) {
+        if button(Rect::new(10.0, y, 276.0, 26.0), tr(self.es, "Back to the levels", "Volver a los niveles"), false, 16.0) {
             act = 9;
         }
         y += 30.0;
@@ -267,88 +223,38 @@ impl Editor {
             self.show_map(maps[(i + 1) % maps.len()]);
         }
         y += 30.0;
-        if button(
-            Rect::new(10.0, y, 88.0, 26.0),
-            tr(self.es, "Picture", "Dibujo"),
-            self.world_tab == TAB_PICTURE,
-            15.0,
-        ) {
+        if button(Rect::new(10.0, y, 88.0, 26.0), tr(self.es, "Picture", "Dibujo"), self.world_tab == TAB_PICTURE, 15.0) {
             self.world_tab = TAB_PICTURE;
         }
-        if button(
-            Rect::new(102.0, y, 88.0, 26.0),
-            tr(self.es, "Orig. points", "Puntos orig."),
-            self.world_tab == TAB_POINTS,
-            15.0,
-        ) {
+        if button(Rect::new(102.0, y, 88.0, 26.0), tr(self.es, "Orig. points", "Puntos orig."), self.world_tab == TAB_POINTS, 15.0) {
             self.world_tab = TAB_POINTS;
         }
-        if button(
-            Rect::new(194.0, y, 92.0, 26.0),
-            tr(self.es, "Your map", "Mapa propio"),
-            self.world_tab == TAB_CUSTOM,
-            15.0,
-        ) {
+        if button(Rect::new(194.0, y, 92.0, 26.0), tr(self.es, "Your map", "Mapa propio"), self.world_tab == TAB_CUSTOM, 15.0) {
             self.world_tab = TAB_CUSTOM;
             self.show_map(OnMap::World);
         }
         y += 30.0;
-        if button(
-            Rect::new(10.0, y, 92.0, 26.0),
-            tr(self.es, "Pencil (B)", "Lapiz (B)"),
-            self.tool.kind() == ToolKind::Pencil,
-            16.0,
-        ) {
+        if button(Rect::new(10.0, y, 92.0, 26.0), tr(self.es, "Pencil (B)", "Lapiz (B)"), self.tool.kind() == ToolKind::Pencil, 16.0) {
             self.set_tool(ToolKind::Pencil);
         }
-        if button(
-            Rect::new(106.0, y, 92.0, 26.0),
-            tr(self.es, "Box (R)", "Caja (R)"),
-            self.tool.kind() == ToolKind::Box,
-            16.0,
-        ) {
+        if button(Rect::new(106.0, y, 92.0, 26.0), tr(self.es, "Box (R)", "Caja (R)"), self.tool.kind() == ToolKind::Box, 16.0) {
             self.set_tool(ToolKind::Box);
         }
-        if button(
-            Rect::new(202.0, y, 84.0, 26.0),
-            tr(self.es, "Grid (G)", "Rejilla (G)"),
-            self.grid,
-            16.0,
-        ) {
+        if button(Rect::new(202.0, y, 84.0, 26.0), tr(self.es, "Grid (G)", "Rejilla (G)"), self.grid, 16.0) {
             self.grid = !self.grid;
         }
         y += 30.0;
-        if button(
-            Rect::new(10.0, y, 92.0, 26.0),
-            tr(self.es, "Undo", "Deshacer"),
-            false,
-            16.0,
-        ) {
+        if button(Rect::new(10.0, y, 92.0, 26.0), tr(self.es, "Undo", "Deshacer"), false, 16.0) {
             act = 1;
         }
-        if button(
-            Rect::new(106.0, y, 92.0, 26.0),
-            tr(self.es, "Redo", "Rehacer"),
-            false,
-            16.0,
-        ) {
+        if button(Rect::new(106.0, y, 92.0, 26.0), tr(self.es, "Redo", "Rehacer"), false, 16.0) {
             act = 2;
         }
-        if button(
-            Rect::new(202.0, y, 84.0, 26.0),
-            tr(self.es, "Original", "Original"),
-            false,
-            16.0,
-        ) {
+        if button(Rect::new(202.0, y, 84.0, 26.0), tr(self.es, "Original", "Original"), false, 16.0) {
             act = 3;
         }
         y += 30.0;
-        if button(
-            Rect::new(10.0, y, 276.0, 28.0),
-            tr(self.es, "Save (Ctrl+S)", "Guardar (Ctrl+S)"),
-            false,
-            17.0,
-        ) {
+        if button(Rect::new(10.0, y, 276.0, 28.0), tr(self.es, "Save (Ctrl+S)", "Guardar (Ctrl+S)"), false, 17.0) {
             act = 4;
         }
         y += 38.0;
@@ -358,21 +264,9 @@ impl Editor {
     /// The shown map's 256 tiles to paint with.
     fn tile_palette(&mut self, mut y: f32) {
         let mp: Vec2 = mouse_position().into();
-        draw_text(
-            &format!(
-                "{} #{:02X}",
-                tr(self.es, "TILES  selected", "TILES  elegido"),
-                self.tile
-            ),
-            10.0,
-            y + 12.0,
-            18.0,
-            col(3),
-        );
+        draw_text(&format!("{} #{:02X}", tr(self.es, "TILES  selected", "TILES  elegido"), self.tile), 10.0, y + 12.0, 18.0, col(3));
         y += 18.0;
-        let Some(atlas) = self.map_atlas() else {
-            return;
-        };
+        let Some(atlas) = self.map_atlas() else { return };
         let cell = (17.0f32).min((screen_height() - y - 30.0) / 16.0);
         let mut picked = None;
         for t in 0..=255u8 {
@@ -384,12 +278,7 @@ impl Editor {
                 yy,
                 WHITE,
                 DrawTextureParams {
-                    source: Some(Rect::new(
-                        (t % 16) as f32 * 8.0,
-                        (t / 16) as f32 * 8.0,
-                        8.0,
-                        8.0,
-                    )),
+                    source: Some(Rect::new((t % 16) as f32 * 8.0, (t / 16) as f32 * 8.0, 8.0, 8.0)),
                     dest_size: Some(vec2(cell - 1.0, cell - 1.0)),
                     ..Default::default()
                 },
@@ -397,26 +286,14 @@ impl Editor {
             if t == self.tile {
                 draw_rectangle_lines(x - 1.0, yy - 1.0, cell + 1.0, cell + 1.0, 2.0, col(3));
             }
-            if Rect::new(x, yy, cell - 1.0, cell - 1.0).contains(mp)
-                && is_mouse_button_pressed(MouseButton::Left)
-            {
+            if Rect::new(x, yy, cell - 1.0, cell - 1.0).contains(mp) && is_mouse_button_pressed(MouseButton::Left) {
                 picked = Some(t);
             }
         }
         if let Some(t) = picked {
             self.tile = t;
         }
-        draw_text(
-            tr(
-                self.es,
-                "Right click on the map: pick a tile",
-                "Clic derecho en el mapa: coger tile",
-            ),
-            10.0,
-            (y + 16.0 * cell + 14.0).min(screen_height() - 4.0),
-            15.0,
-            col(2),
-        );
+        draw_text(tr(self.es, "Right click on the map: pick a tile", "Clic derecho en el mapa: coger tile"), 10.0, (y + 16.0 * cell + 14.0).min(screen_height() - 4.0), 15.0, col(2));
     }
 
     /// The game's own points on the shown map: where the game draws them, the level each
@@ -452,34 +329,15 @@ impl Editor {
         if button(Rect::new(70.0, y, 26.0, 26.0), "-", false, 18.0) {
             self.select_original_point((self.point + world::POINT_COUNT - 1) % world::POINT_COUNT);
         }
-        draw_text(
-            &format!("{:02X}", self.point),
-            104.0,
-            y + 18.0,
-            20.0,
-            col(3),
-        );
+        draw_text(&format!("{:02X}", self.point), 104.0, y + 18.0, 20.0, col(3));
         if button(Rect::new(130.0, y, 26.0, 26.0), "+", false, 18.0) {
             self.select_original_point((self.point + 1) % world::POINT_COUNT);
         }
-        let drawn = original_points::SPOTS
-            .iter()
-            .find(|s| s.point as usize == self.point)
-            .map(|s| self.map_name(s.map));
-        draw_text(
-            drawn.unwrap_or(tr(self.es, "(not drawn)", "(no se dibuja)")),
-            162.0,
-            y + 18.0,
-            15.0,
-            col(2),
-        );
+        let drawn = original_points::SPOTS.iter().find(|s| s.point as usize == self.point).map(|s| self.map_name(s.map));
+        draw_text(drawn.unwrap_or(tr(self.es, "(not drawn)", "(no se dibuja)")), 162.0, y + 18.0, 15.0, col(2));
         y += 30.0;
         let cur = self.doc.points[self.point];
-        let label = if cur == world::NO_LEVEL {
-            tr(self.es, "no level", "sin nivel").to_string()
-        } else {
-            format!("{} {:02}", tr(self.es, "level", "nivel"), cur)
-        };
+        let label = if cur == world::NO_LEVEL { tr(self.es, "no level", "sin nivel").to_string() } else { format!("{} {:02}", tr(self.es, "level", "nivel"), cur) };
         draw_text(tr(self.es, "Opens", "Abre"), 10.0, y + 18.0, 18.0, col(3));
         let mut change: i32 = 0;
         if button(Rect::new(70.0, y, 26.0, 26.0), "-", false, 18.0) {
@@ -491,29 +349,14 @@ impl Editor {
         }
         self.doc.step_point_level(self.point, change);
         y += 34.0;
-        let title = format!(
-            "{} {}:",
-            tr(self.es, "Points on", "Puntos en"),
-            self.map_name(self.world_map)
-        );
+        let title = format!("{} {}:", tr(self.es, "Points on", "Puntos en"), self.map_name(self.world_map));
         draw_text(&title, 10.0, y + 12.0, 15.0, col(2));
         y += 18.0;
-        let list: Vec<usize> = original_points::on(self.world_map)
-            .map(|s| s.point as usize)
-            .collect();
+        let list: Vec<usize> = original_points::on(self.world_map).map(|s| s.point as usize).collect();
         for (k, &p) in list.iter().enumerate() {
-            let r = Rect::new(
-                10.0 + (k % 3) as f32 * 92.0,
-                y + (k / 3) as f32 * 24.0,
-                88.0,
-                22.0,
-            );
+            let r = Rect::new(10.0 + (k % 3) as f32 * 92.0, y + (k / 3) as f32 * 24.0, 88.0, 22.0);
             let l = self.doc.points[p];
-            let text = if l < 32 {
-                format!("{p:02X} > {l:02}")
-            } else {
-                format!("{p:02X} > -")
-            };
+            let text = if l < 32 { format!("{p:02X} > {l:02}") } else { format!("{p:02X} > -") };
             if button(r, &text, p == self.point, 15.0) {
                 self.point = p;
             }

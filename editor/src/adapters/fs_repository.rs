@@ -45,11 +45,7 @@ pub fn open(original_path: &Path) -> Result<Opened, String> {
     let edited = std::fs::read(&path).ok();
     let custom = host::load_custom_map(&path).unwrap_or_default();
     let had_copy = path.exists();
-    Ok(Opened {
-        doc: EditorDocument::open(original, edited, custom),
-        store: EditedCopyFile { path },
-        had_copy,
-    })
+    Ok(Opened { doc: EditorDocument::open(original, edited, custom), store: EditedCopyFile { path }, had_copy })
 }
 
 /// Language from the game's settings file (English unless Spanish was chosen).

@@ -1,8 +1,6 @@
 //! Driving this cartridge's program from outside: reading which screen it is on, and the
 //! button sequences and memory writes that take it to the map, into a level or back.
-use crate::ram_map::{
-    GameMode, GAME_MODE, LEAVE_LEVEL_WRITES, LEVEL_NUMBER, MAP_POINT, SPECIAL_MAP_POINTS,
-};
+use crate::ram_map::{GameMode, GAME_MODE, LEAVE_LEVEL_WRITES, LEVEL_NUMBER, MAP_POINT, SPECIAL_MAP_POINTS};
 use crate::world::point_levels;
 use gb_core::{Buttons, Gb};
 
@@ -106,9 +104,7 @@ impl GameDriver for Gb {
 
     fn enter_level_anywhere(&mut self, level: u8) -> bool {
         let table = point_levels(self.cart().rom());
-        if let Some(p) =
-            (0..table.len()).find(|&p| table[p] < 32 && !SPECIAL_MAP_POINTS.contains(&(p as u8)))
-        {
+        if let Some(p) = (0..table.len()).find(|&p| table[p] < 32 && !SPECIAL_MAP_POINTS.contains(&(p as u8))) {
             self.write(MAP_POINT, p as u8);
         }
         self.enter_level(level)
@@ -126,11 +122,7 @@ impl GameDriver for Gb {
         let mut up = 0;
         for _ in 0..900u32 {
             self.run_frame_with(Buttons::NONE);
-            up = if self.mode() == GameMode::Map {
-                up + 1
-            } else {
-                0
-            };
+            up = if self.mode() == GameMode::Map { up + 1 } else { 0 };
             if up >= 120 {
                 return true;
             }

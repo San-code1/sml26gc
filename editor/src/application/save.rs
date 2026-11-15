@@ -11,15 +11,10 @@ pub enum SaveError {
     Write(std::io::Error),
 }
 
-pub fn save(
-    doc: &mut EditorDocument,
-    store: &dyn EditedCopyStore,
-) -> Result<Vec<Saved>, SaveError> {
+pub fn save(doc: &mut EditorDocument, store: &dyn EditedCopyStore) -> Result<Vec<Saved>, SaveError> {
     let mut parts = doc.commit().map_err(SaveError::Layout)?;
     if doc.custom_dirty {
-        store
-            .save_custom_map(&doc.custom)
-            .map_err(SaveError::CustomMap)?;
+        store.save_custom_map(&doc.custom).map_err(SaveError::CustomMap)?;
         doc.custom_dirty = false;
         parts.push(Saved::CustomMap);
     }

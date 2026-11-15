@@ -6,8 +6,7 @@ use std::path::Path;
 /// Power on a Game Boy with this cartridge file; with `load_save`, its battery RAM comes
 /// from the save file (if there is one).
 pub fn load_gb(rom_path: &Path, sample_rate: u32, load_save: bool) -> Result<Gb, String> {
-    let rom = std::fs::read(rom_path)
-        .map_err(|e| format!("could not read {}: {e}", rom_path.display()))?;
+    let rom = std::fs::read(rom_path).map_err(|e| format!("could not read {}: {e}", rom_path.display()))?;
     let mut gb = Gb::new(rom, sample_rate)?;
     if load_save && gb.cart().has_battery() {
         if let Ok(data) = std::fs::read(save_path(rom_path)) {

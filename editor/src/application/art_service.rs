@@ -27,12 +27,7 @@ pub struct ArtService {
 
 impl ArtService {
     pub fn new() -> ArtService {
-        ArtService {
-            boot: None,
-            levels: (0..LEVELS).map(|_| None).collect(),
-            world: None,
-            zones: ZONES.iter().map(|_| None).collect(),
-        }
+        ArtService { boot: None, levels: (0..LEVELS).map(|_| None).collect(), world: None, zones: ZONES.iter().map(|_| None).collect() }
     }
 
     pub fn booted(&self) -> bool {

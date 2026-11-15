@@ -8,9 +8,7 @@ use std::path::Path;
 
 /// Longest run of $FF and of $00 in each bank (possible free space).
 pub fn free_space(rom_path: &Path) {
-    let Ok(rom) = std::fs::read(rom_path) else {
-        return;
-    };
+    let Ok(rom) = std::fs::read(rom_path) else { return };
     for bank in 0..rom.len() / 0x4000 {
         let b = &rom[bank * 0x4000..(bank + 1) * 0x4000];
         let longest = |v: u8| {
@@ -30,11 +28,7 @@ pub fn free_space(rom_path: &Path) {
         };
         let (ff, ffa) = longest(0xFF);
         let (zz, za) = longest(0x00);
-        println!(
-            "bank {bank:02x}: FF run {ff} at {:04x}, 00 run {zz} at {:04x}",
-            ffa + if bank == 0 { 0 } else { 0x4000 },
-            za + if bank == 0 { 0 } else { 0x4000 }
-        );
+        println!("bank {bank:02x}: FF run {ff} at {:04x}, 00 run {zz} at {:04x}", ffa + if bank == 0 { 0 } else { 0x4000 }, za + if bank == 0 { 0 } else { 0x4000 });
     }
 }
 
@@ -54,9 +48,7 @@ pub fn objects(rom_path: &Path, level: u8) {
     gb.boot_to_map();
     gb.enter_level(level);
     for (k, (b, c, d)) in raw.iter().enumerate() {
-        let r: Vec<String> = (0..5)
-            .map(|j| format!("{:02x}", gb.cart().ram()[0xB06 + k * 5 + j]))
-            .collect();
+        let r: Vec<String> = (0..5).map(|j| format!("{:02x}", gb.cart().ram()[0xB06 + k * 5 + j])).collect();
         println!("{k:2}: {b:02x} {c:02x} {d:02x}   -> ram {}", r.join(" "));
     }
     println!("{} objects, list at file {p:05x}", raw.len());
@@ -83,11 +75,7 @@ pub fn world_shot(rom_path: &Path, off: usize, len: usize, width: usize, png: &P
             } else {
                 rom[off + ty * width + tx]
             };
-            let base = if lcdc & 0x10 != 0 {
-                t as usize * 16
-            } else {
-                (0x1000 + (t as i8 as i32) * 16) as usize
-            };
+            let base = if lcdc & 0x10 != 0 { t as usize * 16 } else { (0x1000 + (t as i8 as i32) * 16) as usize };
             for y in 0..8 {
                 for x in 0..8 {
                     let a = base + y * 2;
@@ -115,11 +103,7 @@ pub fn looks(rom_path: &Path, level: usize, png: &Path) {
     let Some(mut gb) = load(rom_path) else { return };
     let rom = gb.cart().rom().to_vec();
     gb.boot_to_map();
-    let mut kinds: Vec<u8> = objects::read(&rom, level)
-        .0
-        .iter()
-        .map(|o| o.kind)
-        .collect();
+    let mut kinds: Vec<u8> = objects::read(&rom, level).0.iter().map(|o| o.kind).collect();
     kinds.sort();
     kinds.dedup();
     let cell = 40usize;
@@ -127,13 +111,7 @@ pub fn looks(rom_path: &Path, level: usize, png: &Path) {
     let mut rgba = vec![255u8; w * cell * 4];
     for (i, &k) in kinds.iter().enumerate() {
         let look = cart_model::art::capture_look(&gb, &rom, &rom, level, k);
-        println!(
-            "type {k:02X}: {}",
-            match &look {
-                Some(l) => format!("{}x{} offset {},{}", l.w, l.h, l.dx, l.dy),
-                None => "nothing drawn".into(),
-            }
-        );
+        println!("type {k:02X}: {}", match &look { Some(l) => format!("{}x{} offset {},{}", l.w, l.h, l.dx, l.dy), None => "nothing drawn".into() });
         if let Some(l) = look {
             for y in 0..l.h.min(cell) {
                 for x in 0..l.w.min(cell) {
@@ -192,9 +170,7 @@ pub fn map_after(rom_path: &Path, level: u8, png: &Path, at_point: Option<u8>) {
 pub fn map_scan(rom_path: &Path, dir: &Path) {
     use cart_model::ram_map::{GAME_MODE, MAP_POINT};
     use cart_model::world::POINT_COUNT;
-    let Some(mut base) = load(rom_path) else {
-        return;
-    };
+    let Some(mut base) = load(rom_path) else { return };
     base.boot_to_map();
     base.enter_level_anywhere(1);
     for _ in 0..60 {
@@ -224,22 +200,15 @@ pub fn map_scan(rom_path: &Path, dir: &Path) {
         let world = on_world_picture(&mut gb);
         // Mario's sprite (tile $0A first) -> the middle of his feet on the screen
         let o = gb.video().oam().to_vec();
-        let mario = (0..40)
-            .find(|&i| o[i * 4 + 2] == 0x0A && o[i * 4] != 0)
-            .map(|i| (o[i * 4 + 1] as i32, o[i * 4] as i32 - 4));
+        let mario = (0..40).find(|&i| o[i * 4 + 2] == 0x0A && o[i * 4] != 0).map(|i| (o[i * 4 + 1] as i32, o[i * 4] as i32 - 4));
         let spot = match (mario, world) {
-            (Some((x, y)), Some((cx, cy))) => {
-                Some(((cx - 80 + x).rem_euclid(512), (cy - 72 + y).rem_euclid(512)))
-            }
+            (Some((x, y)), Some((cx, cy))) => Some(((cx - 80 + x).rem_euclid(512), (cy - 72 + y).rem_euclid(512))),
             (m, None) => m,
             _ => None,
         };
         println!("spot {p:02x} map {id} {spot:?}");
         if spot.is_none() {
-            let v: Vec<(u8, u8, u8)> = (0..40)
-                .map(|i| (o[i * 4 + 1], o[i * 4], o[i * 4 + 2]))
-                .filter(|s| s.1 != 0 && s.1 < 160)
-                .collect();
+            let v: Vec<(u8, u8, u8)> = (0..40).map(|i| (o[i * 4 + 1], o[i * 4], o[i * 4 + 2])).filter(|s| s.1 != 0 && s.1 < 160).collect();
             println!("  oam {v:02x?}");
         }
         println!(
@@ -266,19 +235,11 @@ fn find_rows(rom: &[u8], bg: &[u8], id: usize) {
                 continue;
             }
             if let Some(at) = rom.windows(12).position(|w| w == piece) {
-                hits.push(format!(
-                    "r{row}c{col}@{:02x}:{:04x}",
-                    at / 0x4000,
-                    0x4000 + at % 0x4000
-                ));
+                hits.push(format!("r{row}c{col}@{:02x}:{:04x}", at / 0x4000, 0x4000 + at % 0x4000));
             }
         }
     }
-    println!(
-        "map {id}: {} plain rows {}",
-        hits.len(),
-        hits.iter().take(8).cloned().collect::<Vec<_>>().join(" ")
-    );
+    println!("map {id}: {} plain rows {}", hits.len(), hits.iter().take(8).cloned().collect::<Vec<_>>().join(" "));
 }
 
 /// Where the middle of the screen is on the 512x512 world picture (pixels), when the
@@ -287,10 +248,7 @@ fn on_world_picture(gb: &mut gb_core::Gb) -> Option<(i32, i32)> {
     use cart_model::world;
     let pic = world::read(gb.cart().rom());
     let bg = gb.video().vram()[0x1800..0x2000].to_vec();
-    let (bx, by) = (
-        (gb.read(0xFF43) as usize + 80) % 256,
-        (gb.read(0xFF42) as usize + 72) % 256,
-    );
+    let (bx, by) = ((gb.read(0xFF43) as usize + 80) % 256, (gb.read(0xFF42) as usize + 72) % 256);
     let (vc, vr) = (bx / 8, by / 8);
     let mut best = (0, 0, 0);
     for a in 0..2 {

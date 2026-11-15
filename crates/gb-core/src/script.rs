@@ -5,9 +5,7 @@ use crate::input::Buttons;
 pub fn parse_script(s: &str) -> Vec<(Buttons, u32, u32)> {
     let mut v = Vec::new();
     for part in s.split(';').filter(|p| !p.is_empty()) {
-        let Some((keys, range)) = part.split_once('@') else {
-            continue;
-        };
+        let Some((keys, range)) = part.split_once('@') else { continue };
         let (a, b) = range.split_once('-').unwrap_or((range, range));
         let mut m = Buttons::NONE;
         for c in keys.chars() {
@@ -29,8 +27,5 @@ pub fn parse_script(s: &str) -> Vec<(Buttons, u32, u32)> {
 }
 
 pub fn buttons_at(script: &[(Buttons, u32, u32)], f: u32) -> Buttons {
-    script
-        .iter()
-        .filter(|(_, a, b)| f >= *a && f <= *b)
-        .fold(Buttons::NONE, |m, (k, _, _)| m | *k)
+    script.iter().filter(|(_, a, b)| f >= *a && f <= *b).fold(Buttons::NONE, |m, (k, _, _)| m | *k)
 }

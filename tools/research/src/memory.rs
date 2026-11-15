@@ -14,10 +14,7 @@ pub fn modes(rom: &Path, script: &str, frames: &str) {
     let sc = parse_script(script);
     let want: Vec<(String, u32)> = frames
         .split(',')
-        .filter_map(|p| {
-            p.split_once(':')
-                .map(|(l, f)| (l.to_string(), f.parse().unwrap_or(0)))
-        })
+        .filter_map(|p| p.split_once(':').map(|(l, f)| (l.to_string(), f.parse().unwrap_or(0))))
         .collect();
     let last = want.iter().map(|w| w.1).max().unwrap_or(0);
     let addrs = crate::console::ram_addresses();
@@ -35,25 +32,14 @@ pub fn modes(rom: &Path, script: &str, frames: &str) {
     let mut shown = 0;
     // Bytes constant across every "l" frame whose value never appears in other frames.
     for (i, a) in addrs.iter().enumerate() {
-        let lv: Vec<u8> = snaps
-            .iter()
-            .filter(|s| s.0 == "l")
-            .map(|s| s.1[i])
-            .collect();
+        let lv: Vec<u8> = snaps.iter().filter(|s| s.0 == "l").map(|s| s.1[i]).collect();
         if lv.is_empty() || lv.iter().any(|&v| v != lv[0]) {
             continue;
         }
-        let others: Vec<u8> = snaps
-            .iter()
-            .filter(|s| s.0 != "l")
-            .map(|s| s.1[i])
-            .collect();
+        let others: Vec<u8> = snaps.iter().filter(|s| s.0 != "l").map(|s| s.1[i]).collect();
         if others.iter().all(|&v| v != lv[0]) && shown < 60 {
             shown += 1;
-            println!(
-                "level-only {a:04x} level={:02x} others={:02x?}",
-                lv[0], others
-            );
+            println!("level-only {a:04x} level={:02x} others={:02x?}", lv[0], others);
         }
     }
     shown = 0;
@@ -73,11 +59,7 @@ pub fn modes(rom: &Path, script: &str, frames: &str) {
         uniq.dedup();
         if ok && uniq.len() == vals.len() && shown < 80 {
             shown += 1;
-            let t: Vec<String> = labels
-                .iter()
-                .zip(&vals)
-                .map(|(l, v)| format!("{l}={v:02x}"))
-                .collect();
+            let t: Vec<String> = labels.iter().zip(&vals).map(|(l, v)| format!("{l}={v:02x}")).collect();
             println!("{a:04x} {}", t.join(" "));
         }
     }
@@ -114,11 +96,7 @@ pub fn poke(rom: &Path, script: &str, at: u32, pokes: &str, until: u32, png: &Pa
         }
         run_script(&mut gb, &sc, f);
         if f >= at && (f - at) % 20 == 0 {
-            println!(
-                "f{f} mode={:02x} lives={:02x}",
-                gb.read(GAME_MODE),
-                gb.read(LIVES)
-            );
+            println!("f{f} mode={:02x} lives={:02x}", gb.read(GAME_MODE), gb.read(LIVES));
         }
     }
     save_png(&gb, png);
@@ -144,11 +122,7 @@ pub fn leave(rom: &Path, script: &str, at: u32, kind: &str, until: u32, png: &Pa
         }
         run_script(&mut gb, &sc, f);
         if f >= at && (f - at) % 20 == 0 {
-            println!(
-                "f{f} mode={:02x} lives={:02x}",
-                gb.mode().byte(),
-                gb.read(LIVES)
-            );
+            println!("f{f} mode={:02x} lives={:02x}", gb.mode().byte(), gb.read(LIVES));
         }
     }
     save_png(&gb, png);
@@ -170,12 +144,7 @@ pub fn cmp_map(rom: &Path, sa: &str, fa: u32, sb: &str, at: u32, fb: u32) {
         run_script(&mut b, &scb, f);
     }
     let (ma, mb) = (ram_snapshot(&mut a), ram_snapshot(&mut b));
-    let d: Vec<String> = ma
-        .iter()
-        .zip(&mb)
-        .filter(|(x, y)| x.1 != y.1 && x.0 < 0xC000 || (x.0 >= 0xFF80 && x.1 != y.1))
-        .map(|(x, y)| format!("{:04x}:{:02x}/{:02x}", x.0, x.1, y.1))
-        .collect();
+    let d: Vec<String> = ma.iter().zip(&mb).filter(|(x, y)| x.1 != y.1 && x.0 < 0xC000 || (x.0 >= 0xFF80 && x.1 != y.1)).map(|(x, y)| format!("{:04x}:{:02x}/{:02x}", x.0, x.1, y.1)).collect();
     println!("{} differ (natural/ours):\n{}", d.len(), d.join(" "));
 }
 
@@ -184,8 +153,7 @@ pub fn cmp_map(rom: &Path, sa: &str, fa: u32, sb: &str, at: u32, fb: u32) {
 pub fn reads(rom: &Path, script: &str, bank: usize, lo: u16, hi: u16, from: u32, to: u32) {
     let Some(mut gb) = probed(rom) else { return };
     let sc = parse_script(script);
-    let mut by_pc: std::collections::BTreeMap<u32, (usize, u16, u16, Vec<u32>)> =
-        Default::default();
+    let mut by_pc: std::collections::BTreeMap<u32, (usize, u16, u16, Vec<u32>)> = Default::default();
     for f in 0..to {
         if f == from {
             gb.observer_mut().read_watch = Some((lo, hi, bank));
@@ -203,11 +171,7 @@ pub fn reads(rom: &Path, script: &str, bank: usize, lo: u16, hi: u16, from: u32,
         }
     }
     for (pc, (n, a, b, fs)) in by_pc {
-        println!(
-            "bank {:02x} pc {:04x}: {n} reads {a:04x}-{b:04x} frames {fs:?}",
-            pc >> 16,
-            pc & 0xFFFF
-        );
+        println!("bank {:02x} pc {:04x}: {n} reads {a:04x}-{b:04x} frames {fs:?}", pc >> 16, pc & 0xFFFF);
     }
 }
 
@@ -232,13 +196,7 @@ pub fn find_player(rom: &Path, script: &str) {
             frames.push((m, world, gb.video().oam()[0] as i32));
         }
     }
-    let name = |i: usize| {
-        if i < 0x2000 {
-            0xC000 + i
-        } else {
-            0xFF80 + i - 0x2000
-        }
-    };
+    let name = |i: usize| if i < 0x2000 { 0xC000 + i } else { 0xFF80 + i - 0x2000 };
     let n = frames[0].0.len();
     let total_w = frames[160].1 - frames[20].1;
     println!("-- bytes whose summed change over the walk is within 3 of {total_w} px");
@@ -258,20 +216,12 @@ pub fn find_player(rom: &Path, script: &str) {
     }
     let ground = frames[209].2;
     let top = frames[210..].iter().map(|f| f.2).min().unwrap_or(0);
-    println!(
-        "-- bytes whose lowest point in the jump is {} below the start (sprite {ground}->{top})",
-        ground - top
-    );
+    println!("-- bytes whose lowest point in the jump is {} below the start (sprite {ground}->{top})", ground - top);
     for i in 0..n {
         let start = frames[209].0[i] as i32;
-        let lo = frames[210..]
-            .iter()
-            .map(|f| f.0[i] as i32)
-            .min()
-            .unwrap_or(0);
+        let lo = frames[210..].iter().map(|f| f.0[i] as i32).min().unwrap_or(0);
         let end = frames[frames.len() - 1].0[i] as i32;
-        if start - lo >= 10 && (start - lo - (ground - top)).abs() <= 3 && (end - start).abs() <= 3
-        {
+        if start - lo >= 10 && (start - lo - (ground - top)).abs() <= 3 && (end - start).abs() <= 3 {
             println!("{:04x} start={start} low={lo}", name(i));
         }
     }
@@ -336,10 +286,7 @@ pub fn trace(rom: &Path, script: &str, addrs: &[u16], from: u32, to: u32) {
     for f in 0..to {
         run_script(&mut gb, &sc, f);
         if f >= from {
-            let v: Vec<String> = addrs
-                .iter()
-                .map(|&a| format!("{:02x}", gb.read(a)))
-                .collect();
+            let v: Vec<String> = addrs.iter().map(|&a| format!("{:02x}", gb.read(a))).collect();
             println!("f{f} btn={:02x} {}", buttons_at(&sc, f).bits(), v.join(" "));
         }
     }

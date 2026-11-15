@@ -55,70 +55,26 @@ type Run = fn(&Path, &Args);
 
 /// Argument 0 is the command name, so a command's own arguments start at 1.
 const COMMANDS: &[(&str, Run)] = &[
-    ("disasm", |r, a| {
-        disasm::disasm(r, a.hex(1) as usize, a.hex(2), a.num(3))
-    }),
-    ("table", |r, a| {
-        disasm::table(r, a.big(1), a.big(2), a.num(3) as usize)
-    }),
-    ("poke", |r, a| {
-        memory::poke(r, &a.s(1), a.num(2), &a.s(3), a.num(4), &a.path(5))
-    }),
-    ("leave", |r, a| {
-        memory::leave(r, &a.s(1), a.num(2), &a.s(3), a.num(4), &a.path(5))
-    }),
-    ("cmpmap", |r, a| {
-        memory::cmp_map(r, &a.s(1), a.num(2), &a.s(3), a.num(4), a.num(5))
-    }),
-    ("diff", |r, a| {
-        memory::diff(
-            r,
-            &a.s(1),
-            a.num(2),
-            a.num(3),
-            a.hex(4) as u8,
-            a.hex(5) as u8,
-        )
-    }),
-    ("worldshot", |r, a| {
-        rom_views::world_shot(r, a.big(1), a.big(2), a.num(3) as usize, &a.path(4))
-    }),
-    ("looks", |r, a| {
-        rom_views::looks(r, a.num(1) as usize, &a.path(2))
-    }),
+    ("disasm", |r, a| disasm::disasm(r, a.hex(1) as usize, a.hex(2), a.num(3))),
+    ("table", |r, a| disasm::table(r, a.big(1), a.big(2), a.num(3) as usize)),
+    ("poke", |r, a| memory::poke(r, &a.s(1), a.num(2), &a.s(3), a.num(4), &a.path(5))),
+    ("leave", |r, a| memory::leave(r, &a.s(1), a.num(2), &a.s(3), a.num(4), &a.path(5))),
+    ("cmpmap", |r, a| memory::cmp_map(r, &a.s(1), a.num(2), &a.s(3), a.num(4), a.num(5))),
+    ("diff", |r, a| memory::diff(r, &a.s(1), a.num(2), a.num(3), a.hex(4) as u8, a.hex(5) as u8)),
+    ("worldshot", |r, a| rom_views::world_shot(r, a.big(1), a.big(2), a.num(3) as usize, &a.path(4))),
+    ("looks", |r, a| rom_views::looks(r, a.num(1) as usize, &a.path(2))),
     ("worldcheck", |r, _| checks::world_check(r)),
     ("objcheck", |r, _| checks::objects_check(r)),
     ("objects", |r, a| rom_views::objects(r, a.num(1) as u8)),
-    ("reads", |r, a| {
-        memory::reads(
-            r,
-            &a.s(1),
-            a.hex(2) as usize,
-            a.hex(3),
-            a.hex(4),
-            a.num(5),
-            a.num(6),
-        )
-    }),
+    ("reads", |r, a| memory::reads(r, &a.s(1), a.hex(2) as usize, a.hex(3), a.hex(4), a.num(5), a.num(6))),
     ("free", |r, _| rom_views::free_space(r)),
     ("storecheck", |r, _| checks::store_check(r)),
     ("levels", |r, _| checks::levels_check(r)),
     ("modes", |r, a| memory::modes(r, &a.s(1), &a.s(2))),
     ("find", |r, a| memory::find_player(r, &a.s(1))),
-    ("watch", |r, a| {
-        memory::watch(r, &a.s(1), &a.list(2), a.num(3), a.num(4))
-    }),
-    ("trace", |r, a| {
-        memory::trace(r, &a.s(1), &a.list(2), a.num(3), a.num(4))
-    }),
-    ("mapafter", |r, a| {
-        rom_views::map_after(
-            r,
-            a.num(1) as u8,
-            &a.path(2),
-            (!a.s(3).is_empty()).then(|| a.hex(3) as u8),
-        )
-    }),
+    ("watch", |r, a| memory::watch(r, &a.s(1), &a.list(2), a.num(3), a.num(4))),
+    ("trace", |r, a| memory::trace(r, &a.s(1), &a.list(2), a.num(3), a.num(4))),
+    ("mapafter", |r, a| rom_views::map_after(r, a.num(1) as u8, &a.path(2), (!a.s(3).is_empty()).then(|| a.hex(3) as u8))),
     ("mapscan", |r, a| rom_views::map_scan(r, &a.path(1))),
 ];
 
@@ -149,16 +105,9 @@ mod tests {
 
     #[test]
     fn argument_forms() {
-        let a = Args(
-            ["watch", "x", "ffc2,a200-a202", "0x10", "12"]
-                .map(String::from)
-                .to_vec(),
-        );
+        let a = Args(["watch", "x", "ffc2,a200-a202", "0x10", "12"].map(String::from).to_vec());
         assert_eq!(a.list(2), vec![0xFFC2, 0xA200, 0xA201, 0xA202]);
-        assert_eq!(
-            (a.hex(3), a.big(3), a.num(4), a.num(9)),
-            (0x10, 0x10, 12, 0)
-        );
+        assert_eq!((a.hex(3), a.big(3), a.num(4), a.num(9)), (0x10, 0x10, 12, 0));
         assert_eq!(COMMANDS.len(), 21);
     }
 }

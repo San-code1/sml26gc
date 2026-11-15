@@ -64,9 +64,7 @@ impl CustomMap {
     }
 
     pub fn linked(&self, a: usize, b: usize) -> bool {
-        self.paths
-            .iter()
-            .any(|&(x, y)| (x, y) == (a, b) || (x, y) == (b, a))
+        self.paths.iter().any(|&(x, y)| (x, y) == (a, b) || (x, y) == (b, a))
     }
 
     pub fn toggle_path(&mut self, a: usize, b: usize) {
@@ -74,8 +72,7 @@ impl CustomMap {
             return;
         }
         if self.linked(a, b) {
-            self.paths
-                .retain(|&(x, y)| !((x, y) == (a, b) || (x, y) == (b, a)));
+            self.paths.retain(|&(x, y)| !((x, y) == (a, b) || (x, y) == (b, a)));
         } else {
             self.paths.push((a, b));
         }
@@ -105,13 +102,7 @@ impl CustomMap {
         let p = self.points.get(from)?;
         let mut best: Option<(usize, f32)> = None;
         for &(a, b) in &self.paths {
-            let o = if a == from {
-                b
-            } else if b == from {
-                a
-            } else {
-                continue;
-            };
+            let o = if a == from { b } else if b == from { a } else { continue };
             let q = self.points[o];
             let (vx, vy) = ((q.x - p.x) as f32, (q.y - p.y) as f32);
             let len = (vx * vx + vy * vy).sqrt().max(1.0);
@@ -130,16 +121,10 @@ mod tests {
 
     #[test]
     fn text_round_trip_and_cleanup() {
-        let m = CustomMap::parse(
-            "# x\npoint 1 2 3\npoint 4 5 -\npoint 6 7 99\npath 0 1\npath 1 1\npath 0 7\nstart 9\n",
-        );
+        let m = CustomMap::parse("# x\npoint 1 2 3\npoint 4 5 -\npoint 6 7 99\npath 0 1\npath 1 1\npath 0 7\nstart 9\n");
         assert_eq!(m.points.len(), 3);
         assert_eq!(m.points[2].level, None, "levels over 31 are dropped");
-        assert_eq!(
-            m.paths,
-            vec![(0, 1)],
-            "self and out-of-range paths are dropped"
-        );
+        assert_eq!(m.paths, vec![(0, 1)], "self and out-of-range paths are dropped");
         assert_eq!(m.start, 0, "a start past the points goes back to 0");
         assert_eq!(CustomMap::parse(&m.to_text()), m);
     }

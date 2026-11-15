@@ -45,23 +45,11 @@ pub fn wrap(t: &str, n: usize) -> Vec<String> {
 pub fn button(r: Rect, label: &str, active: bool, size: f32) -> bool {
     let m: Vec2 = mouse_position().into();
     let hover = r.contains(m);
-    let (bg, fg) = if active {
-        (col(3), col(0))
-    } else if hover {
-        (col(1), col(3))
-    } else {
-        (col(0), col(3))
-    };
+    let (bg, fg) = if active { (col(3), col(0)) } else if hover { (col(1), col(3)) } else { (col(0), col(3)) };
     draw_rectangle(r.x, r.y, r.w, r.h, bg);
     draw_rectangle_lines(r.x, r.y, r.w, r.h, 2.0, col(3));
     let dim = measure_text(label, None, size as u16, 1.0);
-    draw_text(
-        label,
-        r.x + (r.w - dim.width) / 2.0,
-        r.y + (r.h + dim.offset_y) / 2.0 - 1.0,
-        size,
-        fg,
-    );
+    draw_text(label, r.x + (r.w - dim.width) / 2.0, r.y + (r.h + dim.offset_y) / 2.0 - 1.0, size, fg);
     hover && is_mouse_button_pressed(MouseButton::Left)
 }
 
@@ -98,11 +86,7 @@ pub fn make_overview(art: &LevelArt, map: &[u8]) -> Texture2D {
     }
     let mut img = Image::gen_image_color(COLS as u16, ROWS as u16, BLACK);
     for (i, &b) in map.iter().enumerate() {
-        img.set_pixel(
-            (i % COLS) as u32,
-            (i / COLS) as u32,
-            col(mean[b as usize & 0x7F].min(3)),
-        );
+        img.set_pixel((i % COLS) as u32, (i / COLS) as u32, col(mean[b as usize & 0x7F].min(3)));
     }
     texture(&img)
 }
@@ -114,11 +98,7 @@ pub fn make_atlas(art: &LevelArt) -> Texture2D {
         for y in 0..16 {
             for x in 0..16 {
                 let s = art.block_pixel(id, x, y) as usize;
-                img.set_pixel(
-                    (id as u32 % 16) * 16 + x as u32,
-                    (id as u32 / 16) * 16 + y as u32,
-                    col(s),
-                );
+                img.set_pixel((id as u32 % 16) * 16 + x as u32, (id as u32 / 16) * 16 + y as u32, col(s));
             }
         }
     }
@@ -131,11 +111,7 @@ pub fn make_world_atlas(art: &WorldArt) -> Texture2D {
     for t in 0..=255u8 {
         for y in 0..8 {
             for x in 0..8 {
-                img.set_pixel(
-                    (t as u32 % 16) * 8 + x as u32,
-                    (t as u32 / 16) * 8 + y as u32,
-                    col(art.pixel(t, x, y) as usize),
-                );
+                img.set_pixel((t as u32 % 16) * 8 + x as u32, (t as u32 / 16) * 8 + y as u32, col(art.pixel(t, x, y) as usize));
             }
         }
     }

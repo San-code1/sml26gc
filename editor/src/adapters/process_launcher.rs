@@ -12,8 +12,6 @@ impl GameLauncher for GameProcess {
         if let Some(l) = level {
             cmd.arg("--level").arg(l.to_string());
         }
-        cmd.spawn()
-            .map(|_| ())
-            .map_err(|e| format!("{}: {e}", game.display()))
+        cmd.spawn().map(|_| ()).map_err(|e| format!("{}: {e}", game.display()))
     }
 }

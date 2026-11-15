@@ -23,21 +23,11 @@ pub struct Spot {
 }
 
 const fn w(point: u8, x: i32, y: i32) -> Spot {
-    Spot {
-        point,
-        map: OnMap::World,
-        x,
-        y,
-    }
+    Spot { point, map: OnMap::World, x, y }
 }
 
 const fn z(zone: usize, point: u8, x: i32, y: i32) -> Spot {
-    Spot {
-        point,
-        map: OnMap::Zone(zone),
-        x,
-        y,
-    }
+    Spot { point, map: OnMap::Zone(zone), x, y }
 }
 
 const TREE: usize = 0;
@@ -129,11 +119,7 @@ mod tests {
     fn every_spot_is_a_point_on_its_picture_once() {
         for (i, s) in SPOTS.iter().enumerate() {
             assert!((s.point as usize) < POINT_COUNT);
-            assert!(
-                !SPOTS[..i].iter().any(|t| t.point == s.point),
-                "point {:02x} twice",
-                s.point
-            );
+            assert!(!SPOTS[..i].iter().any(|t| t.point == s.point), "point {:02x} twice", s.point);
             let (w, h) = match s.map {
                 OnMap::World => (512, 512),
                 OnMap::Zone(z) => {
@@ -141,22 +127,14 @@ mod tests {
                     (160, 144)
                 }
             };
-            assert!(
-                (0..w).contains(&s.x) && (0..h).contains(&s.y),
-                "point {:02x}",
-                s.point
-            );
+            assert!((0..w).contains(&s.x) && (0..h).contains(&s.y), "point {:02x}", s.point);
         }
     }
 
     #[test]
     fn each_zone_has_its_viewing_point() {
         for (i, zm) in ZONES.iter().enumerate() {
-            assert!(
-                on(OnMap::Zone(i)).any(|s| s.point == zm.point),
-                "{}",
-                zm.name
-            );
+            assert!(on(OnMap::Zone(i)).any(|s| s.point == zm.point), "{}", zm.name);
         }
     }
 }
