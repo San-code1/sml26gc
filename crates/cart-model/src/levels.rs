@@ -29,13 +29,20 @@ pub struct Header {
 
 pub fn header(rom: &[u8], level: usize) -> Header {
     let at = offset(1, word(rom, HEADER_TABLE + level * 2));
-    Header { at, bank: rom[at + 0x0D], map: rom[at + 0x12] & 0x0F }
+    Header {
+        at,
+        bank: rom[at + 0x0D],
+        map: rom[at + 0x12] & 0x0F,
+    }
 }
 
 /// File offset of the map table entry and of the compressed data.
 pub fn map_location(rom: &[u8], h: Header) -> (usize, usize) {
     let entry = offset(h.bank as usize, MAP_TABLE) + h.map as usize * 2;
-    (entry, offset(data_bank(rom, h.bank) as usize, word(rom, entry)))
+    (
+        entry,
+        offset(data_bank(rom, h.bank) as usize, word(rom, entry)),
+    )
 }
 
 /// Decode a map exactly as 0:0361 does; returns the blocks and how many bytes it read.
@@ -120,7 +127,11 @@ mod tests {
     fn round_trip(map: &[u8]) -> Vec<u8> {
         let enc = encode(map);
         let (dec, used) = decode(&enc, 0);
-        assert_eq!(used, enc.len(), "decoder must read exactly what the encoder wrote");
+        assert_eq!(
+            used,
+            enc.len(),
+            "decoder must read exactly what the encoder wrote"
+        );
         dec
     }
 

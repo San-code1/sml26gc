@@ -1,6 +1,8 @@
 //! Driving this cartridge's program from outside: reading which screen it is on, and the
 //! button sequences and memory writes that take it to the map, into a level or back.
-use crate::ram_map::{GameMode, GAME_MODE, LEAVE_LEVEL_WRITES, LEVEL_NUMBER, MAP_POINT, SPECIAL_MAP_POINTS};
+use crate::ram_map::{
+    GameMode, GAME_MODE, LEAVE_LEVEL_WRITES, LEVEL_NUMBER, MAP_POINT, SPECIAL_MAP_POINTS,
+};
 use crate::world::point_levels;
 use gb_core::{Buttons, Gb};
 
@@ -24,6 +26,10 @@ pub trait GameDriver {
     /// Start only works on a point that opens a level (0F:41B1), so first put him on one
     /// ($A840 = point number; the special points 0F:418F-0F:41A1 checks are avoided).
     fn enter_level_anywhere(&mut self, level: u8) -> bool;
+    /// From the world map, show the map that point `point` is on (the world map or a zone
+    /// map) the way the game does after a level: enter one, put Mario on the point
+    /// ($A840) and leave. Returns when the map has been up for a while.
+    fn show_map_at(&mut self, point: u8) -> bool;
 }
 
 fn start_if(pressed: bool) -> Buttons {
@@ -100,9 +106,35 @@ impl GameDriver for Gb {
 
     fn enter_level_anywhere(&mut self, level: u8) -> bool {
         let table = point_levels(self.cart().rom());
-        if let Some(p) = (0..table.len()).find(|&p| table[p] < 32 && !SPECIAL_MAP_POINTS.contains(&(p as u8))) {
+        if let Some(p) =
+            (0..table.len()).find(|&p| table[p] < 32 && !SPECIAL_MAP_POINTS.contains(&(p as u8)))
+        {
             self.write(MAP_POINT, p as u8);
         }
         self.enter_level(level)
+    }
+
+    fn show_map_at(&mut self, point: u8) -> bool {
+        if !self.enter_level_anywhere(1) {
+            return false;
+        }
+        for _ in 0..60 {
+            self.run_frame_with(Buttons::NONE);
+        }
+        self.write(MAP_POINT, point);
+        self.back_to_map();
+        let mut up = 0;
+        for _ in 0..900u32 {
+            self.run_frame_with(Buttons::NONE);
+            up = if self.mode() == GameMode::Map {
+                up + 1
+            } else {
+                0
+            };
+            if up >= 120 {
+                return true;
+            }
+        }
+        false
     }
 }

@@ -18,6 +18,8 @@ use crate::domain::document::{EditorDocument, Saved};
 use crate::domain::tools::{self, GridCanvas, Pointer, Tool, ToolKind};
 use crate::ports::{EditedCopyStore, GameLauncher};
 use cart_model::levels::{COLS, LEVELS, ROWS};
+use cart_model::original_points::OnMap;
+use cart_model::zone_maps::ZONES;
 use macroquad::prelude::*;
 use std::collections::HashMap;
 use widgets::*;
@@ -41,6 +43,7 @@ pub struct Editor {
     art: ArtService,
     atlases: Vec<Option<Texture2D>>,
     world_atlas: Option<Texture2D>,
+    zone_atlases: Vec<Option<Texture2D>>,
     /// What each object type looks like in each level: texture and where its top-left sits
     /// relative to the object's position. None = draws nothing.
     looks: HashMap<(usize, u8), Option<(Texture2D, f32, f32)>>,
@@ -65,6 +68,8 @@ pub struct Editor {
     in_world: bool,
     tile: u8,
     pub(crate) world_tab: usize,
+    /// Which map picture the world map editor shows: the world map or a zone map.
+    pub(crate) world_map: OnMap,
     point: usize,
     world_cam: Vec2,
     level_cam: Vec2,
@@ -93,9 +98,10 @@ impl GridCanvas for LevelCanvas<'_> {
     }
 }
 
-/// Painting tiles into the world map picture.
+/// Painting tiles into a map picture (the world map or a zone map).
 struct WorldCanvas<'a> {
     doc: &'a mut EditorDocument,
+    map: OnMap,
     tile: u8,
 }
 
@@ -104,7 +110,8 @@ impl GridCanvas for WorldCanvas<'_> {
         self.doc.world_snapshot();
     }
     fn paint(&mut self, x: i32, y: i32) {
-        self.doc.set_tile(x as usize, y as usize, self.tile);
+        self.doc
+            .set_tile(self.map, x as usize, y as usize, self.tile);
     }
 }
 
@@ -117,11 +124,21 @@ fn left_button() -> Pointer {
 }
 
 impl Editor {
-    pub fn new(doc: EditorDocument, store: Box<dyn EditedCopyStore>, launcher: Box<dyn GameLauncher>, had_copy: bool, es: bool) -> Editor {
+    pub fn new(
+        doc: EditorDocument,
+        store: Box<dyn EditedCopyStore>,
+        launcher: Box<dyn GameLauncher>,
+        had_copy: bool,
+        es: bool,
+    ) -> Editor {
         let status = if !had_copy {
             tr(es, "Original cartridge opened. Saving makes an edited copy; the original is never changed.", "Cartucho original abierto. Al guardar se crea una copia editada; el original no se toca.").to_string()
         } else {
-            format!("{} {}", tr(es, "Edited copy opened:", "Copia editada abierta:"), store.path().display())
+            format!(
+                "{} {}",
+                tr(es, "Edited copy opened:", "Copia editada abierta:"),
+                store.path().display()
+            )
         };
         Editor {
             es,
@@ -131,6 +148,7 @@ impl Editor {
             art: ArtService::new(),
             atlases: (0..LEVELS).map(|_| None).collect(),
             world_atlas: None,
+            zone_atlases: ZONES.iter().map(|_| None).collect(),
             looks: HashMap::new(),
             cur: 0,
             block: 0,
@@ -153,6 +171,7 @@ impl Editor {
             in_world: false,
             tile: 0,
             world_tab: TAB_PICTURE,
+            world_map: OnMap::World,
             point: 0,
             world_cam: Vec2::ZERO,
             level_cam: Vec2::ZERO,
@@ -223,11 +242,16 @@ impl Editor {
         }
         self.cam += d;
         let space = is_key_down(KeyCode::Space);
-        if m.x >= PANEL && (is_mouse_button_pressed(MouseButton::Middle) || (space && is_mouse_button_pressed(MouseButton::Left))) {
+        if m.x >= PANEL
+            && (is_mouse_button_pressed(MouseButton::Middle)
+                || (space && is_mouse_button_pressed(MouseButton::Left)))
+        {
             self.pan = Some((m, self.cam));
         }
         if let Some((m0, c0)) = self.pan {
-            if is_mouse_button_down(MouseButton::Middle) || (space && is_mouse_button_down(MouseButton::Left)) {
+            if is_mouse_button_down(MouseButton::Middle)
+                || (space && is_mouse_button_down(MouseButton::Left))
+            {
                 self.cam = c0 - (m - m0) / self.scale();
             } else {
                 self.pan = None;
@@ -258,22 +282,50 @@ impl Editor {
                 return;
             }
             Capture::NotLoaded => {
-                self.status = tr(self.es, "The game didn't load this level; its graphics may be wrong.", "El juego no cargo este nivel; sus graficos pueden no ser correctos.").into();
+                self.status = tr(
+                    self.es,
+                    "The game didn't load this level; its graphics may be wrong.",
+                    "El juego no cargo este nivel; sus graficos pueden no ser correctos.",
+                )
+                .into();
             }
             Capture::Captured => {}
         }
         self.atlases[l] = self.art.level(l).map(make_atlas);
     }
 
-    /// The world map's tiles, as the game shows them (captured on the map screen).
+    /// The shown map's tiles, as the game shows them (captured on that map's screen).
     fn ensure_world_art(&mut self) {
-        if self.world_atlas.is_some() {
+        if self.map_atlas().is_some() {
             return;
         }
         if !self.art.booted() {
             self.ensure_art(self.cur);
         }
-        self.world_atlas = self.art.world().map(make_world_atlas);
+        match self.world_map {
+            OnMap::World => self.world_atlas = self.art.world().map(make_world_atlas),
+            OnMap::Zone(z) => self.zone_atlases[z] = self.art.zone(z).map(make_world_atlas),
+        }
+    }
+
+    /// The tiles of the map picture shown.
+    fn map_atlas(&self) -> Option<&Texture2D> {
+        match self.world_map {
+            OnMap::World => self.world_atlas.as_ref(),
+            OnMap::Zone(z) => self.zone_atlases[z].as_ref(),
+        }
+    }
+
+    /// Show another map picture (the world map or a zone map).
+    pub fn show_map(&mut self, map: OnMap) {
+        if map == self.world_map {
+            return;
+        }
+        self.world_map = map;
+        self.cam = Vec2::ZERO;
+        self.sel_point = None;
+        self.link_from = None;
+        self.ensure_world_art();
     }
 
     pub fn select_level(&mut self, l: usize) {
@@ -283,14 +335,28 @@ impl Editor {
         let (c0, r0, r1) = self.doc.content_area(l);
         let view_h = (screen_height() - STATUS_H) / self.scale();
         let content_h = (r1 + 1 - r0) as f32 * BLOCK;
-        let y = if content_h <= view_h { (r1 + 1) as f32 * BLOCK - view_h } else { r0 as f32 * BLOCK };
+        let y = if content_h <= view_h {
+            (r1 + 1) as f32 * BLOCK - view_h
+        } else {
+            r0 as f32 * BLOCK
+        };
         self.cam = vec2(c0 as f32 * BLOCK, y.max(0.0));
         self.overview_stale = true;
         let shared = self.doc.sharing(l);
         self.status = if shared.is_empty() {
             format!("{} {:02}", tr(self.es, "Level", "Nivel"), l)
         } else {
-            format!("{} {:02}: {} {:?}", tr(self.es, "Level", "Nivel"), l, tr(self.es, "its map is also used by level(s)", "su mapa tambien lo usa(n) el/los nivel(es)"), shared)
+            format!(
+                "{} {:02}: {} {:?}",
+                tr(self.es, "Level", "Nivel"),
+                l,
+                tr(
+                    self.es,
+                    "its map is also used by level(s)",
+                    "su mapa tambien lo usa(n) el/los nivel(es)"
+                ),
+                shared
+            )
         };
     }
 
@@ -302,7 +368,12 @@ impl Editor {
             self.level_cam = self.cam;
             self.ensure_world_art();
             self.cam = self.world_cam;
-            self.status = tr(self.es, "World map: paint its tiles, or choose which level each point opens.", "Mapa de mundos: pinta sus tiles o elige que nivel abre cada punto.").into();
+            self.status = tr(
+                self.es,
+                "World map: paint its tiles, or choose which level each point opens.",
+                "Mapa de mundos: pinta sus tiles o elige que nivel abre cada punto.",
+            )
+            .into();
         } else {
             self.world_cam = self.cam;
             self.cam = self.level_cam;
@@ -328,7 +399,12 @@ impl Editor {
         self.doc.restore_level(self.cur);
         self.sel_obj = None;
         self.overview_stale = true;
-        self.status = tr(self.es, "Level restored to the original (save to keep it).", "Nivel restaurado al original (guarda para conservarlo).").into();
+        self.status = tr(
+            self.es,
+            "Level restored to the original (save to keep it).",
+            "Nivel restaurado al original (guarda para conservarlo).",
+        )
+        .into();
     }
 
     /// Save the edited copy; the status bar says what happened.
@@ -346,14 +422,20 @@ impl Editor {
                         Saved::Objects(n) => n.to_string(),
                         Saved::WorldMap => tr(es, "world map", "mapa de mundos").to_string(),
                         Saved::LevelPoints => tr(es, "level points", "puntos de nivel").to_string(),
-                        Saved::CustomMap => tr(es, "your world map", "tu mapa de mundos").to_string(),
+                        Saved::CustomMap => {
+                            tr(es, "your world map", "tu mapa de mundos").to_string()
+                        }
                     })
                     .collect();
                 self.status = format!(
                     "{} {} {}",
                     tr(es, "Saved", "Guardado en"),
                     self.store.path().display(),
-                    if notes.is_empty() { String::new() } else { format!("({})", notes.join(", ")) }
+                    if notes.is_empty() {
+                        String::new()
+                    } else {
+                        format!("({})", notes.join(", "))
+                    }
                 );
                 true
             }
@@ -362,7 +444,10 @@ impl Editor {
                 false
             }
             Err(SaveError::CustomMap(e)) => {
-                self.status = format!("{}: {e}", tr(es, "Could not save the map", "No se pudo guardar el mapa"));
+                self.status = format!(
+                    "{}: {e}",
+                    tr(es, "Could not save the map", "No se pudo guardar el mapa")
+                );
                 false
             }
             Err(SaveError::Write(e)) => {
@@ -378,7 +463,11 @@ impl Editor {
             return;
         }
         self.status = match self.launcher.launch(self.store.path(), Some(self.cur)) {
-            Ok(()) => format!("{} {:02}", tr(self.es, "Playing level", "Jugando el nivel"), self.cur),
+            Ok(()) => format!(
+                "{} {:02}",
+                tr(self.es, "Playing level", "Jugando el nivel"),
+                self.cur
+            ),
             Err(e) => format!("{} {e}", tr(self.es, "Could not start", "No se pudo abrir")),
         };
     }
@@ -389,7 +478,12 @@ impl Editor {
             return;
         }
         self.status = match self.launcher.launch(self.store.path(), None) {
-            Ok(()) => tr(self.es, "Game started with your map.", "Juego abierto con tu mapa.").into(),
+            Ok(()) => tr(
+                self.es,
+                "Game started with your map.",
+                "Juego abierto con tu mapa.",
+            )
+            .into(),
             Err(e) => e,
         };
     }
@@ -407,8 +501,20 @@ impl Editor {
         if !self.doc.custom.points.is_empty() {
             return;
         }
-        for (i, (x, y, l)) in [(120, 120, Some(0u8)), (180, 140, None), (240, 150, Some(1)), (300, 200, Some(2))].iter().enumerate() {
-            self.doc.custom.points.push(Point { x: *x, y: *y, level: *l });
+        for (i, (x, y, l)) in [
+            (120, 120, Some(0u8)),
+            (180, 140, None),
+            (240, 150, Some(1)),
+            (300, 200, Some(2)),
+        ]
+        .iter()
+        .enumerate()
+        {
+            self.doc.custom.points.push(Point {
+                x: *x,
+                y: *y,
+                level: *l,
+            });
             if i > 0 {
                 self.doc.custom.paths.push((i - 1, i));
             }

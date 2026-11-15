@@ -6,7 +6,11 @@ pub enum CartError {
     /// The cartridge is not the version whose code the patches were made for.
     UnknownVersion,
     /// A zone's levels don't fit in the space its bank has for them.
-    ZoneFull { bank: u8, need: usize, capacity: usize },
+    ZoneFull {
+        bank: u8,
+        need: usize,
+        capacity: usize,
+    },
     /// The objects of all levels don't fit in their space.
     ObjectsFull { need: usize, capacity: usize },
 }
@@ -43,7 +47,11 @@ pub struct BankUsage {
 
 impl fmt::Display for BankUsage {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "bank {:02X}: {}/{} bytes", self.bank, self.used, self.capacity)
+        write!(
+            f,
+            "bank {:02X}: {}/{} bytes",
+            self.bank, self.used, self.capacity
+        )
     }
 }
 

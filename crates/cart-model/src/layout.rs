@@ -51,7 +51,12 @@ pub fn bank_space(rom: &[u8], original: &[u8], bank: u8, edited: &[(u8, &[u8])])
 /// Write edited maps into the ROM image: every map of the bank is packed again, one after
 /// another, in the space it has (see `bank_capacity`), and the bank's map table is
 /// pointed at the new places. Every level that uses an edited map changes too.
-pub fn store_bank(rom: &mut [u8], original: &[u8], bank: u8, edited: &[(u8, &[u8])]) -> Result<BankUsage, CartError> {
+pub fn store_bank(
+    rom: &mut [u8],
+    original: &[u8],
+    bank: u8,
+    edited: &[(u8, &[u8])],
+) -> Result<BankUsage, CartError> {
     let (start, capacity) = bank_capacity(rom, original, bank);
     let maps = bank_maps(rom, bank);
     let datas: Vec<(usize, Vec<u8>)> = maps
@@ -63,7 +68,11 @@ pub fn store_bank(rom: &mut [u8], original: &[u8], bank: u8, edited: &[(u8, &[u8
         .collect();
     let need: usize = datas.iter().map(|d| d.1.len()).sum();
     if need > capacity {
-        return Err(CartError::ZoneFull { bank, need, capacity });
+        return Err(CartError::ZoneFull {
+            bank,
+            need,
+            capacity,
+        });
     }
     let expanded = is_expanded(rom);
     let mut at = start;
@@ -77,5 +86,9 @@ pub fn store_bank(rom: &mut [u8], original: &[u8], bank: u8, edited: &[(u8, &[u8
         }
         at += data.len();
     }
-    Ok(BankUsage { bank, used: need, capacity })
+    Ok(BankUsage {
+        bank,
+        used: need,
+        capacity,
+    })
 }

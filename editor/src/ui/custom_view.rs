@@ -29,7 +29,9 @@ impl Editor {
         if is_key_pressed(KeyCode::L) {
             self.link_from = self.sel_point;
         }
-        if (is_key_pressed(KeyCode::Delete) || is_key_pressed(KeyCode::Backspace)) && self.sel_point.is_some() {
+        if (is_key_pressed(KeyCode::Delete) || is_key_pressed(KeyCode::Backspace))
+            && self.sel_point.is_some()
+        {
             self.doc.custom.remove_point(self.sel_point.unwrap());
             self.sel_point = None;
             self.doc.custom_dirty = true;
@@ -50,7 +52,11 @@ impl Editor {
                 (None, _) => {
                     // a new point, joined to the selected one so a route is drawn click by click
                     let map = &mut self.doc.custom;
-                    map.points.push(Point { x: snap(w.x), y: snap(w.y), level: None });
+                    map.points.push(Point {
+                        x: snap(w.x),
+                        y: snap(w.y),
+                        level: None,
+                    });
                     let n = map.points.len() - 1;
                     if let Some(s) = self.sel_point {
                         map.toggle_path(s, n);
@@ -89,11 +95,23 @@ impl Editor {
 
     pub(super) fn draw_custom(&self) {
         let map = &self.doc.custom;
-        let to = |x: i32, y: i32| vec2(PANEL + (x as f32 - self.cam.x) * self.scale(), (y as f32 - self.cam.y) * self.scale());
+        let to = |x: i32, y: i32| {
+            vec2(
+                PANEL + (x as f32 - self.cam.x) * self.scale(),
+                (y as f32 - self.cam.y) * self.scale(),
+            )
+        };
         for &(a, b) in &map.paths {
             let (pa, pb) = (map.points[a], map.points[b]);
             let (s, e) = (to(pa.x, pa.y), to(pb.x, pb.y));
-            draw_line(s.x, s.y, e.x, e.y, 3.0 * self.scale().max(1.0), Color::new(0.12, 0.12, 0.12, 0.85));
+            draw_line(
+                s.x,
+                s.y,
+                e.x,
+                e.y,
+                3.0 * self.scale().max(1.0),
+                Color::new(0.12, 0.12, 0.12, 0.85),
+            );
         }
         if let Some(a) = self.link_from {
             let p = map.points[a];
@@ -107,7 +125,13 @@ impl Editor {
             match p.level {
                 Some(l) => {
                     draw_rectangle(c.x - r, c.y - r, r * 2.0, r * 2.0, col(3));
-                    draw_rectangle(c.x - r + 2.0, c.y - r + 2.0, r * 2.0 - 4.0, r * 2.0 - 4.0, col(0));
+                    draw_rectangle(
+                        c.x - r + 2.0,
+                        c.y - r + 2.0,
+                        r * 2.0 - 4.0,
+                        r * 2.0 - 4.0,
+                        col(0),
+                    );
                     let t = format!("{l:02}");
                     let fs = (r * 1.2).clamp(12.0, 22.0);
                     let d = measure_text(&t, None, fs as u16, 1.0);
@@ -119,7 +143,14 @@ impl Editor {
                 draw_text("S", c.x + r + 2.0, c.y - r, 18.0, WHITE);
             }
             if self.sel_point == Some(i) {
-                draw_rectangle_lines(c.x - r - 3.0, c.y - r - 3.0, r * 2.0 + 6.0, r * 2.0 + 6.0, 2.0, WHITE);
+                draw_rectangle_lines(
+                    c.x - r - 3.0,
+                    c.y - r - 3.0,
+                    r * 2.0 + 6.0,
+                    r * 2.0 + 6.0,
+                    2.0,
+                    WHITE,
+                );
             }
         }
     }
@@ -129,11 +160,29 @@ impl Editor {
     pub(super) fn custom_panel(&mut self, mut y: f32) -> Option<u32> {
         let es = self.es;
         let mut act = None;
-        draw_text(&format!("{} {}   {} {}", tr(es, "points:", "puntos:"), self.doc.custom.points.len(), tr(es, "paths:", "caminos:"), self.doc.custom.paths.len()), 10.0, y + 12.0, 17.0, col(3));
+        draw_text(
+            &format!(
+                "{} {}   {} {}",
+                tr(es, "points:", "puntos:"),
+                self.doc.custom.points.len(),
+                tr(es, "paths:", "caminos:"),
+                self.doc.custom.paths.len()
+            ),
+            10.0,
+            y + 12.0,
+            17.0,
+            col(3),
+        );
         y += 22.0;
         if let Some(i) = self.sel_point.filter(|&i| i < self.doc.custom.points.len()) {
             let cur = self.doc.custom.points[i].level;
-            draw_text(&format!("{} {i}", tr(es, "Point", "Punto")), 10.0, y + 18.0, 18.0, col(3));
+            draw_text(
+                &format!("{} {i}", tr(es, "Point", "Punto")),
+                10.0,
+                y + 18.0,
+                18.0,
+                col(3),
+            );
             y += 28.0;
             draw_text(tr(es, "Opens", "Abre"), 10.0, y + 18.0, 18.0, col(3));
             let mut change = 0i32;
@@ -156,15 +205,34 @@ impl Editor {
                 self.doc.custom_dirty = true;
             }
             y += 32.0;
-            if button(Rect::new(10.0, y, 136.0, 26.0), tr(es, "Mario starts here", "Mario empieza aqui"), self.doc.custom.start == i, 14.0) {
+            if button(
+                Rect::new(10.0, y, 136.0, 26.0),
+                tr(es, "Mario starts here", "Mario empieza aqui"),
+                self.doc.custom.start == i,
+                14.0,
+            ) {
                 self.doc.custom.start = i;
                 self.doc.custom_dirty = true;
             }
-            if button(Rect::new(150.0, y, 136.0, 26.0), tr(es, "Join to... (L)", "Unir con... (L)"), self.link_from == Some(i), 14.0) {
-                self.link_from = if self.link_from == Some(i) { None } else { Some(i) };
+            if button(
+                Rect::new(150.0, y, 136.0, 26.0),
+                tr(es, "Join to... (L)", "Unir con... (L)"),
+                self.link_from == Some(i),
+                14.0,
+            ) {
+                self.link_from = if self.link_from == Some(i) {
+                    None
+                } else {
+                    Some(i)
+                };
             }
             y += 30.0;
-            if button(Rect::new(10.0, y, 136.0, 26.0), tr(es, "Delete point", "Borrar punto"), false, 14.0) {
+            if button(
+                Rect::new(10.0, y, 136.0, 26.0),
+                tr(es, "Delete point", "Borrar punto"),
+                false,
+                14.0,
+            ) {
                 self.doc.custom.remove_point(i);
                 self.sel_point = None;
                 self.doc.custom_dirty = true;
@@ -173,7 +241,12 @@ impl Editor {
         } else {
             y += 4.0;
         }
-        if button(Rect::new(10.0, y, 276.0, 28.0), tr(es, "Try it in the game", "Probarlo en el juego"), false, 16.0) {
+        if button(
+            Rect::new(10.0, y, 276.0, 28.0),
+            tr(es, "Try it in the game", "Probarlo en el juego"),
+            false,
+            16.0,
+        ) {
             act = Some(6);
         }
         y += 40.0;

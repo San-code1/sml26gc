@@ -56,7 +56,9 @@ pub fn store_check(rom_path: &Path) {
             return;
         }
     };
-    let Ok(mut g0) = Gb::new(expanded.clone(), 44100) else { return };
+    let Ok(mut g0) = Gb::new(expanded.clone(), 44100) else {
+        return;
+    };
     let booted = g0.boot_to_map();
     let mut same_levels = 0;
     for l in 0..LEVELS {
@@ -80,9 +82,15 @@ pub fn store_check(rom_path: &Path) {
             }
         }
         let res = store_bank(&mut rom, &original, h.bank, &[(h.map, &map)]);
-        let Ok(mut g) = Gb::new(rom.clone(), 44100) else { return };
+        let Ok(mut g) = Gb::new(rom.clone(), 44100) else {
+            return;
+        };
         let ok = g.boot_to_map() && g.enter_level(level as u8);
-        let same = map_in_memory(&g).iter().zip(&map).filter(|(a, b)| a == b).count();
+        let same = map_in_memory(&g)
+            .iter()
+            .zip(&map)
+            .filter(|(a, b)| a == b)
+            .count();
         // the other levels of the bank must still load unchanged
         let mut others_ok = true;
         for o in 0..LEVELS {
@@ -98,7 +106,11 @@ pub fn store_check(rom_path: &Path) {
         }
         println!("expanded big edit: level {level} ({old} bytes, {rows} rows of checkerboard) -> {}; game loaded={ok}; matches {same}/{MAP_BYTES}; other levels of the zone unchanged={others_ok}", shown(&res));
     }
-    for (name, level, big) in [("small edit", 0usize, false), ("too big edit", 25usize, true), ("grow one, simplify another", 26usize, false)] {
+    for (name, level, big) in [
+        ("small edit", 0usize, false),
+        ("too big edit", 25usize, true),
+        ("grow one, simplify another", 26usize, false),
+    ] {
         let mut rom = original.clone();
         let h = header(&rom, level);
         let (_, start) = map_location(&rom, h);
@@ -131,7 +143,9 @@ pub fn store_check(rom_path: &Path) {
         edits.push((h.map, map.clone()));
         let refs: Vec<(u8, &[u8])> = edits.iter().map(|(m, d)| (*m, d.as_slice())).collect();
         let res = store_bank(&mut rom, &original, h.bank, &refs);
-        let Ok(mut g) = Gb::new(rom.clone(), 44100) else { return };
+        let Ok(mut g) = Gb::new(rom.clone(), 44100) else {
+            return;
+        };
         let ok = g.boot_to_map() && g.enter_level(level as u8);
         let mem = map_in_memory(&g);
         let same = mem.iter().zip(&map).filter(|(a, b)| a == b).count();
@@ -163,7 +177,10 @@ pub fn objects_check(rom_path: &Path) {
         if same == objs.len() {
             good += 1;
         } else {
-            println!("level {l}: {same}/{} objects match the game's records", objs.len());
+            println!(
+                "level {l}: {same}/{} objects match the game's records",
+                objs.len()
+            );
         }
         for o in &objs {
             let b = o.to_bytes();
@@ -175,11 +192,18 @@ pub fn objects_check(rom_path: &Path) {
     let (start, cap) = objects::region(&original);
     println!("{good}/32 levels: the game's unpacked objects match; round trip ok={bytes_ok}; lists total {total} bytes, region {start:05x} {cap} bytes");
     // edit level 0
-    let mut lists: Vec<Vec<Obj>> = (0..cart_model::levels::LEVELS).map(|l| objects::read(&original, l).0).collect();
+    let mut lists: Vec<Vec<Obj>> = (0..cart_model::levels::LEVELS)
+        .map(|l| objects::read(&original, l).0)
+        .collect();
     let removed = lists[1].pop();
     lists[0][0].x += 16;
     lists[0][1].kind = lists[0][2].kind;
-    let extra = Obj { x: 40 * 16, y: lists[0][0].y, kind: lists[0][3].kind, flag: false };
+    let extra = Obj {
+        x: 40 * 16,
+        y: lists[0][0].y,
+        kind: lists[0][3].kind,
+        flag: false,
+    };
     lists[0].push(extra);
     let mut rom = original.clone();
     let res = objects::store(&mut rom, &original, &lists);
@@ -208,14 +232,23 @@ pub fn objects_check(rom_path: &Path) {
         let (objs, _) = objects::read(&original, l);
         let mut g = gx.clone();
         g.enter_level(l as u8);
-        if cart_model::live::objects_in_memory(&g, objs.len()) == objs && objects::read(&exp, l).0 == objs {
+        if cart_model::live::objects_in_memory(&g, objs.len()) == objs
+            && objects::read(&exp, l).0 == objs
+        {
             same += 1;
         }
     }
-    let mut lists: Vec<Vec<Obj>> = (0..cart_model::levels::LEVELS).map(|l| objects::read(&exp, l).0).collect();
+    let mut lists: Vec<Vec<Obj>> = (0..cart_model::levels::LEVELS)
+        .map(|l| objects::read(&exp, l).0)
+        .collect();
     let (k, y0) = (lists[0][0].kind, lists[0][0].y);
     for i in 0..40u16 {
-        lists[0].push(Obj { x: 304 + i * 48, y: y0, kind: k, flag: false }); // positions are in 8 px steps
+        lists[0].push(Obj {
+            x: 304 + i * 48,
+            y: y0,
+            kind: k,
+            flag: false,
+        }); // positions are in 8 px steps
     }
     let mut rom = exp.clone();
     let res = objects::store(&mut rom, &original, &lists);
@@ -232,7 +265,12 @@ pub fn objects_check(rom_path: &Path) {
             ok += 1;
         } else {
             let first = mem.iter().zip(&want).position(|(a, b)| a != b);
-            println!("  level {l}: {} objects, first difference at {first:?}: game {:?} / stored {:?}", want.len(), first.map(|i| mem[i]), first.map(|i| want[i]));
+            println!(
+                "  level {l}: {} objects, first difference at {first:?}: game {:?} / stored {:?}",
+                want.len(),
+                first.map(|i| mem[i]),
+                first.map(|i| want[i])
+            );
         }
     }
     println!("expanded: {same}/32 levels' objects unchanged; +40 objects in level 0 -> {}; levels 0,5,17,31 load as stored: {ok}/4", shown(&res));
@@ -250,11 +288,13 @@ pub fn world_check(rom_path: &Path) {
     let find = |win: &[u8], pic: &[u8]| -> Option<(usize, usize)> {
         for oy in 0..world::H {
             for ox in 0..world::W {
-                let ok = (0..32).all(|y| (0..32).all(|x| {
-                    let (px, py) = ((ox + x) % world::W, (oy + y) % world::H);
-                    // VRAM holds the tile at (px % 32, py % 32)
-                    win[(py % 32) * 32 + px % 32] == pic[py * world::W + px]
-                }));
+                let ok = (0..32).all(|y| {
+                    (0..32).all(|x| {
+                        let (px, py) = ((ox + x) % world::W, (oy + y) % world::H);
+                        // VRAM holds the tile at (px % 32, py % 32)
+                        win[(py % 32) * 32 + px % 32] == pic[py * world::W + px]
+                    })
+                });
                 if ok {
                     return Some((ox, oy));
                 }
@@ -296,7 +336,11 @@ pub fn world_check(rom_path: &Path) {
             level = Some(g.read(cart_model::ram_map::LEVEL_NUMBER));
             break;
         }
-        g.run_frame_with(if f % 30 < 4 { Buttons::START } else { Buttons::NONE });
+        g.run_frame_with(if f % 30 < 4 {
+            Buttons::START
+        } else {
+            Buttons::NONE
+        });
     }
     println!("edited: VRAM window best match with the edited picture {same_new}/1024; Start on point 0 opens level {level:?} (set to 6)");
 }

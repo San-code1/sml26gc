@@ -18,14 +18,32 @@ impl Editor {
             self.obj_space = self.doc.object_space();
             self.space_at = get_time();
         }
-        let (need, cap) = if self.mode == Mode::Objects { self.obj_space } else { self.space_cache };
+        let (need, cap) = if self.mode == Mode::Objects {
+            self.obj_space
+        } else {
+            self.space_cache
+        };
         let bw = 220.0;
         let bx = screen_width() - bw - 10.0;
         let frac = (need as f32 / cap.max(1) as f32).min(1.0);
         draw_rectangle(bx, ch + 6.0, bw, 14.0, col(0));
-        draw_rectangle(bx, ch + 6.0, bw * frac, 14.0, if need > cap { Color::from_rgba(170, 40, 30, 255) } else { col(2) });
+        draw_rectangle(
+            bx,
+            ch + 6.0,
+            bw * frac,
+            14.0,
+            if need > cap {
+                Color::from_rgba(170, 40, 30, 255)
+            } else {
+                col(2)
+            },
+        );
         draw_rectangle_lines(bx, ch + 6.0, bw, 14.0, 2.0, col(3));
-        let what = if self.mode == Mode::Objects { tr(self.es, "object space", "espacio objetos") } else { tr(self.es, "zone space", "espacio zona") };
+        let what = if self.mode == Mode::Objects {
+            tr(self.es, "object space", "espacio objetos")
+        } else {
+            tr(self.es, "zone space", "espacio zona")
+        };
         let label = format!("{what} {need}/{cap}");
         let dim = measure_text(&label, None, 16, 1.0);
         draw_text(&label, bx - dim.width - 8.0, ch + 18.0, 16.0, col(3));

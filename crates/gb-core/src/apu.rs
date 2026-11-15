@@ -63,7 +63,11 @@ struct Pulse {
 impl Pulse {
     fn sweep_calc(&mut self) -> u16 {
         let d = self.shadow >> self.sw_shift;
-        let n = if self.sw_neg { self.shadow.wrapping_sub(d) } else { self.shadow + d };
+        let n = if self.sw_neg {
+            self.shadow.wrapping_sub(d)
+        } else {
+            self.shadow + d
+        };
         if n > 2047 {
             self.on = false;
         }
@@ -77,7 +81,11 @@ impl Pulse {
         self.timer = (2048 - self.freq as i32) * 4;
         self.env.trigger();
         self.shadow = self.freq;
-        self.sw_timer = if self.sw_period == 0 { 8 } else { self.sw_period };
+        self.sw_timer = if self.sw_period == 0 {
+            8
+        } else {
+            self.sw_period
+        };
         self.sw_en = self.sw_period != 0 || self.sw_shift != 0;
         if self.sw_shift != 0 {
             self.sweep_calc();
@@ -88,7 +96,11 @@ impl Pulse {
             self.sw_timer -= 1;
         }
         if self.sw_timer == 0 {
-            self.sw_timer = if self.sw_period == 0 { 8 } else { self.sw_period };
+            self.sw_timer = if self.sw_period == 0 {
+                8
+            } else {
+                self.sw_period
+            };
             if self.sw_en && self.sw_period != 0 {
                 let n = self.sweep_calc();
                 if n <= 2047 && self.sw_shift != 0 {
@@ -263,7 +275,10 @@ impl Apu {
             ch1: Pulse::default(),
             ch2: Pulse::default(),
             ch3: Wave::default(),
-            ch4: Noise { lfsr: 0x7FFF, ..Default::default() },
+            ch4: Noise {
+                lfsr: 0x7FFF,
+                ..Default::default()
+            },
             cycles_per_sample: cps,
             sample_acc: 0.0,
             sum_l: 0.0,
@@ -330,12 +345,20 @@ impl Apu {
                 self.ch1.sw_shift = v & 7;
             }
             0xFF11 | 0xFF16 => {
-                let ch = if addr == 0xFF11 { &mut self.ch1 } else { &mut self.ch2 };
+                let ch = if addr == 0xFF11 {
+                    &mut self.ch1
+                } else {
+                    &mut self.ch2
+                };
                 ch.duty = v >> 6;
                 ch.length = 64 - (v & 63) as u16;
             }
             0xFF12 | 0xFF17 => {
-                let ch = if addr == 0xFF12 { &mut self.ch1 } else { &mut self.ch2 };
+                let ch = if addr == 0xFF12 {
+                    &mut self.ch1
+                } else {
+                    &mut self.ch2
+                };
                 ch.env.set(v);
                 ch.dac = v & 0xF8 != 0;
                 if !ch.dac {
@@ -343,11 +366,19 @@ impl Apu {
                 }
             }
             0xFF13 | 0xFF18 => {
-                let ch = if addr == 0xFF13 { &mut self.ch1 } else { &mut self.ch2 };
+                let ch = if addr == 0xFF13 {
+                    &mut self.ch1
+                } else {
+                    &mut self.ch2
+                };
                 ch.freq = (ch.freq & 0x700) | v as u16;
             }
             0xFF14 | 0xFF19 => {
-                let ch = if addr == 0xFF14 { &mut self.ch1 } else { &mut self.ch2 };
+                let ch = if addr == 0xFF14 {
+                    &mut self.ch1
+                } else {
+                    &mut self.ch2
+                };
                 ch.freq = (ch.freq & 0xFF) | (((v & 7) as u16) << 8);
                 ch.len_en = v & 0x40 != 0;
                 if v & 0x80 != 0 {
@@ -424,7 +455,12 @@ impl Apu {
             }
             // Mix
             let (l, r) = if self.power {
-                let o = [self.ch1.out(), self.ch2.out(), self.ch3.out(), self.ch4.out()];
+                let o = [
+                    self.ch1.out(),
+                    self.ch2.out(),
+                    self.ch3.out(),
+                    self.ch4.out(),
+                ];
                 let pan = self.regs[0x15];
                 let mut l = 0u32;
                 let mut r = 0u32;

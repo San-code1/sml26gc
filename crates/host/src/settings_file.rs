@@ -13,7 +13,10 @@ pub fn write(text: &str) -> std::io::Result<()> {
 
 /// The value of `key` in `key=value` text (spaces around both are ignored).
 pub fn value<'a>(text: &'a str, key: &str) -> Option<&'a str> {
-    text.lines().filter_map(|l| l.split_once('=')).find(|(k, _)| k.trim() == key).map(|(_, v)| v.trim())
+    text.lines()
+        .filter_map(|l| l.split_once('='))
+        .find(|(k, _)| k.trim() == key)
+        .map(|(_, v)| v.trim())
 }
 
 /// The language chosen in the game ("en", "es" or "ja"), if any.

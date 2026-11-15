@@ -11,7 +11,10 @@ pub struct History<T> {
 
 impl<T> Default for History<T> {
     fn default() -> Self {
-        History { undo: Vec::new(), redo: Vec::new() }
+        History {
+            undo: Vec::new(),
+            redo: Vec::new(),
+        }
     }
 }
 

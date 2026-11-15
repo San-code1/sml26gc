@@ -61,7 +61,10 @@ mod tests {
         let tiles: Vec<u8> = (0..W * H).map(|i| (i * 7 % 251) as u8).collect();
         write(&mut rom, &tiles);
         assert_eq!(read(&rom), tiles);
-        assert_eq!(&rom[PICTURE + TWIN..PICTURE + TWIN + W * H], &rom[PICTURE..PICTURE + W * H]);
+        assert_eq!(
+            &rom[PICTURE + TWIN..PICTURE + TWIN + W * H],
+            &rom[PICTURE..PICTURE + W * H]
+        );
         // the top-right quadrant starts 1024 bytes after the top-left one
         assert_eq!(rom[PICTURE + 1024], tiles[32]);
     }

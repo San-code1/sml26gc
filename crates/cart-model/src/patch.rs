@@ -24,16 +24,22 @@ pub const EXPANDED_SIZE: usize = 0x10_0000;
 /// Banks $20-$3F of the expanded copy mirror $00-$1F.
 pub const TWIN: usize = 0x8_0000;
 const STUB_AT: usize = 0x39BD;
-const STUB: [u8; 11] = [0x7C, 0xFE, 0xE0, 0xC2, 0x86, 0x03, 0xAF, 0xEA, 0x00, 0x40, 0xC9];
+const STUB: [u8; 11] = [
+    0x7C, 0xFE, 0xE0, 0xC2, 0x86, 0x03, 0xAF, 0xEA, 0x00, 0x40, 0xC9,
+];
 pub const OBJ_STUB_AT: usize = 0x39C8;
-const OBJ_STUB: [u8; 13] = [0x3E, 0x01, 0xEA, 0x00, 0x40, 0xCD, 0xBB, 0x6B, 0xAF, 0xEA, 0x00, 0x40, 0xC9];
+const OBJ_STUB: [u8; 13] = [
+    0x3E, 0x01, 0xEA, 0x00, 0x40, 0xCD, 0xBB, 0x6B, 0xAF, 0xEA, 0x00, 0x40, 0xC9,
+];
 
 pub fn is_expanded(rom: &[u8]) -> bool {
     rom.len() == EXPANDED_SIZE && rom[0x037C] == 0x01 && rom[STUB_AT..STUB_AT + STUB.len()] == STUB
 }
 
 pub fn objects_patched(rom: &[u8]) -> bool {
-    is_expanded(rom) && rom[OBJ_STUB_AT..OBJ_STUB_AT + OBJ_STUB.len()] == OBJ_STUB && rom[0x0582] == OBJ_STUB_AT as u8
+    is_expanded(rom)
+        && rom[OBJ_STUB_AT..OBJ_STUB_AT + OBJ_STUB.len()] == OBJ_STUB
+        && rom[0x0582] == OBJ_STUB_AT as u8
 }
 
 /// The bank the decoder reads map data from: the level's own bank, or in an expanded
@@ -51,20 +57,31 @@ pub fn can_expand(original: &[u8]) -> bool {
     original.len() == ORIGINAL_SIZE
         && original[0x037B..0x037D] == [0x3E, 0x00]
         && original[0x03A9..0x03AF] == [0x7C, 0xFE, 0xE0, 0x20, 0xD8, 0xC9]
-        && original[STUB_AT..OBJ_STUB_AT + OBJ_STUB.len()].iter().all(|&b| b == 0xFF)
+        && original[STUB_AT..OBJ_STUB_AT + OBJ_STUB.len()]
+            .iter()
+            .all(|&b| b == 0xFF)
         && original[0x0581..0x0584] == [0xCD, 0xBB, 0x6B]
         && original[0x0147] == 0x03
 }
 
 fn write_object_patch(rom: &mut [u8], base: usize) {
-    rom[base + 0x0581..base + 0x0584].copy_from_slice(&[0xCD, OBJ_STUB_AT as u8, (OBJ_STUB_AT >> 8) as u8]);
+    rom[base + 0x0581..base + 0x0584].copy_from_slice(&[
+        0xCD,
+        OBJ_STUB_AT as u8,
+        (OBJ_STUB_AT >> 8) as u8,
+    ]);
     rom[base + OBJ_STUB_AT..base + OBJ_STUB_AT + OBJ_STUB.len()].copy_from_slice(&OBJ_STUB);
 }
 
 /// Add the object patch to a copy expanded before it existed (its bank $23 is still a plain
 /// copy of bank 3, so the game reads the same lists until they're saved again).
 pub fn upgrade(rom: &mut [u8]) {
-    if is_expanded(rom) && !objects_patched(rom) && rom[OBJ_STUB_AT..OBJ_STUB_AT + OBJ_STUB.len()].iter().all(|&b| b == 0xFF) {
+    if is_expanded(rom)
+        && !objects_patched(rom)
+        && rom[OBJ_STUB_AT..OBJ_STUB_AT + OBJ_STUB.len()]
+            .iter()
+            .all(|&b| b == 0xFF)
+    {
         for base in [0, TWIN] {
             write_object_patch(rom, base);
         }
@@ -86,7 +103,11 @@ pub fn expand(original: &[u8]) -> Result<Vec<u8>, CartError> {
     rom.extend_from_slice(original);
     for base in [0, TWIN] {
         rom[base + 0x037C] = 0x01;
-        rom[base + 0x03A9..base + 0x03AC].copy_from_slice(&[0xC3, STUB_AT as u8, (STUB_AT >> 8) as u8]);
+        rom[base + 0x03A9..base + 0x03AC].copy_from_slice(&[
+            0xC3,
+            STUB_AT as u8,
+            (STUB_AT >> 8) as u8,
+        ]);
         rom[base + STUB_AT..base + STUB_AT + STUB.len()].copy_from_slice(&STUB);
         write_object_patch(&mut rom, base);
     }

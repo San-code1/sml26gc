@@ -141,7 +141,11 @@ impl Cpu {
                 let r = a as u16 + v as u16 + cin as u16;
                 self.a = r as u8;
                 self.f = z(self.a)
-                    | if (a & 0xF) + (v & 0xF) + cin > 0xF { HF } else { 0 }
+                    | if (a & 0xF) + (v & 0xF) + cin > 0xF {
+                        HF
+                    } else {
+                        0
+                    }
                     | if r > 0xFF { CF } else { 0 };
             }
             2 | 3 | 7 => {
@@ -150,7 +154,11 @@ impl Cpu {
                 let res = r as u8;
                 self.f = z(res)
                     | NF
-                    | if ((a & 0xF) as i16 - (v & 0xF) as i16 - cin as i16) < 0 { HF } else { 0 }
+                    | if ((a & 0xF) as i16 - (v & 0xF) as i16 - cin as i16) < 0 {
+                        HF
+                    } else {
+                        0
+                    }
                     | if r < 0 { CF } else { 0 };
                 if k != 7 {
                     self.a = res;
@@ -175,8 +183,15 @@ impl Cpu {
         let e = self.fetch(bus);
         let sp = self.sp;
         let r = sp.wrapping_add(e as i8 as i16 as u16);
-        self.f = if (sp & 0xF) + (e as u16 & 0xF) > 0xF { HF } else { 0 }
-            | if (sp & 0xFF) + (e as u16) > 0xFF { CF } else { 0 };
+        self.f = if (sp & 0xF) + (e as u16 & 0xF) > 0xF {
+            HF
+        } else {
+            0
+        } | if (sp & 0xFF) + (e as u16) > 0xFF {
+            CF
+        } else {
+            0
+        };
         r
     }
 
@@ -272,7 +287,11 @@ impl Cpu {
                 let n = v.wrapping_add(1);
                 self.set_r(bus, r, n);
                 self.f = (self.f & CF) | z(n) | if v & 0xF == 0xF { HF } else { 0 };
-                if r == 6 { 12 } else { 4 }
+                if r == 6 {
+                    12
+                } else {
+                    4
+                }
             }
             0x05 | 0x0D | 0x15 | 0x1D | 0x25 | 0x2D | 0x35 | 0x3D => {
                 let r = (op >> 3) & 7;
@@ -280,13 +299,21 @@ impl Cpu {
                 let n = v.wrapping_sub(1);
                 self.set_r(bus, r, n);
                 self.f = (self.f & CF) | z(n) | NF | if v & 0xF == 0 { HF } else { 0 };
-                if r == 6 { 12 } else { 4 }
+                if r == 6 {
+                    12
+                } else {
+                    4
+                }
             }
             0x06 | 0x0E | 0x16 | 0x1E | 0x26 | 0x2E | 0x36 | 0x3E => {
                 let r = (op >> 3) & 7;
                 let v = self.fetch(bus);
                 self.set_r(bus, r, v);
-                if r == 6 { 12 } else { 8 }
+                if r == 6 {
+                    12
+                } else {
+                    8
+                }
             }
             0x07 => {
                 let c = self.a >> 7;
@@ -323,7 +350,11 @@ impl Cpu {
                 let v = self.get_rp((op >> 4) & 3);
                 let r = hl as u32 + v as u32;
                 self.f = (self.f & ZF)
-                    | if (hl & 0xFFF) + (v & 0xFFF) > 0xFFF { HF } else { 0 }
+                    | if (hl & 0xFFF) + (v & 0xFFF) > 0xFFF {
+                        HF
+                    } else {
+                        0
+                    }
                     | if r > 0xFFFF { CF } else { 0 };
                 self.set_hl(r as u16);
                 8
@@ -394,12 +425,20 @@ impl Cpu {
             0x40..=0x7F => {
                 let v = self.get_r(bus, op & 7);
                 self.set_r(bus, (op >> 3) & 7, v);
-                if op & 7 == 6 || (op >> 3) & 7 == 6 { 8 } else { 4 }
+                if op & 7 == 6 || (op >> 3) & 7 == 6 {
+                    8
+                } else {
+                    4
+                }
             }
             0x80..=0xBF => {
                 let v = self.get_r(bus, op & 7);
                 self.alu((op >> 3) & 7, v);
-                if op & 7 == 6 { 8 } else { 4 }
+                if op & 7 == 6 {
+                    8
+                } else {
+                    4
+                }
             }
             0xC0 | 0xC8 | 0xD0 | 0xD8 => {
                 if self.cond((op >> 3) & 3) {
@@ -559,24 +598,44 @@ impl Cpu {
                 };
                 self.f = z(res) | if co != 0 { CF } else { 0 };
                 self.set_r(bus, r, res);
-                if hl { 16 } else { 8 }
+                if hl {
+                    16
+                } else {
+                    8
+                }
             }
             1 => {
                 self.f = (self.f & CF) | HF | if v & (1 << n) == 0 { ZF } else { 0 };
-                if hl { 12 } else { 8 }
+                if hl {
+                    12
+                } else {
+                    8
+                }
             }
             2 => {
                 self.set_r(bus, r, v & !(1 << n));
-                if hl { 16 } else { 8 }
+                if hl {
+                    16
+                } else {
+                    8
+                }
             }
             _ => {
                 self.set_r(bus, r, v | (1 << n));
-                if hl { 16 } else { 8 }
+                if hl {
+                    16
+                } else {
+                    8
+                }
             }
         }
     }
 }
 
 fn z(v: u8) -> u8 {
-    if v == 0 { ZF } else { 0 }
+    if v == 0 {
+        ZF
+    } else {
+        0
+    }
 }

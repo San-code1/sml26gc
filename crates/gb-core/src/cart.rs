@@ -52,7 +52,13 @@ impl Cart {
         let title: String = rom[0x134..0x144]
             .iter()
             .take_while(|&&b| b != 0)
-            .map(|&b| if (0x20..0x7F).contains(&b) { b as char } else { ' ' })
+            .map(|&b| {
+                if (0x20..0x7F).contains(&b) {
+                    b as char
+                } else {
+                    ' '
+                }
+            })
             .collect();
         Ok(Cart {
             rom,
@@ -148,7 +154,9 @@ impl Cart {
             0x4000..=0x7FFF => {
                 let bank = match self.mbc {
                     Mbc::None => 1,
-                    Mbc::Mbc1 => (((self.bank2 as usize) << 5) | self.rom_bank as usize) % self.banks(),
+                    Mbc::Mbc1 => {
+                        (((self.bank2 as usize) << 5) | self.rom_bank as usize) % self.banks()
+                    }
                     _ => self.rom_bank as usize % self.banks(),
                 };
                 self.rom[bank * 0x4000 + (addr as usize - 0x4000)]

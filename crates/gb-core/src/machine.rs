@@ -27,9 +27,16 @@ impl GameBoy<NoObserver> {
 }
 
 impl<O: BusObserver> GameBoy<O> {
-    pub fn with_observer(rom: Vec<u8>, sample_rate: u32, observer: O) -> Result<GameBoy<O>, String> {
+    pub fn with_observer(
+        rom: Vec<u8>,
+        sample_rate: u32,
+        observer: O,
+    ) -> Result<GameBoy<O>, String> {
         let cart = Cart::new(rom)?;
-        Ok(GameBoy { cpu: Cpu::new(), bus: Bus::new(cart, sample_rate, observer) })
+        Ok(GameBoy {
+            cpu: Cpu::new(),
+            bus: Bus::new(cart, sample_rate, observer),
+        })
     }
 
     /// Run until the next vertical blank (one video frame).

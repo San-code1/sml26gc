@@ -26,7 +26,14 @@ pub const OBJECT_RECORDS: u16 = 0xAB06;
 
 /// What the game's own pause menu writes to leave a cleared level for the map with
 /// Select (0:2774-0:278B), before setting the mode to `GameMode::ToMap`.
-pub const LEAVE_LEVEL_WRITES: [(u16, u8); 6] = [(0xA45E, 0x02), (0xA224, 0x02), (0xA2C8, 0), (0xA299, 0), (0xA2B4, 0), (0xA50D, 0)];
+pub const LEAVE_LEVEL_WRITES: [(u16, u8); 6] = [
+    (0xA45E, 0x02),
+    (0xA224, 0x02),
+    (0xA2C8, 0),
+    (0xA299, 0),
+    (0xA2B4, 0),
+    (0xA50D, 0),
+];
 
 /// Map points that Start does not enter like the others (0F:418F-0F:41A1 checks them).
 pub const SPECIAL_MAP_POINTS: [u8; 6] = [0x05, 0x09, 0x0E, 0x17, 0x1D, 0x11];

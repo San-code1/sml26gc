@@ -9,7 +9,11 @@ use gb_core::{Buttons, Gb};
 
 /// Shade (0-3) of pixel (x, y) of an 8x8 background tile, with the game's tile addressing.
 fn tile_pixel(vram: &[u8], lcdc: u8, bgp: u8, tile: u8, x: usize, y: usize) -> u8 {
-    let base = if lcdc & 0x10 != 0 { tile as usize * 16 } else { (0x1000 + (tile as i8 as i32) * 16) as usize };
+    let base = if lcdc & 0x10 != 0 {
+        tile as usize * 16
+    } else {
+        (0x1000 + (tile as i8 as i32) * 16) as usize
+    };
     let a = base + y * 2;
     let bit = 7 - x;
     let c = ((vram[a + 1] >> bit) & 1) << 1 | ((vram[a] >> bit) & 1);
@@ -55,7 +59,11 @@ pub struct WorldArt {
 
 impl WorldArt {
     pub fn capture(gb: &Gb) -> WorldArt {
-        WorldArt { vram: gb.video().vram().to_vec(), lcdc: gb.video().lcdc(), bgp: gb.video().bgp() }
+        WorldArt {
+            vram: gb.video().vram().to_vec(),
+            lcdc: gb.video().lcdc(),
+            bgp: gb.video().bgp(),
+        }
     }
 
     pub fn pixel(&self, tile: u8, x: usize, y: usize) -> u8 {
@@ -76,13 +84,22 @@ pub struct Look {
 
 fn sprites(g: &Gb) -> Vec<[u8; 4]> {
     let oam = g.video().oam();
-    (0..40).map(|i| [oam[i * 4], oam[i * 4 + 1], oam[i * 4 + 2], oam[i * 4 + 3]]).filter(|s| s[0] != 0 && s[0] < 160).collect()
+    (0..40)
+        .map(|i| [oam[i * 4], oam[i * 4 + 1], oam[i * 4 + 2], oam[i * 4 + 3]])
+        .filter(|s| s[0] != 0 && s[0] < 160)
+        .collect()
 }
 
 /// Let the game show one object of type `kind` alone beside Mario at the start of `level`,
 /// and cut out the sprites it draws (compared with the same level with no objects).
 /// `map_state` is a machine standing on the world map; `rom`/`original` the cartridge images.
-pub fn capture_look(map_state: &Gb, rom: &[u8], original: &[u8], level: usize, kind: u8) -> Option<Look> {
+pub fn capture_look(
+    map_state: &Gb,
+    rom: &[u8],
+    original: &[u8],
+    level: usize,
+    kind: u8,
+) -> Option<Look> {
     let lists: Vec<Vec<Obj>> = (0..LEVELS).map(|l| read(rom, l).0).collect();
     // Mario's start: let the game load the level once with no objects
     let mut empty = lists.clone();
@@ -97,7 +114,12 @@ pub fn capture_look(map_state: &Gb, rom: &[u8], original: &[u8], level: usize, k
     let (mx, my) = player_position(&mut g0);
     // just past the right edge of the screen: the game brings objects in as the view
     // scrolls, so Mario then walks right a little in both runs
-    let obj = Obj { x: ((mx + 216) / 8) * 8, y: (my / 8) * 8, kind, flag: false };
+    let obj = Obj {
+        x: ((mx + 216) / 8) * 8,
+        y: (my / 8) * 8,
+        kind,
+        flag: false,
+    };
     let mut one = lists;
     one[level] = vec![obj];
     let mut r1 = rom.to_vec();
@@ -108,14 +130,27 @@ pub fn capture_look(map_state: &Gb, rom: &[u8], original: &[u8], level: usize, k
         return None;
     }
     for f in 0..150 {
-        let b = if f < 130 { Buttons::RIGHT } else { Buttons::NONE };
+        let b = if f < 130 {
+            Buttons::RIGHT
+        } else {
+            Buttons::NONE
+        };
         g0.run_frame_with(b);
         g1.run_frame_with(b);
     }
     let base = sprites(&g0);
-    let new: Vec<[u8; 4]> = sprites(&g1).into_iter().filter(|s| !base.contains(s)).collect();
+    let new: Vec<[u8; 4]> = sprites(&g1)
+        .into_iter()
+        .filter(|s| !base.contains(s))
+        .collect();
     if std::env::var("LOOK_DEBUG").is_ok() {
-        eprintln!("mario {mx},{my} obj {:?} rec {:02x?} base {:?} one {:?}", obj, &g1.cart().ram()[0xB00..0xB12], base, sprites(&g1));
+        eprintln!(
+            "mario {mx},{my} obj {:?} rec {:02x?} base {:?} one {:?}",
+            obj,
+            &g1.cart().ram()[0xB00..0xB12],
+            base,
+            sprites(&g1)
+        );
     }
     if new.is_empty() {
         return None;
@@ -139,7 +174,11 @@ pub fn capture_look(map_state: &Gb, rom: &[u8], original: &[u8], level: usize, k
         }
         let pal = g1.video().obp((s[3] >> 4) & 1);
         for row in 0..sh as usize {
-            let r = if s[3] & 0x40 != 0 { sh as usize - 1 - row } else { row };
+            let r = if s[3] & 0x40 != 0 {
+                sh as usize - 1 - row
+            } else {
+                row
+            };
             let a = tile * 16 + r * 2;
             for col in 0..8usize {
                 let bit = if s[3] & 0x20 != 0 { col } else { 7 - col };
@@ -161,5 +200,11 @@ pub fn capture_look(map_state: &Gb, rom: &[u8], original: &[u8], level: usize, k
     let cam_y = cy as i32 - (oam[0] as i32 - 16);
     let dx = (x0 - 8 + cam_x) - obj.x as i32;
     let dy = (y0 - 16 + cam_y) - obj.y as i32;
-    Some(Look { w, h, px, dx: dx.clamp(-32, 32), dy: dy.clamp(-32, 32) })
+    Some(Look {
+        w,
+        h,
+        px,
+        dx: dx.clamp(-32, 32),
+        dy: dy.clamp(-32, 32),
+    })
 }

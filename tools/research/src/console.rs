@@ -15,7 +15,12 @@ pub fn use_battery_save(on: bool) {
 /// The cartridge on a Game Boy (with the player's save only under `--with-save`), or None
 /// if it can't be loaded.
 pub fn load(rom: &Path) -> Option<Gb> {
-    host::load_gb(rom, 44100, WITH_SAVE.load(std::sync::atomic::Ordering::Relaxed)).ok()
+    host::load_gb(
+        rom,
+        44100,
+        WITH_SAVE.load(std::sync::atomic::Ordering::Relaxed),
+    )
+    .ok()
 }
 
 /// Play frame `f` of a button script (sound dropped).
@@ -34,14 +39,20 @@ pub fn ram_addresses() -> Vec<u16> {
 
 /// (address, value) for every byte of `RAM_RANGES`.
 pub fn ram_snapshot(gb: &mut Gb) -> Vec<(u16, u8)> {
-    ram_addresses().into_iter().map(|a| (a, gb.read(a))).collect()
+    ram_addresses()
+        .into_iter()
+        .map(|a| (a, gb.read(a)))
+        .collect()
 }
 
 /// Write `pokes` ("a299=00,ff9b=14", hex) into memory.
 pub fn apply_pokes(gb: &mut Gb, pokes: &str) {
     for p in pokes.split(',') {
         if let Some((a, v)) = p.split_once('=') {
-            gb.write(u16::from_str_radix(a, 16).unwrap_or(0), u8::from_str_radix(v, 16).unwrap_or(0));
+            gb.write(
+                u16::from_str_radix(a, 16).unwrap_or(0),
+                u8::from_str_radix(v, 16).unwrap_or(0),
+            );
         }
     }
 }

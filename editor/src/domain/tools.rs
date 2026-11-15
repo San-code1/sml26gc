@@ -106,9 +106,21 @@ mod tests {
         }
     }
 
-    const PRESS: Pointer = Pointer { pressed: true, down: true, released: false };
-    const HOLD: Pointer = Pointer { pressed: false, down: true, released: false };
-    const RELEASE: Pointer = Pointer { pressed: false, down: false, released: true };
+    const PRESS: Pointer = Pointer {
+        pressed: true,
+        down: true,
+        released: false,
+    };
+    const HOLD: Pointer = Pointer {
+        pressed: false,
+        down: true,
+        released: false,
+    };
+    const RELEASE: Pointer = Pointer {
+        pressed: false,
+        down: false,
+        released: true,
+    };
 
     #[test]
     fn pencil_one_edit_per_stroke() {

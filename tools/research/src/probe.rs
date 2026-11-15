@@ -20,7 +20,12 @@ impl BusObserver for Probe {
     fn on_read(&mut self, pc: u16, bank: usize, addr: u16) {
         if let Some((lo, hi, want)) = self.read_watch {
             let fetch = addr >= pc && addr < pc.wrapping_add(3);
-            if addr >= lo && addr <= hi && (want == 0xFF || bank == want) && !fetch && self.read_log.len() < 200_000 {
+            if addr >= lo
+                && addr <= hi
+                && (want == 0xFF || bank == want)
+                && !fetch
+                && self.read_log.len() < 200_000
+            {
                 self.read_log.push((pc, addr, bank as u8));
             }
         }
@@ -36,5 +41,7 @@ impl BusObserver for Probe {
 /// The cartridge on a Game Boy with a `Probe` on its bus (no battery save loaded).
 pub fn probed(rom: &Path) -> Option<GameBoy<Probe>> {
     let data = std::fs::read(rom).map_err(|e| eprintln!("{e}")).ok()?;
-    GameBoy::with_observer(data, 44100, Probe::default()).map_err(|e| eprintln!("{e}")).ok()
+    GameBoy::with_observer(data, 44100, Probe::default())
+        .map_err(|e| eprintln!("{e}"))
+        .ok()
 }

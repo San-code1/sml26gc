@@ -40,7 +40,11 @@ pub struct Obj {
 
 impl Obj {
     pub fn from_bytes(b: u8, c: u8, d: u8) -> Obj {
-        let kind = ((b >> 4) & 1) << 6 | ((b >> 7) & 1) << 5 | ((b >> 6) & 1) << 4 | ((b >> 5) & 1) << 3 | (c >> 5);
+        let kind = ((b >> 4) & 1) << 6
+            | ((b >> 7) & 1) << 5
+            | ((b >> 6) & 1) << 4
+            | ((b >> 5) & 1) << 3
+            | (c >> 5);
         Obj {
             x: (b as u16 & 0x0F) * 256 + (c as u16 & 0x1F) * 8,
             y: ((d as u16 >> 5) & 3) * 256 + (d as u16 & 0x1F) * 8,
@@ -53,7 +57,11 @@ impl Obj {
         let x = self.x.min(4095);
         let y = self.y.min(1023);
         let k = self.kind & 0x7F;
-        let b = (x / 256) as u8 | ((k >> 6) & 1) << 4 | ((k >> 3) & 1) << 5 | ((k >> 4) & 1) << 6 | ((k >> 5) & 1) << 7;
+        let b = (x / 256) as u8
+            | ((k >> 6) & 1) << 4
+            | ((k >> 3) & 1) << 5
+            | ((k >> 4) & 1) << 6
+            | ((k >> 5) & 1) << 7;
         let c = ((x % 256) / 8) as u8 | (k & 7) << 5;
         let d = ((y % 256) / 8) as u8 | (((y / 256) as u8) & 3) << 5 | (self.flag as u8) << 7;
         [b, c, d]
@@ -122,7 +130,11 @@ pub fn space(rom: &[u8], original: &[u8], lists: &[Vec<Obj>]) -> (usize, usize) 
 
 /// Write every level's list back, one after another in the original lists' space, sorted
 /// left to right (the order the game keeps them in), and point the table at them.
-pub fn store(rom: &mut [u8], original: &[u8], lists: &[Vec<Obj>]) -> Result<ObjectsUsage, CartError> {
+pub fn store(
+    rom: &mut [u8],
+    original: &[u8],
+    lists: &[Vec<Obj>],
+) -> Result<ObjectsUsage, CartError> {
     let (start, capacity) = region_for(rom, original);
     let (need, _) = space(rom, original, lists);
     let b = bank(rom);
@@ -152,7 +164,10 @@ pub fn store(rom: &mut [u8], original: &[u8], lists: &[Vec<Obj>]) -> Result<Obje
         };
         set_word(rom, tbl + l * 2, addr);
     }
-    Ok(ObjectsUsage { used: need, capacity })
+    Ok(ObjectsUsage {
+        used: need,
+        capacity,
+    })
 }
 
 #[cfg(test)]
@@ -174,7 +189,12 @@ mod tests {
 
     #[test]
     fn positions_are_clamped_and_snapped() {
-        let o = Obj { x: 5000, y: 2000, kind: 0xFF, flag: false };
+        let o = Obj {
+            x: 5000,
+            y: 2000,
+            kind: 0xFF,
+            flag: false,
+        };
         let [b, c, d] = o.to_bytes();
         let back = Obj::from_bytes(b, c, d);
         assert_eq!((back.x, back.y, back.kind), (4088, 1016, 0x7F));

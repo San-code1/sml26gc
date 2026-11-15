@@ -6,7 +6,9 @@ const R8: [&str; 8] = ["b", "c", "d", "e", "h", "l", "(hl)", "a"];
 const RP: [&str; 4] = ["bc", "de", "hl", "sp"];
 const RP2: [&str; 4] = ["bc", "de", "hl", "af"];
 const CC: [&str; 4] = ["nz", "z", "nc", "c"];
-const ALU: [&str; 8] = ["add a,", "adc a,", "sub ", "sbc a,", "and ", "xor ", "or ", "cp "];
+const ALU: [&str; 8] = [
+    "add a,", "adc a,", "sub ", "sbc a,", "and ", "xor ", "or ", "cp ",
+];
 const ROT: [&str; 8] = ["rlc", "rrc", "rl", "rr", "sla", "sra", "swap", "srl"];
 
 /// Disassemble one instruction; returns (text, length).
@@ -77,7 +79,14 @@ pub fn dis1(b: &[u8; 3], pc: u16) -> (String, u16) {
                         s(format!("add hl,{}", RP[(y >> 1) as usize]), 1)
                     }
                 }
-                3 => s(format!("{} {}", if y & 1 == 0 { "inc" } else { "dec" }, RP[(y >> 1) as usize]), 1),
+                3 => s(
+                    format!(
+                        "{} {}",
+                        if y & 1 == 0 { "inc" } else { "dec" },
+                        RP[(y >> 1) as usize]
+                    ),
+                    1,
+                ),
                 4 => s(format!("inc {}", R8[y as usize]), 1),
                 5 => s(format!("dec {}", R8[y as usize]), 1),
                 6 => s(format!("ld {},${n:02x}", R8[y as usize]), 2),
@@ -111,10 +120,18 @@ pub fn disasm(rom: &Path, bank: usize, addr: u16, count: u32) {
     };
     let mut pc = addr;
     for _ in 0..count {
-        let b = [gb.cart().rom_byte(off(pc)), gb.cart().rom_byte(off(pc.wrapping_add(1))), gb.cart().rom_byte(off(pc.wrapping_add(2)))];
+        let b = [
+            gb.cart().rom_byte(off(pc)),
+            gb.cart().rom_byte(off(pc.wrapping_add(1))),
+            gb.cart().rom_byte(off(pc.wrapping_add(2))),
+        ];
         let (t, l) = dis1(&b, pc);
         let bytes: Vec<String> = b[..l as usize].iter().map(|x| format!("{x:02x}")).collect();
-        println!("{:02x}:{pc:04x}  {:<9} {t}", if pc < 0x4000 { 0 } else { bank }, bytes.join(" "));
+        println!(
+            "{:02x}:{pc:04x}  {:<9} {t}",
+            if pc < 0x4000 { 0 } else { bank },
+            bytes.join(" ")
+        );
         pc = pc.wrapping_add(l);
     }
 }
@@ -124,7 +141,9 @@ pub fn table(rom: &Path, off: usize, len: usize, row: usize) {
     let Some(gb) = load(rom) else { return };
     let mut i = 0;
     while i < len {
-        let vals: Vec<i32> = (0..row.min(len - i)).map(|k| gb.cart().rom_byte(off + i + k) as i8 as i32).collect();
+        let vals: Vec<i32> = (0..row.min(len - i))
+            .map(|k| gb.cart().rom_byte(off + i + k) as i8 as i32)
+            .collect();
         let s: i32 = vals.iter().sum();
         let t: Vec<String> = vals.iter().map(|v| format!("{v:3}")).collect();
         println!("{:05x} idx {:02x}: {}  sum {s}", off + i, i, t.join(""));

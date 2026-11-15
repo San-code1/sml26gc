@@ -1,9 +1,10 @@
 //! The game's own graphics, captured by running the console in the background: it boots
 //! to the world map once (from the cartridge as it was when first needed), then each level
 //! is entered on a copy of that state to see its blocks; object pictures and the world
-//! map's tiles come from the same state.
+//! map's tiles come from the same state, and each zone map's tiles from a copy taken there.
 use cart_model::art::{capture_look, LevelArt, Look, WorldArt};
 use cart_model::levels::LEVELS;
+use cart_model::zone_maps::ZONES;
 use cart_model::GameDriver;
 use gb_core::Gb;
 
@@ -21,11 +22,17 @@ pub struct ArtService {
     boot: Option<Gb>,
     levels: Vec<Option<LevelArt>>,
     world: Option<WorldArt>,
+    zones: Vec<Option<WorldArt>>,
 }
 
 impl ArtService {
     pub fn new() -> ArtService {
-        ArtService { boot: None, levels: (0..LEVELS).map(|_| None).collect(), world: None }
+        ArtService {
+            boot: None,
+            levels: (0..LEVELS).map(|_| None).collect(),
+            world: None,
+            zones: ZONES.iter().map(|_| None).collect(),
+        }
     }
 
     pub fn booted(&self) -> bool {
@@ -64,6 +71,17 @@ impl ArtService {
             self.world = Some(WorldArt::capture(self.boot.as_ref()?));
         }
         self.world.as_ref()
+    }
+
+    /// Zone map `z`'s tiles as the game shows them: the game is taken to one of the zone's
+    /// points on a copy of the booted console (needs the console booted).
+    pub fn zone(&mut self, z: usize) -> Option<&WorldArt> {
+        if self.zones[z].is_none() {
+            let mut g = self.boot.clone()?;
+            g.show_map_at(ZONES[z].point);
+            self.zones[z] = Some(WorldArt::capture(&g));
+        }
+        self.zones[z].as_ref()
     }
 
     /// What object type `kind` looks like in level `l`. None while the console isn't
