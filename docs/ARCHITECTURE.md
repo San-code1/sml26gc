@@ -98,6 +98,7 @@ Propuesta (módulos):
 | `layout` | Capacidad por banco, empaquetado de mapas y objetos (`store_bank`, `space`) |
 | `extra_levels` | Niveles nuevos (32 en adelante): guardados en bancos libres de la copia de 1 MB y jugados en lugar de un nivel base (`writes_for`, `apply`) |
 | `original_points` | Dónde dibuja el juego sus puntos (medido), para el editor |
+| `doors` | Puertas entre el mapa del mundo y las zonas: qué punto entra en qué zona y adónde lleva cada salida (al mundo o directamente a otra zona), cambiando los bytes del código del mapa |
 | `map_routes` | Los caminos del mapa tal como los lee el juego (guiones de pasos en el banco $18), dónde queda Mario en cada punto, y los puntos nuevos; en la copia editada se mueven al banco $36 con un parche del código del mapa |
 | `art` | `LevelArt`, `WorldArt`, captura de sprites (`Look`) a partir de una `GameBoy` |
 | `live` | Lo que el juego en marcha tiene cargado: mapa del nivel, objetos, posición del jugador |
@@ -174,7 +175,7 @@ editor/src/
 │  ├─ level_view.rs   Vista del nivel, vista general, panel lateral
 │  ├─ objects_view.rs Objetos: poner, arrastrar, cambiar tipo, borrar
 │  ├─ palette.rs      Paletas de bloques y de tipos de objeto
-│  ├─ world_view.rs   Mapa del mundo: dibujo, nivel de cada punto, caminos y puntos nuevos
+│  ├─ world_view.rs   Mapa del mundo: dibujo, nivel de cada punto, caminos, puntos nuevos y puertas
 │  ├─ custom_view.rs  "Tu mapa"
 │  ├─ status_bar.rs   Mensaje y espacio de zona/objetos
 │  └─ widgets.rs      Colores, botón, wrap, texturas a partir de los gráficos capturados

@@ -405,6 +405,7 @@ impl Editor {
                         Saved::Objects(n) => n.to_string(),
                         Saved::WorldMap => tr(es, "world map", "mapa de mundos").to_string(),
                         Saved::LevelPoints => tr(es, "level points", "puntos de nivel").to_string(),
+                        Saved::Doors => tr(es, "doors", "puertas").to_string(),
                         Saved::Routes(n) => format!("{} ({n} bytes)", tr(es, "map paths", "caminos del mapa")),
                         Saved::NewLevels(n, used) => format!("{n} {} {used} bytes", tr(es, "new levels", "niveles nuevos")),
                     })

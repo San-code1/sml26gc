@@ -487,3 +487,92 @@ pub fn exit_check(rom_path: &Path, from: u8, first: &str, then: &str) {
     }
     println!("points: {}", trail.iter().map(|t| format!("{t:02x}")).collect::<Vec<_>>().join(" "));
 }
+
+/// Try a map change: patch the ROM (`patches` "BB:AAAA=hexbytes,..."), show the map at
+/// `point`, press `pads` one after another (R L U D A), and say where Mario ends up: the
+/// point, the map ($A68B, 0 = world) and a picture `png`.
+pub fn door_try(rom_path: &Path, patches: &str, point: u8, pads: &str, png: &Path) {
+    use cart_model::ram_map::{GAME_MODE, MAP_POINT};
+    let Some(gb) = load(rom_path) else { return };
+    let mut rom = gb.cart().rom().to_vec();
+    for p in patches.split(',').filter(|s| !s.is_empty()) {
+        let (at, bytes) = p.split_once('=').unwrap();
+        let (b, a) = at.split_once(':').unwrap();
+        let o = cart_model::rom::offset(usize::from_str_radix(b, 16).unwrap(), u16::from_str_radix(a, 16).unwrap());
+        for (i, k) in (0..bytes.len()).step_by(2).enumerate() {
+            rom[o + i] = u8::from_str_radix(&bytes[k..k + 2], 16).unwrap();
+        }
+    }
+    let Ok(mut g) = Gb::new(rom, 44100) else { return };
+    if !g.boot_to_map() {
+        println!("could not reach the map");
+        return;
+    }
+    g.show_map_at(point);
+    let mut trail = vec![(g.read(MAP_POINT), g.read(0xA68B), g.read(GAME_MODE))];
+    for c in pads.chars() {
+        let b = match c { 'R' => Buttons::RIGHT, 'L' => Buttons::LEFT, 'U' => Buttons::UP, 'D' => Buttons::DOWN, _ => Buttons::A };
+        for f in 0..500u32 {
+            g.run_frame_with(if f < 6 { b } else { Buttons::NONE });
+            g.clear_audio();
+            let now = (g.read(MAP_POINT), g.read(0xA68B), g.read(GAME_MODE));
+            if trail.last() != Some(&now) {
+                trail.push(now);
+            }
+        }
+    }
+    println!("(point, map, mode): {}", trail.iter().map(|t| format!("({:02x},{},{:02x})", t.0, t.1, t.2)).collect::<Vec<_>>().join(" "));
+    println!("Mario ({:02x},{:02x})", g.read(0xA842), g.read(0xA843));
+    host::png_out::save_png(&g, png);
+}
+
+/// Show the map at `point`, press `pads` (R L U D A), return (point, zone $A68B) as they change.
+fn pads_trail(rom: Vec<u8>, point: u8, pads: &str) -> Vec<(u8, u8)> {
+    use cart_model::ram_map::MAP_POINT;
+    let Ok(mut g) = Gb::new(rom, 44100) else { return vec![] };
+    if !g.boot_to_map() {
+        return vec![];
+    }
+    g.show_map_at(point);
+    let mut trail = vec![(g.read(MAP_POINT), g.read(0xA68B))];
+    for c in pads.chars() {
+        let b = match c { 'R' => Buttons::RIGHT, 'L' => Buttons::LEFT, 'U' => Buttons::UP, 'D' => Buttons::DOWN, _ => Buttons::A };
+        for f in 0..500u32 {
+            g.run_frame_with(if f < 6 { b } else { Buttons::NONE });
+            g.clear_audio();
+            let now = (g.read(MAP_POINT), g.read(0xA68B));
+            if trail.last() != Some(&now) {
+                trail.push(now);
+            }
+        }
+    }
+    trail
+}
+
+/// Doors changed through `cart_model::doors`, tried in the game.
+pub fn door_check(rom_path: &Path) {
+    use cart_model::doors::{read, write, Leads};
+    let Some(gb) = load(rom_path) else { return };
+    let rom = gb.cart().rom().to_vec();
+    let d = read(&rom);
+    println!("known: {}  into {:02x?}", cart_model::doors::known(&rom), d.into);
+    println!("exits {:02x?}", d.exits);
+    let show = |t: Vec<(u8, u8)>| t.iter().map(|(p, z)| format!("{p:02x}/{z}")).collect::<Vec<_>>().join(" ");
+    let tries: Vec<(&str, Box<dyn Fn(&mut cart_model::doors::Doors)>, u8, &str)> = vec![
+        ("as the game is: Tree Zone out", Box::new(|_| {}), 0x23, "D"),
+        ("Tree Zone out into Macro Zone", Box::new(|d| d.exits[0].1 = Leads::Zone(2)), 0x23, "D"),
+        ("Macro Zone out into Tree Zone", Box::new(|d| d.exits[4].1 = Leads::Zone(0)), 0x32, "L"),
+        ("Tree Zone out to world point 07", Box::new(|d| d.exits[0].1 = Leads::World(0x07)), 0x23, "D"),
+        ("07 opens Pumpkin Zone", Box::new(|d| d.set_door(0x07, Some(1))), 0x07, "A"),
+        ("02 no longer opens Tree Zone", Box::new(|d| d.set_door(0x02, None)), 0x02, "A"),
+        ("Tree Zone exit moved to 22", Box::new(|d| d.exits[0].0 = 0x22), 0x22, "D"),
+        ("Space Zone out into Mario Zone", Box::new(|d| d.exits[5].1 = Leads::Zone(4)), 0x3C, "D"),
+    ];
+    for (name, change, point, pads) in tries {
+        let mut r = rom.clone();
+        let mut dd = d.clone();
+        change(&mut dd);
+        write(&mut r, &dd);
+        println!("{name}: {}", show(pads_trail(r, point, pads)));
+    }
+}
