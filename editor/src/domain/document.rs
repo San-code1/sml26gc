@@ -278,20 +278,32 @@ impl EditorDocument {
         self.points_dirty = true;
     }
 
-    /// Add the game's own points (where it draws them, with the levels they open now) to the
-    /// editor-made map, leaving out any already there. Returns how many were added.
+    /// Add the game's own map (its points where it draws them, with the levels they open now,
+    /// and its paths and doors) to the editor-made map; points already there (same map and
+    /// place) are reused. Returns how many points were added.
     pub fn add_original_points(&mut self) -> usize {
         let original = CustomMap::from_original(&self.points);
         let was_empty = self.custom.points.is_empty();
         let mut added = 0;
-        for p in original.points {
-            if !self.custom.points.iter().any(|q| (q.map, q.x, q.y) == (p.map, p.x, p.y)) {
-                self.custom.points.push(p);
-                added += 1;
+        let mut index = Vec::new();
+        for p in &original.points {
+            match self.custom.points.iter().position(|q| (q.map, q.x, q.y) == (p.map, p.x, p.y)) {
+                Some(i) => index.push(i),
+                None => {
+                    self.custom.points.push(*p);
+                    index.push(self.custom.points.len() - 1);
+                    added += 1;
+                }
+            }
+        }
+        for &(a, b) in &original.paths {
+            if !self.custom.linked(index[a], index[b]) {
+                self.custom.paths.push((index[a], index[b]));
+                self.custom_dirty = true;
             }
         }
         if was_empty {
-            self.custom.start = original.start;
+            self.custom.start = index[original.start];
         }
         self.custom_dirty |= added > 0;
         added
@@ -457,6 +469,9 @@ mod tests {
         let n = doc.add_original_points();
         assert!(n > 30 && doc.custom_dirty);
         assert_eq!(doc.custom.points[doc.custom.start].level, Some(0), "Mario starts on the first level");
+        let paths = CustomMap::from_original(&doc.points).paths.len();
+        assert_eq!(doc.custom.paths.len(), paths, "the paths come too");
         assert_eq!(doc.add_original_points(), 0, "points already there are not added twice");
+        assert_eq!(doc.custom.paths.len(), paths);
     }
 }

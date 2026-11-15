@@ -76,6 +76,13 @@ const COMMANDS: &[(&str, Run)] = &[
     ("trace", |r, a| memory::trace(r, &a.s(1), &a.list(2), a.num(3), a.num(4))),
     ("mapafter", |r, a| rom_views::map_after(r, a.num(1) as u8, &a.path(2), (!a.s(3).is_empty()).then(|| a.hex(3) as u8))),
     ("mapscan", |r, a| rom_views::map_scan(r, &a.path(1))),
+    ("savediff", |r, _| memory::save_diff(r)),
+    ("pathscan", |r, a| rom_views::path_scan(r, &a.s(1))),
+    ("unlock", |r, a| rom_views::unlock(r, a.hex(1) as u8, a.hex(2), a.hex(3))),
+    ("walk", |r, a| rom_views::walk_test(r, (a.s(1) != "-").then(|| a.hex(1) as u8), &a.s(2), a.num(3))),
+    ("clearscan", |r, _| rom_views::clear_scan(r)),
+    ("cleardiff", |r, a| rom_views::clear_diff(r, a.num(1) as u8)),
+    ("modetry", |r, a| rom_views::mode_try(r, a.num(1) as u8, a.hex(2) as u8, &a.s(3))),
 ];
 
 const USAGE: &str = "research [--with-save]: disasm BANK ADDR N | table OFF LEN ROW | find SCRIPT | watch SCRIPT ADDRS FROM TO | trace SCRIPT ADDRS FROM TO\n\
@@ -108,6 +115,6 @@ mod tests {
         let a = Args(["watch", "x", "ffc2,a200-a202", "0x10", "12"].map(String::from).to_vec());
         assert_eq!(a.list(2), vec![0xFFC2, 0xA200, 0xA201, 0xA202]);
         assert_eq!((a.hex(3), a.big(3), a.num(4), a.num(9)), (0x10, 0x10, 12, 0));
-        assert_eq!(COMMANDS.len(), 21);
+        assert_eq!(COMMANDS.len(), 28);
     }
 }

@@ -211,8 +211,8 @@ impl Editor {
         y += 36.0;
         let help = tr(
             es,
-            "Click empty map: new point, joined to the selected one. Drag: move. Right click: delete. Join to... then click another point: add or remove a path; change map with < > before the second click to make a door to a zone. In the game, the d-pad walks the paths, A or Start enters the point's level or goes through a door. The pause menu switches between this map and the original.",
-            "Clic en el mapa vacio: punto nuevo, unido al elegido. Arrastrar: mover. Clic derecho: borrar. Unir con... y clic en otro punto: pone o quita un camino; cambia de mapa con < > antes del segundo clic para hacer una puerta a una zona. En el juego, la cruceta recorre los caminos, A o Start entra en el nivel del punto o cruza la puerta. El menu de pausa cambia entre este mapa y el original.",
+            "Click empty map: new point, joined to the selected one. Drag: move. Right click: delete. Join to... then click another point: add or remove a path; change map with < > before the second click to make a door to a zone. In the game, the d-pad walks the paths, A or Start enters the point's level, B goes through a door (A too where there is no level). The pause menu switches between this map and the original.",
+            "Clic en el mapa vacio: punto nuevo, unido al elegido. Arrastrar: mover. Clic derecho: borrar. Unir con... y clic en otro punto: pone o quita un camino; cambia de mapa con < > antes del segundo clic para hacer una puerta a una zona. En el juego, la cruceta recorre los caminos, A o Start entra en el nivel del punto, B cruza la puerta (A tambien si no hay nivel). El menu de pausa cambia entre este mapa y el original.",
         );
         for (k, line) in wrap(help, 38).iter().enumerate() {
             draw_text(line, 10.0, y + k as f32 * 16.0, 15.0, col(2));

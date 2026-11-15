@@ -22,7 +22,8 @@ pub trait GameDriver {
     fn enter_level(&mut self, level: u8) -> bool;
     /// Enter `level` from the world map whatever point the game's own Mario stands on:
     /// Start only works on a point that opens a level (0F:41B1), so first put him on one
-    /// ($A840 = point number; the special points 0F:418F-0F:41A1 checks are avoided).
+    /// ($A840 = point number; the special points 0F:418F-0F:41A1 checks are avoided, and
+    /// the start point $00 is only the fallback).
     fn enter_level_anywhere(&mut self, level: u8) -> bool;
     /// From the world map, show the map that point `point` is on (the world map or a zone
     /// map) the way the game does after a level: enter one, put Mario on the point
@@ -104,10 +105,19 @@ impl GameDriver for Gb {
 
     fn enter_level_anywhere(&mut self, level: u8) -> bool {
         let table = point_levels(self.cart().rom());
-        if let Some(p) = (0..table.len()).find(|&p| table[p] < 32 && !SPECIAL_MAP_POINTS.contains(&(p as u8))) {
-            self.write(MAP_POINT, p as u8);
+        // Point $00 (where a new game starts) stops taking Start once its level is cleared,
+        // so another level point is tried first.
+        let mut points: Vec<u8> = (0..table.len() as u8).filter(|&p| table[p as usize] < 32 && !SPECIAL_MAP_POINTS.contains(&p)).collect();
+        points.sort_by_key(|&p| p == 0);
+        for p in points.into_iter().take(2) {
+            let mut g = self.clone();
+            g.write(MAP_POINT, p);
+            if g.enter_level(level) {
+                *self = g;
+                return true;
+            }
         }
-        self.enter_level(level)
+        false
     }
 
     fn show_map_at(&mut self, point: u8) -> bool {

@@ -225,6 +225,9 @@ impl GameSession {
             let lock = self.input_lock;
             let k = |i: usize| input.held(st.keys[i]) && !lock;
             let enter = !lock && (input.pressed(st.keys[keys::A]) || input.pressed(st.keys[keys::START]));
+            if !lock && input.pressed(st.keys[keys::B]) {
+                v.go_through_door();
+            }
             if let Some(level) = v.update(k(keys::LEFT), k(keys::RIGHT), k(keys::UP), k(keys::DOWN), enter) {
                 g.enter_level_anywhere(level);
                 self.acc = 0.0;

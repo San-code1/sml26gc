@@ -291,3 +291,20 @@ pub fn trace(rom: &Path, script: &str, addrs: &[u16], from: u32, to: u32) {
         }
     }
 }
+
+/// Cartridge and work RAM on the world map with no save and with the player's battery save:
+/// the addresses that differ (where the game keeps its progress).
+pub fn save_diff(rom: &Path) {
+    let snap = |save: bool| {
+        crate::console::use_battery_save(save);
+        let mut gb = load(rom)?;
+        gb.boot_to_map();
+        Some(crate::console::ram_snapshot(&mut gb))
+    };
+    let (Some(a), Some(b)) = (snap(false), snap(true)) else { return };
+    for (x, y) in a.iter().zip(&b) {
+        if x.1 != y.1 && x.0 < 0xC000 {
+            println!("{:04x}: new {:02x}  saved {:02x}", x.0, x.1, y.1);
+        }
+    }
+}

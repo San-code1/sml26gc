@@ -1,15 +1,15 @@
 //! The port's own world map, made in the editor: points anywhere on the world picture or on
 //! a zone map's picture, the paths between them and which level each point opens. The game
 //! uses it instead of the cartridge's map (whose points and paths are fixed inside its code).
-//! A path between points on two different pictures is a door: on its end without a level,
-//! A or Start takes Mario to the other picture.
+//! A path between points on two different pictures is a door: B (or A / Start on a point
+//! without a level) takes Mario to the other picture.
 //!
 //! Kept as plain text (`host` saves it next to the cartridge copy as `<name>.points.txt`):
 //!   point <x> <y> <level or -> [map]   one per line, numbered from 0 in order; map 0 (or
 //!                                      none) = the world map, 1.. = zone map 1..
 //!   path <a> <b>                       two point numbers
 //!   start <n>                          where Mario starts
-use crate::original_points::{OnMap, SPOTS};
+use crate::original_points::{OnMap, LINKS, SPOTS};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Point {
@@ -79,12 +79,35 @@ impl CustomMap {
         s
     }
 
-    /// The game's own points where it draws them (`original_points`), each opening the level
-    /// `levels` (the point-to-level table) gives it; no paths. Mario starts on point $00.
+    /// The game's own map (`original_points`): its points where it draws them, each opening
+    /// the level `levels` (the point-to-level table) gives it, and its paths and doors; the
+    /// corners of a road are points of their own (bends, see `is_bend`). Mario starts on
+    /// point $00.
     pub fn from_original(levels: &[u8]) -> CustomMap {
-        let points = SPOTS.iter().map(|s| Point { x: s.x, y: s.y, level: levels.get(s.point as usize).copied().filter(|&l| l < 32), map: s.map }).collect();
+        let mut points: Vec<Point> = SPOTS.iter().map(|s| Point { x: s.x, y: s.y, level: levels.get(s.point as usize).copied().filter(|&l| l < 32), map: s.map }).collect();
+        let mut paths = Vec::new();
+        for &(a, b, bends) in LINKS {
+            let mut from = a;
+            for &(x, y) in bends {
+                points.push(Point { x, y, level: None, map: SPOTS[a].map });
+                paths.push((from, points.len() - 1));
+                from = points.len() - 1;
+            }
+            paths.push((from, b));
+        }
         let start = SPOTS.iter().position(|s| s.point == 0).unwrap_or(0);
-        CustomMap { points, paths: Vec::new(), start }
+        CustomMap { points, paths, start }
+    }
+
+    /// A bend of a road: a point with no level and no door joined to exactly two others.
+    /// Mario walks on through it instead of stopping.
+    pub fn is_bend(&self, i: usize) -> bool {
+        self.points.get(i).is_some_and(|p| p.level.is_none()) && self.door(i).is_none() && self.paths.iter().filter(|&&(a, b)| a == i || b == i).count() == 2
+    }
+
+    /// The other point joined to `i` than `came_from`.
+    pub fn other_end(&self, i: usize, came_from: usize) -> Option<usize> {
+        self.paths.iter().filter_map(|&(a, b)| if a == i { Some(b) } else if b == i { Some(a) } else { None }).find(|&o| o != came_from)
     }
 
     /// Where a door at point `i` leads: the first point joined to it on another picture.
@@ -177,9 +200,14 @@ mod tests {
         levels[0] = 0;
         levels[0x20] = 5;
         let o = CustomMap::from_original(&levels);
-        assert_eq!(o.points.len(), SPOTS.len());
+        let corners: usize = LINKS.iter().map(|l| l.2.len()).sum();
+        assert_eq!(o.points.len(), SPOTS.len() + corners);
         assert_eq!(o.points[o.start].level, Some(0));
         let i = SPOTS.iter().position(|s| s.point == 0x20).unwrap();
         assert_eq!((o.points[i].level, o.points[i].map), (Some(5), OnMap::Zone(0)));
+        assert_eq!(o.paths.len(), LINKS.len() + corners);
+        assert!((SPOTS.len()..o.points.len()).all(|p| o.is_bend(p)), "the corners of the roads are bends");
+        assert!(!(0..SPOTS.len()).any(|p| o.points[p].level.is_some() && o.is_bend(p)));
+        assert!((0..o.points.len()).any(|p| o.door(p).is_some()), "the zones are reached through doors");
     }
 }

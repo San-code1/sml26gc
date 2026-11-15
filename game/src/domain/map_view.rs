@@ -1,7 +1,8 @@
 //! The port's own world map screen (used when the editor made a map for this cartridge):
 //! the cartridge's world picture and zone map pictures with the person's points and paths,
 //! Mario walking between them, Start / A entering the level of the point he stands on, and
-//! on a door (a point joined to one on another picture) taking him to that picture. Where
+//! on a door (a point joined to one on another picture) B, or A / Start where there is no
+//! level, taking him to that picture. Where
 //! the map and the cleared levels are kept is the caller's business.
 use super::i18n::texts;
 use super::overlay::{text_width, Canvas};
@@ -99,7 +100,8 @@ impl MapView {
             let t = t + 1.5 / dist; // 1.5 px per frame
             if t >= 1.0 {
                 self.cur = b;
-                self.walk = None;
+                // on a bend of the road, on to the next point
+                self.walk = self.map.other_end(b, a).filter(|_| self.map.is_bend(b)).map(|n| (b, n, 0.0));
             } else {
                 self.walk = Some((a, b, t));
             }
@@ -132,6 +134,21 @@ impl MapView {
             return level;
         }
         None
+    }
+
+    /// B: through the door Mario stands on (even on a point that opens a level). Returns
+    /// whether he went through.
+    pub fn go_through_door(&mut self) -> bool {
+        if self.walk.is_some() {
+            return false;
+        }
+        match self.map.door(self.cur) {
+            Some(to) => {
+                self.cur = to;
+                true
+            }
+            None => false,
+        }
     }
 
     pub fn draw(&self, out: &mut [u8], lang: usize) {
@@ -181,6 +198,7 @@ impl MapView {
                     c.rect(x - 4, y - 4, 8, 8, 3);
                     c.rect(x - 2, y - 2, 4, 4, 0);
                 }
+                None if self.map.is_bend(i) => {} // a corner of a road: just the road
                 None => c.rect(x - 2, y - 2, 4, 4, 3),
             }
         }

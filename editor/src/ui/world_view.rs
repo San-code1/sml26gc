@@ -298,7 +298,16 @@ impl Editor {
     /// opens, the chosen one ringed.
     fn draw_original_points(&self) {
         let r = (4.0 * self.scale()).max(6.0);
-        for sp in original_points::on(self.world_map) {
+        for road in original_points::links_on(self.world_map) {
+            for w in road.windows(2) {
+                let (s, e) = (self.on_screen(w[0].0, w[0].1), self.on_screen(w[1].0, w[1].1));
+                draw_line(s.x, s.y, e.x, e.y, 3.0, Color::new(0.1, 0.1, 0.1, 0.8));
+            }
+        }
+        for (i, sp) in original_points::SPOTS.iter().enumerate() {
+            if sp.map != self.world_map {
+                continue;
+            }
             let c = self.on_screen(sp.x, sp.y);
             let level = self.doc.points[sp.point as usize];
             if level < 32 {
@@ -312,7 +321,10 @@ impl Editor {
                 draw_circle(c.x, c.y, r * 0.6 + 1.5, BLACK);
                 draw_circle(c.x, c.y, r * 0.6, Color::new(0.8, 0.8, 0.8, 1.0));
             }
-            let tag = format!("{:02X}", sp.point);
+            let tag = match original_points::door(i) {
+                Some(to) => format!("{:02X} > {}", sp.point, self.map_name(to.map)),
+                None => format!("{:02X}", sp.point),
+            };
             draw_text(&tag, c.x + r + 3.0, c.y - r * 0.4 + 1.0, 15.0, BLACK);
             draw_text(&tag, c.x + r + 2.0, c.y - r * 0.4, 15.0, WHITE);
             if sp.point as usize == self.point {
@@ -362,8 +374,8 @@ impl Editor {
         let yy = y + list.len().div_ceil(3) as f32 * 24.0 + 16.0;
         let note = tr(
             self.es,
-            "Click a point on the map to choose it. Where the points sit and the paths between them are fixed in the game's code; to move points or add new ones, use Your map.",
-            "Haz clic en un punto del mapa para elegirlo. Donde estan los puntos y sus caminos esta fijo en el codigo del juego; para moverlos o anadir nuevos, usa Mapa propio.",
+            "Click a point on the map to choose it. Where the points sit and the paths between them are fixed in the game's code (measured from the game and drawn here); to move points, add new ones or change paths, use Your map: 'Add the game's own points' copies this map there.",
+            "Haz clic en un punto del mapa para elegirlo. Donde estan los puntos y sus caminos esta fijo en el codigo del juego (medidos en el juego y dibujados aqui); para moverlos, anadir nuevos o cambiar caminos, usa Mapa propio: 'Anadir los puntos originales' copia alli este mapa.",
         );
         for (i, line) in wrap(note, 36).iter().enumerate() {
             draw_text(line, 10.0, yy + i as f32 * 16.0, 15.0, col(2));

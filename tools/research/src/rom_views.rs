@@ -270,3 +270,321 @@ fn on_world_picture(gb: &mut gb_core::Gb) -> Option<(i32, i32)> {
     }
     (best.0 >= 70).then(|| ((best.1 * 8 + bx % 8) as i32, (best.2 * 8 + by % 8) as i32))
 }
+
+/// From every map point, press each direction once and follow Mario: the points ($A840)
+/// he goes through and where he stops. `pokes` (hex "a2xx=ff,...") are written on the point,
+/// e.g. to open paths a new game keeps shut.
+pub fn path_scan(rom_path: &Path, pokes: &str) {
+    use cart_model::ram_map::MAP_POINT;
+    use cart_model::world::POINT_COUNT;
+    use gb_core::Buttons;
+    let Some(mut base) = load(rom_path) else { return };
+    if std::env::var("POKE_FIRST").is_ok() {
+        crate::console::apply_pokes(&mut base, pokes);
+    }
+    base.boot_to_map();
+    if std::env::var("CLEAR_ALL").is_ok() {
+        clear_all(&mut base, &[0x09]);
+    }
+    crate::console::apply_pokes(&mut base, pokes);
+    for p in 0..POINT_COUNT as u8 {
+        let mut g = base.clone();
+        g.show_map_at(p);
+        if g.read(MAP_POINT) != p {
+            println!("point {p:02x}: not reachable (shown at {:02x})", g.read(MAP_POINT));
+            continue;
+        }
+        println!("start {p:02x} at {:?}", mario_spot(&mut g));
+        for (name, b) in [("R", Buttons::RIGHT), ("L", Buttons::LEFT), ("U", Buttons::UP), ("D", Buttons::DOWN)] {
+            let mut h = g.clone();
+            let mut trail = vec![p];
+            let mut track = Vec::new();
+            let mut still = 0;
+            let mut last_oam = (0u8, 0u8, 0u8, 0u8);
+            for f in 0..600u32 {
+                h.run_frame_with(if f < 6 { b } else { Buttons::NONE });
+                h.clear_audio();
+                // Mario's track, for the bends of the paths
+                if std::env::var("TRACK").is_ok() {
+                    if let Some(t) = mario_spot(&mut h) {
+                        if track.last() != Some(&t) {
+                            println!("  t {:?} {} {}", t.0, t.1, t.2);
+                            track.push(t);
+                        }
+                    }
+                }
+                let a = h.read(MAP_POINT);
+                if *trail.last().unwrap() != a {
+                    trail.push(a);
+                    println!("  passing {a:02x} at {:?}", mario_spot(&mut h));
+                    if std::env::var("OAM_DEBUG").is_ok() {
+                        let o = h.video().oam();
+                        let v: Vec<(u8, u8, u8)> = (0..12).map(|i| (o[i * 4 + 1], o[i * 4], o[i * 4 + 2])).collect();
+                        println!("    oam {v:02x?}");
+                    }
+                }
+                // Mario's sprite and the scroll (on the world map the camera follows him)
+                let (o0, o1) = (h.video().oam()[0], h.video().oam()[1]);
+                let now = (o0, o1, h.read(0xFF42), h.read(0xFF43));
+                still = if now == last_oam { still + 1 } else { 0 };
+                last_oam = now;
+                if f > 20 && still > 40 {
+                    break;
+                }
+            }
+            if trail.len() > 1 {
+                println!("point {p:02x} {name}: {}", trail.iter().map(|t| format!("{t:02x}")).collect::<Vec<_>>().join(" "));
+                println!("  stops on {:02x} at {:?}", h.read(MAP_POINT), mario_spot(&mut h));
+            }
+        }
+    }
+}
+
+/// Which single RAM byte, set to $FF, lets Mario leave map point `point` (for finding where
+/// the game keeps which paths are open).
+pub fn unlock(rom_path: &Path, point: u8, lo: u16, hi: u16) {
+    use cart_model::ram_map::MAP_POINT;
+    use gb_core::Buttons;
+    let Some(mut base) = load(rom_path) else { return };
+    base.boot_to_map();
+    base.show_map_at(point);
+    for a in lo..=hi {
+        if (0xA840..=0xA84F).contains(&a) {
+            continue;
+        }
+        for b in [Buttons::RIGHT, Buttons::LEFT, Buttons::UP, Buttons::DOWN] {
+            let mut h = base.clone();
+            h.write(a, 0xFF);
+            for f in 0..90u32 {
+                h.run_frame_with(if f < 6 { b } else { Buttons::NONE });
+                h.clear_audio();
+            }
+            if h.read(MAP_POINT) != point {
+                println!("{a:04x}=ff: {:?} moves to {:02x}", b, h.read(MAP_POINT));
+            }
+        }
+    }
+}
+
+/// Hold `dir` (R/L/U/D) for `hold` frames on the map after booting (optionally after
+/// `show_map_at(point)`), printing $A840 and Mario's sprite as they change.
+pub fn walk_test(rom_path: &Path, point: Option<u8>, dir: &str, hold: u32) {
+    use cart_model::ram_map::{GAME_MODE, MAP_POINT};
+    use gb_core::Buttons;
+    let Some(mut g) = load(rom_path) else { return };
+    g.boot_to_map();
+    if let Some(p) = point {
+        g.show_map_at(p);
+    }
+    let b = match dir { "R" => Buttons::RIGHT, "L" => Buttons::LEFT, "U" => Buttons::UP, _ => Buttons::DOWN };
+    let mut last = (0, 0, 0, 0);
+    for f in 0..400u32 {
+        g.run_frame_with(if f < hold { b } else { Buttons::NONE });
+        g.clear_audio();
+        let (sx, sy) = (g.video().oam()[1], g.video().oam()[0]);
+        let now = (g.read(MAP_POINT), g.read(GAME_MODE), sx, sy);
+        if now != last {
+            println!("f{f}: point {:02x} mode {:02x} sprite ({},{})", now.0, now.1, now.2, now.3);
+            last = now;
+        }
+    }
+}
+
+/// In level 0, set the game mode byte to each value the code writes, let the game run back
+/// to the map, and see whether Mario can then leave point 0 (which mode ends a level as
+/// cleared).
+pub fn clear_scan(rom_path: &Path) {
+    use cart_model::ram_map::{GAME_MODE, MAP_POINT};
+    use gb_core::Buttons;
+    let Some(mut base) = load(rom_path) else { return };
+    base.boot_to_map();
+    base.enter_level(0);
+    for _ in 0..60 {
+        base.run_frame_with(Buttons::NONE);
+    }
+    for m in [0x05u8, 0x06, 0x07, 0x08, 0x09, 0x11, 0x12, 0x15, 0x16, 0x18, 0x19, 0x1b, 0x1d, 0x23] {
+        let mut g = base.clone();
+        g.write(GAME_MODE, m);
+        let mut trail = vec![m];
+        let mut on_map = 0;
+        for f in 0..3000u32 {
+            // tap A now and then to get through any message
+            g.run_frame_with(if f % 90 < 3 && on_map == 0 { Buttons::A } else { Buttons::NONE });
+            g.clear_audio();
+            let now = g.read(GAME_MODE);
+            if trail.last() != Some(&now) {
+                trail.push(now);
+            }
+            on_map = if now == 0x0C { on_map + 1 } else { 0 };
+            if on_map > 200 {
+                break;
+            }
+        }
+        let mut moved = Vec::new();
+        for b in [Buttons::UP, Buttons::RIGHT, Buttons::LEFT, Buttons::DOWN] {
+            let mut h = g.clone();
+            for f in 0..120u32 {
+                h.run_frame_with(if f < 20 { b } else { Buttons::NONE });
+            }
+            moved.push(h.read(MAP_POINT));
+        }
+        println!("mode {m:02x}: modes {trail:02x?} point {:02x} after U/R/L/D {moved:02x?}", g.read(MAP_POINT));
+    }
+}
+
+/// Clear every level as the game does at a goal: inside the level the game mode is set to
+/// the first of `modes` that brings the game back to the map (the goal, a boss...). Ends on
+/// the map.
+pub fn clear_all(g: &mut gb_core::Gb, modes: &[u8]) {
+    use cart_model::ram_map::GAME_MODE;
+    use gb_core::Buttons;
+    for l in 0..32u8 {
+        // stand on the point that opens level l, then press Start there
+        let table = cart_model::world::point_levels(g.cart().rom());
+        if let Some(p) = table.iter().position(|&t| t == l) {
+            g.write(cart_model::ram_map::MAP_POINT, p as u8);
+        }
+        let mut inside = g.clone();
+        if !inside.enter_level(l) {
+            eprintln!("level {l}: not entered");
+            continue;
+        }
+        for _ in 0..30 {
+            inside.run_frame_with(Buttons::NONE);
+        }
+        let mut done = None;
+        for &m in modes {
+            let mut t = inside.clone();
+            t.write(GAME_MODE, m);
+            let mut on_map = 0;
+            let mut trail = vec![m];
+            for f in 0..6000u32 {
+                // tap A or Start now and then to get through a zone's ending
+                let tap = match f % 240 { 0..=2 => Buttons::A, 120..=122 => Buttons::START, _ => Buttons::NONE };
+                let mode = t.read(GAME_MODE);
+                t.run_frame_with(if mode != 0x0C && mode != 0x14 { tap } else { Buttons::NONE });
+                t.clear_audio();
+                let now = t.read(GAME_MODE);
+                if trail.last() != Some(&now) && trail.len() < 20 {
+                    trail.push(now);
+                }
+                on_map = if now == 0x0C { on_map + 1 } else { 0 };
+                if on_map > 600 {
+                    break;
+                }
+            }
+            if std::env::var("CLEAR_DEBUG").is_ok() {
+                eprintln!("  level {l} mode {m:02x}: {trail:02x?}");
+            }
+            if on_map > 600 {
+                done = Some((m, t));
+                break;
+            }
+        }
+        match done {
+            Some((m, t)) => {
+                *g = t;
+                if std::env::var("CLEAR_DEBUG").is_ok() {
+                    eprintln!("level {l}: mode {m:02x}, back on point {:02x}", g.read(0xA840));
+                }
+            }
+            None => eprintln!("level {l}: no mode brought the game back to the map"),
+        }
+    }
+}
+
+/// RAM bytes ($A000-$BFFF, $C000-$DFFF) that differ after clearing level `level` with the
+/// goal mode, compared with standing on the map before (where progress is kept).
+pub fn clear_diff(rom_path: &Path, level: u8) {
+    use cart_model::ram_map::{GAME_MODE, MAP_POINT};
+    use gb_core::Buttons;
+    let Some(mut g) = load(rom_path) else { return };
+    g.boot_to_map();
+    let before = crate::console::ram_snapshot(&mut g);
+    let table = cart_model::world::point_levels(g.cart().rom());
+    if let Some(p) = table.iter().position(|&t| t == level) {
+        g.write(MAP_POINT, p as u8);
+    }
+    g.enter_level(level);
+    for _ in 0..30 {
+        g.run_frame_with(Buttons::NONE);
+    }
+    if std::env::var("CLEAR_EXIT").is_ok() {
+        g.back_to_map();
+    } else {
+        g.write(GAME_MODE, 0x09);
+    }
+    let mut on_map = 0;
+    for _ in 0..6000u32 {
+        g.run_frame_with(Buttons::NONE);
+        on_map = if g.read(GAME_MODE) == 0x0C { on_map + 1 } else { 0 };
+        if on_map > 600 {
+            break;
+        }
+    }
+    let after = crate::console::ram_snapshot(&mut g);
+    for (a, b) in before.iter().zip(&after) {
+        if a.1 != b.1 && a.0 < 0xC000 {
+            println!("{:04x}: {:02x} -> {:02x}", a.0, a.1, b.1);
+        }
+    }
+}
+
+/// Level `level` (entered from its point), game mode set to `mode`, then `buttons` held
+/// (R/L/U/D/A/B letters): the modes the game goes through.
+pub fn mode_try(rom_path: &Path, level: u8, mode: u8, buttons: &str) {
+    use cart_model::ram_map::{GAME_MODE, MAP_POINT};
+    use gb_core::Buttons;
+    let Some(mut g) = load(rom_path) else { return };
+    g.boot_to_map();
+    let table = cart_model::world::point_levels(g.cart().rom());
+    if let Some(p) = table.iter().position(|&t| t == level) {
+        g.write(MAP_POINT, p as u8);
+    }
+    println!("entered {}", g.enter_level(level));
+    for _ in 0..30 {
+        g.run_frame_with(Buttons::NONE);
+    }
+    g.write(GAME_MODE, mode);
+    let mut b = Buttons::NONE;
+    for c in buttons.chars() {
+        b |= match c { 'R' => Buttons::RIGHT, 'L' => Buttons::LEFT, 'U' => Buttons::UP, 'D' => Buttons::DOWN, 'A' => Buttons::A, 'B' => Buttons::B, _ => Buttons::NONE };
+    }
+    let mut last = 0xFFu8;
+    for f in 0..6000u32 {
+        g.run_frame_with(if f % 60 < 40 { b } else { Buttons::NONE });
+        g.clear_audio();
+        let m = g.read(GAME_MODE);
+        if m != last {
+            println!("f{f}: mode {m:02x} point {:02x}", g.read(MAP_POINT));
+            last = m;
+        }
+    }
+}
+
+/// Which map picture is on screen and where Mario stands on it (the middle of his feet, in
+/// the picture's pixels): the world map is found by matching the background with its
+/// picture around the middle of the screen, a zone map by matching its 20 x 18 tiles.
+pub fn mario_spot(gb: &mut gb_core::Gb) -> Option<(cart_model::original_points::OnMap, i32, i32)> {
+    use cart_model::original_points::OnMap;
+    use cart_model::zone_maps;
+    let o = gb.video().oam().to_vec();
+    // Mario is the first four sprites (16 x 16, the first one top left); in the Macro Zone
+    // he is one 8 x 8 sprite and the other three are blank (tile $7F)
+    if o[0] == 0 {
+        return None;
+    }
+    let (x, y) = if o[6] == 0x7F { (o[1] as i32 - 4, o[0] as i32 - 10) } else { (o[1] as i32, o[0] as i32 - 4) };
+    if let Some((cx, cy)) = on_world_picture(gb) {
+        return Some((OnMap::World, (cx - 80 + x).rem_euclid(512), (cy - 72 + y).rem_euclid(512)));
+    }
+    let rom = gb.cart().rom().to_vec();
+    let bg = gb.video().vram()[0x1800..0x2000].to_vec();
+    let same = |z: usize| {
+        let t = zone_maps::read(&rom, z);
+        (0..zone_maps::W * zone_maps::H).filter(|&i| t[i] == bg[(i / zone_maps::W) * 32 + i % zone_maps::W]).count()
+    };
+    // most of the screen must match (some zones animate a few tiles), not a screen half drawn while maps change
+    let z = (0..zone_maps::ZONES.len()).find(|&z| same(z) * 4 >= zone_maps::W * zone_maps::H * 3)?;
+    Some((OnMap::Zone(z), x, y))
+}
