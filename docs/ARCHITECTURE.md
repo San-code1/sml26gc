@@ -49,6 +49,8 @@ Each module documents the ROM addresses and formats it relies on.
 | `level_goals` | Where a level ends: the finish block $4A and the secret exit block $4B in its map, the bell (object $16) above the finish, the boss levels that have none |
 | `secret_exits` | Where a level's secret exit takes Mario: a hook at 0F:6F62 and its table at 0F:7E40 (level to target point; a new level takes its base's entry while played) |
 | `level_start` | Where Mario begins a level: header bytes $00-$07 (his y and x, the camera's), the camera worked out from his place |
+| `checkpoint` | Midway bells (object $17) and their restart places (0:377B); up to 4 per level through a hook (touch, bell, map flag bits 4-5, restart table in bank $21) |
+| `level_settings` | Header bytes of a level's start time ($13), music ($0E) and background shades ($0F) |
 | `objects` | Object lists: 3-byte format, reading, re-packing |
 | `patch` | The 1 MB edited copy (twin banks $20-$3F) that gives levels and objects more room |
 | `layout` | Each zone's space for its maps and packing edited maps back |
@@ -56,11 +58,12 @@ Each module documents the ROM addresses and formats it relies on.
 | `new_zones` | New zones, stored in bank $31 and played in place of a base zone (point numbers, entry code, progress kept apart) |
 | `world` | World map picture and the level each map point opens |
 | `zone_maps` | The zones' one-screen map pictures |
+| `original_notes` | What the original game does with some map points (Space Zone flight, entrance twins, unused door) |
 | `original_points` | Where the game draws its map points (measured) |
 | `map_routes` | Paths between map points (walk scripts), where Mario stands on each, new points; moved to bank $36 in the edited copy, room for 256 numbers |
 | `added_points` | Points numbered from $80 on every map: hooks in bank $0F (level, flag, map pick), their flag bytes at $A1A0, the game zones' kept in bank $24 |
 | `doors` | Which world points enter which zone and where each zone exit leads |
-| `cheats` | What each cheat does in the running game: the invincible patch (0:2E95, 0:1C58), a summoned item in a free object slot, finishing the level through the bell and goal or its secret exit, the timer, lives, coins and golden coins, the info panel's values |
+| `cheats` | What each cheat does in the running game: the invincible patch (0:2E95, 0:1C58), a summoned item in a free object slot, finishing the level through the bell and goal or its secret exit, going to a level, opening the whole map, the active objects, the timer, lives, coins and golden coins, the info panel's values |
 | `art` | Pictures captured from the running game (blocks, map tiles, object looks) |
 | `live` | What the running game has loaded |
 | `driver` | `GameDriver`: boot to the map, enter a level, back to the map, show a map point |
@@ -70,9 +73,11 @@ Each module documents the ROM addresses and formats it relies on.
 
 ```
 game/src/
-├─ domain/        keys, settings (text format), i18n, overlay (bitmap font), pause menu
-├─ application/   preferences (settings + saving), session (one frame of play; new levels),
-│                 zones (new zones swapped in and out, their progress)
+├─ domain/        keys, settings (text format), i18n, overlay (bitmap font), pause menu,
+│                 cheats (which there are, the lasting ones, the info and object tags)
+├─ application/   preferences (settings + saving), session (one frame of play; new levels;
+│                 cheats, save states and rewind), zones (new zones swapped in and out,
+│                 their progress)
 ├─ ports.rs       Keyboard, AudioOut, Window, SettingsStore, SaveStore, ZoneProgressStore
 ├─ adapters/      macroquad keyboard/display/picker, cpal audio, file stores, Win32
 ├─ checks.rs, selftest.rs   headless checks (--research, --self-test, --dump)
@@ -90,17 +95,23 @@ editor/src/
 │                 history (generic undo/redo), tools (Tool trait: pencil, box, select, paste),
 │                 stamp (a rectangle of cells: brush and clipboard), prefs (editor.cfg text),
 │                 files (level, zone and project files: text format); document/zones
-│                 (new zones) and document/restore
+│                 (new zones), document/restore and document/check (level warnings),
+│                 look_cache (captured object pictures as text)
 ├─ application/   save (commit + write through a port), art_service (captured graphics),
-│                 exchange (level, zone and project files through the dialogs)
-├─ ports.rs       EditedCopyStore, GameLauncher, PrefsStore, FileDialogs, TextFiles, MenuBar
+│                 exchange (level, zone and project files through the dialogs), music
+│                 (a level's music played by a console of the copy), look_loader (object
+│                 pictures captured on a background thread)
+├─ ports.rs       EditedCopyStore, GameLauncher, PrefsStore, FileDialogs, TextFiles, MenuBar,
+│                 SoundOut, LookStore
 ├─ adapters/      file repository (edited copy, editor.cfg, text files), Win32 file dialogs
-│                 and menu bar, game.exe launcher
+│                 and menu bar, game.exe launcher, cpal speakers
 ├─ ui/            macroquad panels: level, objects, palettes, world map, status bar, widgets;
 │                 grid_edit (painting and clipboard shared by both views), shortcuts (one
 │                 table for keys and button labels), menu (the File menu), files_view
 │                 (file actions and their messages), names_view (naming new levels and
-│                 zones), target_picker (where a door or exit leads, chosen on the maps)
+│                 zones), target_picker (where a door or exit leads, chosen on the maps),
+│                 level_panel (the level side panel: picker, toolbar, tabs, inspector),
+│                 testing_view (checkpoints and play here drawn on the level)
 └─ main.rs        composition root
 ```
 
@@ -117,13 +128,14 @@ trace, ROM views, and checks that play the edited data in the emulator (`routech
 
 | Item | Format |
 |---|---|
-| Start the game | `game.exe <rom> [--level N]` (no rom: start screen to choose one) |
+| Start the game | `game.exe <rom> [--level N [--start X,Y]] [--cheats]` (no rom: start screen to choose one; `--start`: Mario's left x and feet y for that start only) |
 | Edited copy | `edits/<name> (edit).gb` |
 | Battery saves | `saves/<name>.sav` |
 | New zone and added point progress (game only) | `saves/<name>.zones` |
 | Last cartridge chosen | `last_cartridge.txt` |
 | Settings (the editor reads the language) | `settings.cfg` |
-| Editor settings (palette zoom) | `editor.cfg` |
+| Editor settings (palette zoom, listening volume) | `editor.cfg` |
+| Captured object pictures (editor only) | `cache/looks-<hash of the cartridge>.txt` |
 | Level, zone and project files (editor only) | `exports/*.nmblevel`, `exports/*.nmbzone`, `exports/*.nmbproject` |
 
 Paths and names live in `host::paths`, so both programs compute them the same way.

@@ -16,6 +16,23 @@ pub fn col(i: usize) -> Color {
     Color::from_rgba((c >> 16) as u8, (c >> 8) as u8, c as u8, 255)
 }
 
+/// Marks drawn over the game's pictures (objects, map points): colours none of the game's
+/// four shades is near, each over a dark border.
+pub const MARK: Color = Color::new(1.0, 0.25, 0.85, 1.0);
+pub const MARK_SELECTED: Color = Color::new(1.0, 0.9, 0.1, 1.0);
+
+/// A rectangle outline that shows on any picture: a dark border under a bright line.
+pub fn marker(r: Rect, thick: f32, c: Color) {
+    draw_rectangle_lines(r.x - 1.0, r.y - 1.0, r.w + 2.0, r.h + 2.0, thick + 2.0, Color::new(0.0, 0.0, 0.0, c.a));
+    draw_rectangle_lines(r.x, r.y, r.w, r.h, thick, c);
+}
+
+/// Text with a dark shadow, readable on any picture.
+pub fn marked_text(t: &str, x: f32, y: f32, size: f32, c: Color) {
+    draw_text(t, x + 1.0, y + 1.0, size, Color::new(0.0, 0.0, 0.0, c.a));
+    draw_text(t, x, y, size, c);
+}
+
 /// English or Spanish text.
 pub fn tr(es: bool, en: &'static str, es_text: &'static str) -> &'static str {
     if es {

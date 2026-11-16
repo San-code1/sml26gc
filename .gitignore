@@ -10,6 +10,7 @@ roms/
 saves/
 edits/
 exports/
+cache/
 *.nmblevel
 *.nmbproject
 *.points.txt

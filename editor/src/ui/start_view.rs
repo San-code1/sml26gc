@@ -11,6 +11,9 @@ pub(super) enum Placing {
     Start,
     Finish,
     Secret,
+    Checkpoint,
+    /// Not placed: a click starts the game there.
+    PlayHere,
 }
 
 impl Editor {
@@ -46,12 +49,14 @@ impl Editor {
             Some(Placing::Start) => tr(self.es, "Click the block Mario should stand on when the level begins. Esc: done.", "Haz clic en el bloque sobre el que Mario empieza el nivel. Esc: terminar.").into(),
             Some(Placing::Secret) => tr(self.es, "Click the cell of the secret exit. Esc: done.", "Haz clic en la celda de la salida secreta. Esc: terminar.").into(),
             Some(Placing::Finish) => tr(self.es, "Click the cell where the level ends (its bell goes along). Esc: done.", "Haz clic en la celda donde termina el nivel (su campana va con ella). Esc: terminar.").into(),
+            Some(Placing::PlayHere) => tr(self.es, "Click where Mario should start: the copy is saved and the game starts there. Esc: cancel.", "Haz clic donde debe empezar Mario: se guarda la copia y el juego empieza ahi. Esc: cancelar.").into(),
+            Some(Placing::Checkpoint) => tr(self.es, "Click the cell for a checkpoint bell; Mario starts again just left of it, on the ground below. Esc: done.", "Haz clic en la celda de una campana de control; Mario vuelve a salir a su izquierda, sobre el suelo. Esc: terminar.").into(),
             None => String::new(),
         };
     }
 
     /// The start at level pixel `w`: Mario's feet on the top of the block there.
-    fn start_at(w: Vec2) -> Start {
+    pub(super) fn start_at(w: Vec2) -> Start {
         let x = ((w.x - SPRITE_W as f32 / 2.0).max(0.0) / 8.0).floor() as u16 * 8;
         let feet = (w.y.max(0.0) / BLOCK).floor() as u16 * BLOCK as u16;
         Start::standing(x, feet)
@@ -97,15 +102,9 @@ impl Editor {
             None => draw_rectangle_lines(x, y, r.w * k, r.h * k, 2.0, col(3)),
         }
         let c = if self.placing == Some(Placing::Start) { Color::new(1.0, 0.85, 0.1, 1.0) } else { Color::new(1.0, 1.0, 1.0, 0.6) };
-        draw_rectangle_lines(x - 2.0, y - 2.0, r.w * k + 4.0, r.h * k + 4.0, 2.0, c);
+        marker(Rect::new(x - 2.0, y - 2.0, r.w * k + 4.0, r.h * k + 4.0), 2.0, c);
         let t = tr(self.es, "START", "INICIO");
         draw_text(t, x + 1.0, y - 5.0, 16.0, BLACK);
         draw_text(t, x, y - 6.0, 16.0, c);
-    }
-
-    /// Where the start is, beside its button in the panel.
-    pub(super) fn start_coords(&self, y: f32) {
-        let s = self.doc.level_start(self.cur);
-        draw_text(&format!("x {:04X} y {:04X}", s.mario_x, s.mario_y), 178.0, y + 18.0, 15.0, col(2));
     }
 }

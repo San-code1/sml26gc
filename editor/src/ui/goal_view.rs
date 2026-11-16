@@ -15,7 +15,7 @@ impl Editor {
         match p {
             Placing::Finish => Some(Goal::Finish),
             Placing::Secret => Some(Goal::Secret),
-            Placing::Start => None,
+            Placing::Start | Placing::Checkpoint | Placing::PlayHere => None,
         }
     }
 
@@ -61,7 +61,7 @@ impl Editor {
             let cells = self.doc.goal_cells(self.cur, g);
             for &(cx, cy) in &cells {
                 let (x, y) = (self.panel + (cx as f32 * BLOCK - self.cam.x) * k, (cy as f32 * BLOCK - self.cam.y) * k);
-                draw_rectangle_lines(x - 2.0, y - 2.0, BLOCK * k + 4.0, BLOCK * k + 4.0, 2.0, c);
+                marker(Rect::new(x - 2.0, y - 2.0, BLOCK * k + 4.0, BLOCK * k + 4.0), 2.0, c);
             }
             if let Some(&(cx, cy)) = cells.first() {
                 let (x, y) = (self.panel + (cx as f32 * BLOCK - self.cam.x) * k, (cy as f32 * BLOCK - self.cam.y) * k);
@@ -69,25 +69,6 @@ impl Editor {
                 draw_text(name, x, y - 6.0, 16.0, c);
             }
         }
-    }
-
-    /// Where the finish is, beside its button in the panel (or that the level has none).
-    pub(super) fn finish_note(&self, y: f32) {
-        let t = match self.doc.goal_cells(self.cur, Goal::Finish).first() {
-            Some(&(c, r)) => format!("{c}, {r}"),
-            None if self.doc.ends_with_boss(self.cur) => tr(self.es, "ends with its boss", "termina con su jefe").to_string(),
-            None => tr(self.es, "none", "ninguna").to_string(),
-        };
-        draw_text(&t, 178.0, y + 18.0, 15.0, col(2));
-    }
-
-    /// Where the secret exit is, beside its button.
-    pub(super) fn secret_note(&self, y: f32) {
-        let t = match self.doc.goal_cells(self.cur, Goal::Secret).first() {
-            Some(&(c, r)) => format!("{c}, {r}"),
-            None => tr(self.es, "none", "ninguna").to_string(),
-        };
-        draw_text(&t, 178.0, y + 18.0, 15.0, col(2));
     }
 
     /// Where the shown level's secret exit leads, as the panel says it.

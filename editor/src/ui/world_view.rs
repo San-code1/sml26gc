@@ -3,6 +3,8 @@
 //! each one opens and the paths Mario walks between them (Points tab): levels, paths, doors,
 //! exits and new points can be changed there. New zones are made from a zone and deleted here.
 use super::shortcuts::{keys, with_keys, Action};
+use super::level_panel::SCROLL_STEP;
+use super::palette::clip;
 use super::widgets::*;
 use super::names_view::Named;
 use super::{Editor, TAB_PICTURE, TAB_POINTS};
@@ -11,6 +13,7 @@ use crate::domain::tools::ToolKind;
 use cart_model::added_points;
 use cart_model::doors::{self, Leads};
 use cart_model::map_routes::{self, Way, DIRS};
+use cart_model::original_notes::{self, Note};
 use cart_model::original_points::{self, OnMap};
 use cart_model::world;
 use cart_model::zone_maps::ZONES;
@@ -479,20 +482,23 @@ impl Editor {
     /// drag a new zone's point somewhere else.
     fn points_clicks(&mut self, m: Vec2) {
         let clicked = is_mouse_button_pressed(MouseButton::Left) && m.x >= self.panel && m.y < screen_height() - STATUS_H;
+        // keys typed into a name are not for the map
+        let key = |k: KeyCode| self.naming.is_none() && is_key_pressed(k);
         if self.placing_point {
-            if is_key_pressed(KeyCode::Escape) || is_mouse_button_pressed(MouseButton::Right) {
+            if key(KeyCode::Escape) || is_mouse_button_pressed(MouseButton::Right) {
                 self.placing_point = false;
             } else if clicked {
                 self.place_point(m);
             }
             return;
         }
+        let (escape, backspace) = (key(KeyCode::Escape), key(KeyCode::Backspace));
         if let Some(corners) = &mut self.route_draw {
-            if is_key_pressed(KeyCode::Escape) || is_mouse_button_pressed(MouseButton::Right) {
+            if escape || is_mouse_button_pressed(MouseButton::Right) {
                 self.route_draw = None;
                 return;
             }
-            if is_key_pressed(KeyCode::Backspace) {
+            if backspace {
                 corners.pop();
             }
             if !clicked {
@@ -539,7 +545,7 @@ impl Editor {
                         self.doc.zone_move_point(k, p, w.x.round() as i32, w.y.round() as i32 + FEET);
                     }
                     (None, Some((place, _)), Some((dx, dy))) if (dx, dy) != (0, 0) => {
-                        self.doc.points_snapshot();
+                        self.doc.map_snapshot();
                         self.doc.move_point(self.world_map, p, place, dx, dy);
                     }
                     _ => {}
@@ -659,7 +665,7 @@ impl Editor {
                 act
             }
             _ if self.picker.is_some() => self.picker_panel(y).or(act),
-            _ => self.points_panel(y).or(act),
+            _ => self.scrolled_points_panel(y).or(act),
         };
         self.status_line(cw, ch);
         if let Some(a) = act {
@@ -682,32 +688,18 @@ impl Editor {
             OnMap::NewZone(k) => format!("{} {} {}", tr(self.es, "restored as the", "restaurada como la"), self.map_name(OnMap::Zone(self.doc.new_zones[k].base)), tr(self.es, "is in the game", "esta en el juego")),
             _ => tr(self.es, "restored as it is in the game", "restaurado como esta en el juego").to_string(),
         };
-        self.status = format!("{name} {how}: {}", tr(self.es, "picture and points (save to keep it; undo in each tab brings them back).", "dibujo y puntos (guarda para conservarlo; deshacer en cada pestana lo recupera)."));
+        self.status = format!("{name} {how}: {}", tr(self.es, "picture and points (save to keep it; undo brings them back).", "dibujo y puntos (guarda para conservarlo; deshacer lo recupera)."));
     }
 
-    /// Undo in the tab shown: the map pictures, or the points (levels, paths, doors).
+    /// Undo the last map change, a picture's or the points', whatever the tab.
     pub(super) fn world_undo(&mut self) {
-        let done = match self.world_tab {
-            TAB_PICTURE => {
-                self.doc.world_undo();
-                true
-            }
-            _ => self.doc.points_undo(),
-        };
-        if !done {
+        if !self.doc.map_undo() {
             self.status = tr(self.es, "Nothing to undo.", "Nada que deshacer.").into();
         }
     }
 
     pub(super) fn world_redo(&mut self) {
-        let done = match self.world_tab {
-            TAB_PICTURE => {
-                self.doc.world_redo();
-                true
-            }
-            _ => self.doc.points_redo(),
-        };
-        if !done {
+        if !self.doc.map_redo() {
             self.status = tr(self.es, "Nothing to redo.", "Nada que rehacer.").into();
         }
     }
@@ -816,10 +808,13 @@ impl Editor {
             draw_circle(c.x, c.y, r * 0.6 + 1.5, BLACK);
             draw_circle(c.x, c.y, r * 0.6, Color::new(0.8, 0.8, 0.8, 1.0));
         }
-        draw_text(tag, c.x + r + 3.0, c.y - r * 0.4 + 1.0, 15.0, BLACK);
-        draw_text(tag, c.x + r + 2.0, c.y - r * 0.4, 15.0, WHITE);
-        if p as usize == self.point {
-            draw_circle_lines(c.x, c.y, r + 5.0, 3.0, WHITE);
+        let chosen = p as usize == self.point;
+        marked_text(tag, c.x + r + 2.0, c.y - r * 0.4, 15.0, if chosen { MARK_SELECTED } else { MARK });
+        if chosen {
+            draw_circle_lines(c.x, c.y, r + 5.0, 5.0, BLACK);
+            draw_circle_lines(c.x, c.y, r + 5.0, 3.0, MARK_SELECTED);
+        } else {
+            draw_circle_lines(c.x, c.y, r + 2.5, 1.5, MARK);
         }
     }
 
@@ -872,7 +867,8 @@ impl Editor {
                 self.snapped(mouse_position().into(), (0, 2))
             };
             let c = self.on_screen(x, y);
-            draw_circle_lines(c.x, c.y, r, 2.0, WHITE);
+            draw_circle_lines(c.x, c.y, r, 4.0, BLACK);
+            draw_circle_lines(c.x, c.y, r, 2.0, MARK_SELECTED);
         }
         if let Some(k) = zone {
             let entry = self.doc.new_zones[k].entry;
@@ -897,6 +893,9 @@ impl Editor {
             if self.game_entry_shown() == Some(sp.point) {
                 tag = format!("{tag} {}", tr(self.es, "(entry)", "(entrada)"));
             }
+            if self.doc.point_notes(sp.point).contains(&Note::FlightOut) && tag == format!("{:02X}", sp.point) {
+                tag = format!("{tag} > {} {}", self.map_name(OnMap::Zone(original_notes::SPACE_ZONE)), tr(self.es, "(when cleared)", "(al superarlo)"));
+            }
             let (_, x, y, _) = self.spot_at(sp);
             self.draw_point(sp.point, (x, y), Color::new(0.95, 0.45, 0.1, 1.0), &tag);
         }
@@ -908,10 +907,84 @@ impl Editor {
         }
     }
 
+    /// What the original game does with the chosen game point, and whether it was changed.
+    fn original_rows(&self, mut y: f32) -> f32 {
+        let p = self.point as u8;
+        let mut lines: Vec<String> = self.doc.point_notes(p).iter().map(|&n| self.note_text(n)).collect();
+        if self.doc.point_changed(p) {
+            lines.push(tr(self.es, "Changed from the original game (Restore puts the map back as it was).", "Cambiado respecto al juego original (Restaurar devuelve el mapa como era).").to_string());
+        }
+        if lines.is_empty() {
+            return y;
+        }
+        draw_text(tr(self.es, "In the original game:", "En el juego original:"), 10.0, y + 12.0, 15.0, col(3));
+        y += 18.0;
+        for line in lines.iter().flat_map(|l| wrap(l, 36)) {
+            marked_text(&line, 10.0, y + 12.0, 15.0, MARK);
+            y += 16.0;
+        }
+        y + 8.0
+    }
+
+    fn note_text(&self, n: Note) -> String {
+        let zone = |z: usize| self.map_name(OnMap::Zone(z));
+        match n {
+            Note::Start => tr(self.es, "Where a new game starts; clearing its level walks Mario on to 13.", "Donde empieza una partida nueva; al superar su nivel Mario sigue andando hasta 13.").to_string(),
+            Note::FlightOut => tr(self.es, "Clearing the level opened here flies Mario to the Space Zone (he lands on 3C).", "Al superar el nivel que abre, Mario vuela a la Zona Espacial (aterriza en 3C).").to_string(),
+            Note::FlightIn => tr(self.es, "How Mario enters the Space Zone: he lands here flying after clearing the level of world point 05 (or 1A).", "Asi entra Mario en la Zona Espacial: aterriza aqui volando tras superar el nivel del punto 05 del mundo (o 1A).").to_string(),
+            Note::Entrance { zone: z, twin } => format!(
+                "{} {}. {} {twin:02X} {}",
+                tr(self.es, "Entrance of the", "Entrada de la"),
+                zone(z),
+                tr(self.es, "After leaving the zone Mario stands here as point", "Al salir de la zona Mario queda aqui como el punto"),
+                tr(self.es, "(same place and paths, changed together; its level follows this one's).", "(mismo sitio y caminos, cambian juntos; su nivel sigue al de este).")
+            ),
+            Note::ZoneReturn { zone: z, twin } => format!(
+                "{} {}: {} {twin:02X}, {}",
+                tr(self.es, "Where Mario stands after leaving the", "Donde queda Mario al salir de la"),
+                zone(z),
+                tr(self.es, "the same place and paths as", "el mismo sitio y caminos que"),
+                tr(self.es, "whose level it follows.", "cuyo nivel sigue.")
+            ),
+            Note::UnusedDoor => tr(self.es, "The game also keeps number 12 here, with its door into the Space Zone (A on 12), but Mario stops on 13, so that door never runs: he reaches the Space Zone by clearing world point 05's level.", "El juego tambien guarda aqui el numero 12, con su puerta a la Zona Espacial (A sobre el 12), pero Mario para en el 13 y esa puerta nunca se usa: llega a la Zona Espacial superando el nivel del punto 05 del mundo.").to_string(),
+            Note::TurtleWalk => tr(self.es, "Leads into the Turtle Zone: the game walks Mario on its own to the hidden point 0D.", "Lleva a la Zona Tortuga: el juego hace andar a Mario solo hasta el punto oculto 0D.").to_string(),
+            Note::NeverStood => tr(self.es, "No path leads here or out and it opens no level: Mario never stands on it.", "Ningun camino llega ni sale y no abre nivel: Mario nunca se para aqui.").to_string(),
+        }
+    }
+
     const SHUT_ACTIONS: [Action; 4] = [Action::ShutRight, Action::ShutLeft, Action::ShutUp, Action::ShutDown];
 
-/// The chosen point: the level it opens, where it leads, its paths; the points of the map.
-    fn points_panel(&mut self, mut y: f32) -> Option<Action> {
+    /// The Points panel below `top`, scrolled with the wheel when it is taller than the window.
+    fn scrolled_points_panel(&mut self, top: f32) -> Option<Action> {
+        let bottom = screen_height() - 6.0;
+        let m: Vec2 = mouse_position().into();
+        if m.x < self.panel && m.y > top {
+            let wheel = mouse_wheel().1;
+            if wheel != 0.0 {
+                self.points_scroll -= wheel.signum() * SCROLL_STEP;
+            }
+        }
+        self.points_scroll = self.points_scroll.clamp(0.0, (self.points_content - (bottom - top)).max(0.0));
+        let point = self.point;
+        clip(Some(Rect::new(0.0, top, self.panel, bottom - top)));
+        let (act, end) = self.points_panel(top - self.points_scroll);
+        clip(None);
+        self.points_content = end + self.points_scroll - top;
+        if self.points_content > bottom - top {
+            let (frac, at) = ((bottom - top) / self.points_content, self.points_scroll / self.points_content);
+            draw_rectangle(self.panel - 8.0, top + at * (bottom - top), 3.0, frac * (bottom - top), col(2));
+        }
+        // a click above the panel's top is on the buttons drawn there, not on a row scrolled under them
+        if m.y < top {
+            self.point = point;
+            return None;
+        }
+        act
+    }
+
+    /// The chosen point: the level it opens, where it leads, its paths; the points of the map.
+    /// Returns the action chosen and where the panel ends.
+    fn points_panel(&mut self, mut y: f32) -> (Option<Action>, f32) {
         let zone = self.new_zone_shown();
         let (used, most) = self.doc.point_count(self.world_map);
         draw_text(&format!("{} {used} / {most}", tr(self.es, "Points:", "Puntos:")), 10.0, y + 12.0, 16.0, col(3));
@@ -946,6 +1019,9 @@ impl Editor {
         let (ny, door) = self.door_rows(y);
         y = ny;
         act = act.or(door);
+        if zone.is_none() && !new {
+            y = self.original_rows(y);
+        }
         // the ways out of the point
         draw_text(tr(self.es, "Paths (pad > point); button: delete", "Caminos (cruceta > punto); boton: borrar"), 10.0, y + 12.0, 15.0, col(2));
         y += 18.0;
@@ -1040,9 +1116,10 @@ impl Editor {
                 "Haz clic en un punto del mapa para elegirlo; con - + elige el nivel que abre. Puerta: un punto del mundo puede entrar en una zona o en una zona nueva (A o START sobre el). Sale a: la salida de una zona lleva a un punto del mundo o directamente a otra zona; Elegir en el mapa (U) lo elige con un clic. Hacer salida aqui la mueve al punto elegido de la zona. Los caminos se ven en amarillo; Nuevo camino dibuja uno, Nuevo punto pone uno en el mundo (6 numeros libres). Jugar (F5) guarda y lo prueba.",
             )
         };
-        for (i, line) in wrap(note, 36).iter().enumerate() {
+        let lines = wrap(note, 36);
+        for (i, line) in lines.iter().enumerate() {
             draw_text(line, 10.0, yy + i as f32 * 16.0, 15.0, col(2));
         }
-        act
+        (act, yy + lines.len() as f32 * 16.0)
     }
 }

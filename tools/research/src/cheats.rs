@@ -647,6 +647,50 @@ pub fn cheat_check(rom_path: &Path) {
         let b = cheats::info(&mut g);
         report("info", a.level == 0 && a.mode == 0x04 && b.x > a.x, format!("({a:?} > x {:04x})", b.x));
     }
+    {
+        let mut g = lvl.clone();
+        play(&mut g, 300, Buttons::RIGHT);
+        let seen = cheats::active_objects(&mut g);
+        let on_screen = seen.iter().filter(|a| (0..160).contains(&a.x) && (0..144).contains(&a.y)).count();
+        report("active objects", !seen.is_empty() && on_screen > 0 && cheats::info(&mut g).objects as usize == seen.len(), format!("({seen:?})"));
+    }
+    {
+        let mut g = base.clone();
+        g.enter_level_anywhere(1);
+        play(&mut g, 30, Buttons::NONE);
+        let from_level = cheats::go_to_level(&mut g, 12) && g.read(LEVEL_NUMBER) == 12;
+        let lives = cheats::lives(&g);
+        let mut m = base.clone();
+        let from_map = cheats::go_to_level(&mut m, 5) && m.read(LEVEL_NUMBER) == 5;
+        report("go to level", from_level && from_map, format!("(from level 1 to 12 {from_level}, from the map to 5 {from_map}, lives {lives})"));
+    }
+    {
+        let reached = |open: bool| {
+            let mut g = base.clone();
+            if open {
+                cheats::open_map(&mut g);
+            }
+            g.show_map_at(0x07);
+            let mut seen: Vec<u8> = Vec::new();
+            let dirs = [Buttons::RIGHT, Buttons::UP, Buttons::LEFT, Buttons::DOWN];
+            let mut seed: u32 = 12345;
+            for f in 0..20000u32 {
+                if f % 20 == 0 {
+                    seed = seed.wrapping_mul(1103515245).wrapping_add(12345);
+                }
+                g.run_frame_with(if f % 20 < 4 { dirs[(seed >> 16) as usize % 4] } else { Buttons::NONE });
+                g.clear_audio();
+                let p = g.read(0xA840);
+                if g.read(GAME_MODE) == 0x0C && !seen.contains(&p) {
+                    seen.push(p);
+                }
+            }
+            seen
+        };
+        let (shut, open) = (reached(false), reached(true));
+        let more: Vec<u8> = open.iter().copied().filter(|p| !shut.contains(p)).collect();
+        report("open the whole map", !more.is_empty(), format!("(points only reached with it open: {more:02x?})"));
+    }
     println!("{}", if ok { "cheatcheck ok" } else { "cheatcheck FAILED" });
 }
 

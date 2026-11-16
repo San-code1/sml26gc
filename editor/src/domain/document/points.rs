@@ -25,11 +25,6 @@ impl EditorDocument {
         (b.0 - a.0, b.1 - a.1)
     }
 
-    /// Take the undo snapshot for a drag of a point (once per drag).
-    pub fn points_snapshot(&mut self) {
-        self.points_record();
-    }
-
     /// Put point `p` of `map` (the world map or a game zone) `(dx, dy)` picture pixels from
     /// place `from`, in steps of 4 (as the map's walks go); the paths to and from it become
     /// straight. A zone's entrance on the world map moves with the point Mario walks out of

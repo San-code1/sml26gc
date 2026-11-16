@@ -3,6 +3,9 @@
 /// Palette zoom steps: how many screen pixels per pixel of a block or tile.
 pub const PALETTE_ZOOMS: std::ops::RangeInclusive<u32> = 1..=5;
 const DEFAULT_ZOOM: u32 = 2;
+/// Volume steps of a level's music played in the editor (not the game's).
+pub const MUSIC_VOLUMES: std::ops::RangeInclusive<u32> = 0..=10;
+const DEFAULT_VOLUME: u32 = 6;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Prefs {
@@ -10,11 +13,13 @@ pub struct Prefs {
     pub level_palette_zoom: u32,
     /// The world and zone maps' tile palette.
     pub map_palette_zoom: u32,
+    /// Listening to a level's music in the editor.
+    pub music_volume: u32,
 }
 
 impl Default for Prefs {
     fn default() -> Prefs {
-        Prefs { level_palette_zoom: DEFAULT_ZOOM, map_palette_zoom: DEFAULT_ZOOM }
+        Prefs { level_palette_zoom: DEFAULT_ZOOM, map_palette_zoom: DEFAULT_ZOOM, music_volume: DEFAULT_VOLUME }
     }
 }
 
@@ -28,11 +33,12 @@ impl Prefs {
         Prefs {
             level_palette_zoom: value("level_palette_zoom", &PALETTE_ZOOMS, d.level_palette_zoom),
             map_palette_zoom: value("map_palette_zoom", &PALETTE_ZOOMS, d.map_palette_zoom),
+            music_volume: value("music_volume", &MUSIC_VOLUMES, d.music_volume),
         }
     }
 
     pub fn to_text(&self) -> String {
-        format!("level_palette_zoom={}\nmap_palette_zoom={}\n", self.level_palette_zoom, self.map_palette_zoom)
+        format!("level_palette_zoom={}\nmap_palette_zoom={}\nmusic_volume={}\n", self.level_palette_zoom, self.map_palette_zoom, self.music_volume)
     }
 }
 
@@ -42,10 +48,10 @@ mod tests {
 
     #[test]
     fn text_round_trip_and_bad_values() {
-        let p = Prefs { level_palette_zoom: 4, map_palette_zoom: 5 };
+        let p = Prefs { level_palette_zoom: 4, map_palette_zoom: 5, music_volume: 3 };
         assert_eq!(Prefs::from_text(&p.to_text()), p);
         assert_eq!(Prefs::from_text(""), Prefs::default());
-        let odd = Prefs::from_text("other=1\nlevel_palette_zoom = 9\nmap_palette_zoom=x\n");
+        let odd = Prefs::from_text("other=1\nlevel_palette_zoom = 9\nmap_palette_zoom=x\nmusic_volume=11\n");
         assert_eq!(odd, Prefs::default());
     }
 }

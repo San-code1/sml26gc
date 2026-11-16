@@ -2,7 +2,7 @@
 //! (paths: `host::paths`).
 use crate::domain::document::EditorDocument;
 use crate::domain::prefs::Prefs;
-use crate::ports::{EditedCopyStore, PrefsStore, TextFiles};
+use crate::ports::{EditedCopyStore, LookStore, PrefsStore, TextFiles};
 use std::path::{Path, PathBuf};
 
 pub struct EditedCopyFile {
@@ -52,6 +52,32 @@ impl PrefsStore for PrefsFile {
     }
     fn save(&self, prefs: &Prefs) {
         let _ = std::fs::write(host::editor_settings_path(), prefs.to_text());
+    }
+}
+
+/// The object pictures captured for one cartridge: `cache\looks-<hash>.txt` next to the
+/// editor (`hash` of the original file, so another cartridge has its own).
+pub struct LookFile {
+    path: PathBuf,
+}
+
+impl LookFile {
+    pub fn for_cartridge(original: &[u8]) -> LookFile {
+        // FNV-1a
+        let hash = original.iter().fold(0xcbf2_9ce4_8422_2325u64, |h, &b| (h ^ b as u64).wrapping_mul(0x0100_0000_01b3));
+        LookFile { path: host::exe_dir().join("cache").join(format!("looks-{hash:016x}.txt")) }
+    }
+}
+
+impl LookStore for LookFile {
+    fn load(&self) -> Option<String> {
+        std::fs::read_to_string(&self.path).ok()
+    }
+    fn save(&self, text: &str) {
+        if let Some(d) = self.path.parent() {
+            let _ = std::fs::create_dir_all(d);
+        }
+        let _ = std::fs::write(&self.path, text);
     }
 }
 

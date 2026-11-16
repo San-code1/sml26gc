@@ -80,3 +80,17 @@ was made in (the level, or the map pictures).
 #### Scenario: Undo a cut
 - **WHEN** the user cuts a selection and presses Ctrl+Z
 - **THEN** the selection's cells are as they were before the cut and the clipboard still holds them
+
+### Requirement: One undo order for every kind of change
+Undo and redo SHALL go through a view's changes in the order they were made, whatever the
+mode or tab they were made in and whichever is shown: in a level, its blocks, objects, start,
+finish, secret exit, checkpoints and settings; on the maps, the pictures and the points (levels,
+paths, doors, exits, added points).
+
+#### Scenario: Tile, point, tile
+- **WHEN** a world map tile is painted, then a point's level is changed in the Points tab, then another tile is painted, and Undo is pressed three times in the Points tab
+- **THEN** the second tile is undone first, then the point's level, then the first tile
+
+#### Scenario: Block, object, block
+- **WHEN** a block is painted, an object placed and another block painted in a level, and Undo is pressed with Blocks chosen
+- **THEN** the last block is undone, then the object, then the first block

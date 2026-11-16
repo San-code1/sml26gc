@@ -114,7 +114,7 @@ impl EditorDocument {
                 Place { x: x.clamp(0, 159) as u8, y: y.clamp(8, 143) as u8, rest: [0, 0], ..cam }
             }
         };
-        self.points_record();
+        self.map_snapshot();
         self.routes.added.push(p);
         self.routes.ways[p as usize] = Default::default();
         self.routes.places[p as usize] = place;
@@ -153,7 +153,7 @@ impl EditorDocument {
                 }
             }
             None => {
-                self.points_record();
+                self.map_snapshot();
                 self.shuts[p as usize] ^= bit;
                 self.points_dirty = true;
             }
@@ -276,7 +276,7 @@ mod tests {
 
         // undo across maps: back to before the zone's point, with the world map's kept
         doc.show_added(OnMap::Zone(0));
-        assert!(doc.points_undo() && doc.points_undo() && doc.points_undo() && doc.points_undo());
+        assert!(doc.map_undo() && doc.map_undo() && doc.map_undo() && doc.map_undo());
         doc.show_added(OnMap::Zone(0));
         assert!(!doc.routes.added.contains(&t), "the Tree Zone's point is undone");
         doc.show_added(OnMap::World);

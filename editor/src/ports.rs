@@ -16,8 +16,23 @@ pub trait PrefsStore {
 
 /// Starting the game on the edited copy.
 pub trait GameLauncher {
-    /// `level`: go straight into that level. The error names the program that failed.
-    fn launch(&self, rom: &Path, level: Option<usize>) -> Result<(), String>;
+    /// `level`: go straight into that level; `start`: with Mario there (his left x and feet y)
+    /// this time only. The error names the program that failed.
+    fn launch(&self, rom: &Path, level: Option<usize>, start: Option<(u16, u16)>) -> Result<(), String>;
+}
+
+/// Where the captured object pictures are kept between starts (`look_cache` text).
+pub trait LookStore {
+    fn load(&self) -> Option<String>;
+    fn save(&self, text: &str);
+}
+
+/// The speakers, for listening to a level's music.
+pub trait SoundOut {
+    fn sample_rate(&self) -> u32;
+    /// Interleaved stereo samples, at `volume` (0-1).
+    fn push(&self, samples: &[f32], volume: f32);
+    fn queued_seconds(&self) -> f32;
 }
 
 /// The kinds of file the editor exports and imports.
