@@ -9,7 +9,7 @@ Architecture: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). Contributing rules
 ## Build and run
 
     cargo build --release
-    target\release\game.exe ["path\to\game.gb"] [--level N]
+    target\release\game.exe ["path\to\game.gb"] [--level N] [--cheats]
     target\release\editor.exe
     target\release\research.exe disasm 0 0361 20
 
@@ -29,6 +29,23 @@ next to the executables.
 
 Esc (or Enter in a level) opens the pause menu: controls, display, sound, back to map, file
 select, language. F11: full screen. Hold Ctrl: fast-forward.
+
+The start screen's "Debug / cheats" box (C) adds a "Debug / cheats" entry to the pause menu;
+the choice is kept in `settings.cfg` (`cheats=1`). The game started from the editor (F5,
+`--cheats`) always has it. The cheats only change the game being played, never the file:
+
+| Cheat | What it does |
+|---|---|
+| Invincible | On/off: enemies and spikes do not hurt Mario (falling off still does) |
+| Finish level | Ends the level as its goal with the bell rung: bonus game, then the map |
+| Secret exit | Ends the level through its secret exit, to where it leads (only in levels that have one) |
+| Summon item | Star, mushroom, fire flower, carrot or heart (a life) in front of Mario |
+| Freeze timer | On/off: the level's timer does not go down |
+| 99 lives, 999 coins | Sets the counter |
+| 6 golden coins | Marks the six bosses beaten, so Wario's castle door opens (their levels close, as in the game) |
+| Info panel | On/off: level, Mario's x and y, map point and game mode (hexadecimal) at the top left |
+
+Finish level, Secret exit and Summon item only work in a level.
 
 ## Editor
 
@@ -72,7 +89,7 @@ select, language. F11: full screen. Hold Ctrl: fast-forward.
   import the whole project (every level, the maps, points, paths, doors and new zones) over the
   same cartridge; nothing is written until you save.
 - Every button shows its shortcut. Ctrl+Z / Ctrl+Y undo and redo, Ctrl+S saves
-  `edits\<game> (edit).gb` (the original is never changed), F5 saves and plays it.
+  `edits\<game> (edit).gb` (the original is never changed), F5 saves and plays it (with the cheats on).
 
 ## Checks
 

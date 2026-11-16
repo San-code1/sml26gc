@@ -8,7 +8,7 @@ impl GameLauncher for GameProcess {
     fn launch(&self, rom: &Path, level: Option<usize>) -> Result<(), String> {
         let game = host::game_exe();
         let mut cmd = std::process::Command::new(&game);
-        cmd.arg(rom);
+        cmd.arg(rom).arg("--cheats");
         if let Some(l) = level {
             cmd.arg("--level").arg(l.to_string());
         }
