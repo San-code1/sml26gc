@@ -1,8 +1,9 @@
 # editor/level-settings Specification
 
 ## Purpose
-The level's own settings the game keeps in its header, chosen in the level editor: how much
-time Mario has, which music plays and how dark the background is.
+The level's own settings, chosen in the level editor for the game's levels and new ones: how
+much time Mario has, which music plays and how dark the background is (its header), and its
+gravity, auto-scroll, camera margin and animated tiles (the game's per-level tables).
 
 ## Requirements
 
@@ -47,3 +48,55 @@ restore and files SHALL keep it.
 #### Scenario: Darker background
 - **WHEN** level 01 gets the darkest shades and the copy is saved
 - **THEN** the editor and the game show level 01 darker
+
+### Requirement: Gravity
+The level's settings SHALL let the user choose its gravity, normal or space (the floating
+jumps of the Space Zone). After a save the game SHALL play the level with that gravity.
+
+#### Scenario: Space gravity in level 01
+- **WHEN** level 01 gets space gravity, the copy is saved and level 01 is played
+- **THEN** Mario jumps and falls as in the Space Zone
+
+#### Scenario: Normal gravity in the Space Zone
+- **WHEN** level 18 gets normal gravity and the copy is saved
+- **THEN** Mario jumps in level 18 as in level 01
+
+### Requirement: Auto-scroll
+The level's settings SHALL let the user turn on auto-scroll, which the game has but none of its
+levels uses: the screen moves right by itself and pushes Mario along, losing a life if he is
+caught against a wall, and stops at the level's end. After a save the game SHALL play the
+level that way.
+
+#### Scenario: Finished while scrolling
+- **WHEN** Mario reaches the finish of a level with auto-scroll
+- **THEN** the level ends as usual and the map comes back
+
+#### Scenario: Pushed along
+- **WHEN** level 01 gets auto-scroll, the copy is saved and level 01 is played without touching the pad
+- **THEN** the screen moves right by itself and Mario is pushed along by its left edge
+
+### Requirement: Camera margin
+The level's settings SHALL let the user choose the camera's vertical margin, normal or wide
+(the camera moves up sooner, as in the game's levels that climb). After a save the
+game SHALL follow Mario that way.
+
+#### Scenario: Wide margin
+- **WHEN** level 01 gets the wide margin and the copy is saved
+- **THEN** the camera starts to move up when Mario is lower on the screen than before
+
+### Requirement: Animated tiles
+For a level whose tiles the game animates, the level's settings SHALL let the user keep the
+animation or turn it off. Only the level's own animation SHALL be offered.
+
+#### Scenario: Still tiles
+- **WHEN** the animation of a level with animated tiles is turned off and the copy is saved
+- **THEN** those tiles stay still in the game
+
+### Requirement: Settings kept like the others
+The new settings SHALL be undone, redone, restored, kept in level and project files, shown in
+the level's "mod" mark when they differ from the game's, and played by new levels as by the
+game's own.
+
+#### Scenario: A new level with space gravity
+- **WHEN** a new level based on level 01 gets space gravity and is saved and played
+- **THEN** it plays with space gravity and level 01 keeps normal gravity
