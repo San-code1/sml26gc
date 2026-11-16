@@ -645,3 +645,393 @@ pub fn spot_check(rom_path: &Path) {
         }
     }
 }
+
+/// Can level `a` show level `b`'s objects? For each object type `b` uses: its picture in `b`,
+/// in `a` as it is, and in `a` with `b`'s enemy sprite set (0:362A entry) and, with
+/// `with_common`, `b`'s common sets byte (0:360A) too.
+pub fn combo_probe(rom_path: &Path, a: usize, b: usize, with_common: bool) {
+    use cart_model::{art, objects, rom::offset};
+    let Some(mut g) = crate::console::load(rom_path) else { return };
+    let rom = g.cart().rom().to_vec();
+    g.boot_to_map();
+    let mut patched = rom.clone();
+    let set = offset(0, 0x362A);
+    patched.copy_within(set + 4 * b..set + 4 * b + 4, set + 4 * a);
+    if with_common {
+        let common = offset(0, 0x360A);
+        patched[common + a] = rom[common + b];
+    }
+    let mut kinds: Vec<u8> = objects::read(&rom, b).0.iter().map(|o| o.kind).collect();
+    kinds.sort();
+    kinds.dedup();
+    let (mut same_before, mut same_after, mut drawn) = (0, 0, 0);
+    for &k in &kinds {
+        let own = art::capture_look(&g, &rom, &rom, b, k);
+        let before = art::capture_look(&g, &rom, &rom, a, k);
+        let after = art::capture_look(&g, &patched, &rom, a, k);
+        drawn += own.is_some() as usize;
+        same_before += (own.is_some() && before == own) as usize;
+        same_after += (own.is_some() && after == own) as usize;
+        println!("type {k:02x}: own {} | in {a} as is {} | with {b}'s set {}", own.is_some(), before == own, after == own);
+        if let (Some(o), Some(t)) = (&own, &after) {
+            if o != t {
+                let shades = |l: &art::Look| { let mut c = [0usize; 4]; l.px.iter().flatten().for_each(|&s| c[s as usize] += 1); c };
+                println!("    own {}x{} at {},{} shades {:?} | there {}x{} at {},{} shades {:?}", o.w, o.h, o.dx, o.dy, shades(o), t.w, t.h, t.dx, t.dy, shades(t));
+            }
+        }
+    }
+    println!("level {a} with level {b}'s objects: {drawn} types drawn; same picture as is {same_before}, with the set {same_after}");
+}
+
+/// Level `level` with each value of the physics table (0:1F91, read into $A287): how high
+/// Mario jumps holding A, how fast he falls back, and how far he runs right in 60 frames.
+pub fn physics_probe(rom_path: &Path, level: u8) {
+    use cart_model::rom::offset;
+    let Some(base) = crate::console::load(rom_path) else { return };
+    for v in [0u8, 1, 8] {
+        let mut g = base.clone();
+        let mut rom = g.cart().rom().to_vec();
+        rom[offset(0, 0x1F91) + level as usize] = v;
+        g.cart_mut().set_rom(&rom);
+        g.boot_to_map();
+        if !g.enter_level(level) {
+            println!("{v}: level not entered");
+            continue;
+        }
+        for _ in 0..90 {
+            g.run_frame_with(Buttons::NONE);
+        }
+        let y = |g: &mut gb_core::Gb| g.read(PLAYER_Y) as i32 | (g.read(PLAYER_Y + 1) as i32) << 8;
+        let x = |g: &mut gb_core::Gb| g.read(PLAYER_X) as i32 | (g.read(PLAYER_X + 1) as i32) << 8;
+        let ground = y(&mut g);
+        let (mut top, mut up_frames, mut down_frames) = (ground, 0, 0);
+        for f in 0..240 {
+            g.run_frame_with(if f < 40 { Buttons::A } else { Buttons::NONE });
+            let now = y(&mut g);
+            if now < top {
+                top = now;
+                up_frames = f;
+            }
+            if now >= ground && f > 2 && down_frames == 0 && top < ground {
+                down_frames = f - up_frames;
+            }
+        }
+        let x0 = x(&mut g);
+        for _ in 0..60 {
+            g.run_frame_with(Buttons::RIGHT);
+        }
+        println!("physics {v}: jump {} px in {up_frames} frames, back down in {down_frames}; ran {} px; $A287 = {:02x}", ground - top, x(&mut g) - x0, g.read(0xA287));
+    }
+}
+
+/// Level `level` with byte `level` of the per-level table at bank 0 `table` set to `value`:
+/// Mario, the camera ($FFC8 y, $FFCA x) and the game mode every 30 frames with no input.
+pub fn table_probe(rom_path: &Path, table: u16, level: u8, value: u8) {
+    use cart_model::rom::offset;
+    let Some(mut g) = crate::console::load(rom_path) else { return };
+    let mut rom = g.cart().rom().to_vec();
+    rom[offset(0, table) + level as usize] = value;
+    g.cart_mut().set_rom(&rom);
+    g.boot_to_map();
+    if !g.enter_level(level) {
+        println!("level not entered");
+        return;
+    }
+    for f in 0..600 {
+        g.run_frame_with(Buttons::NONE);
+        g.clear_audio();
+        if f % 30 == 0 {
+            let w = |g: &mut gb_core::Gb, a: u16| g.read(a) as u16 | (g.read(a + 1) as u16) << 8;
+            println!("frame {f:3}: mario {},{} camera {},{} mode {:02x}", w(&mut g, PLAYER_X), w(&mut g, PLAYER_Y), w(&mut g, 0xFFCA), w(&mut g, 0xFFC8), g.read(GAME_MODE));
+        }
+    }
+}
+
+/// The camera margin (0:1F51) of `level` at 0 and at 8: Mario jumps while walking right, and
+/// for each value the heights on the screen ($FF99) at which the camera moved up and down.
+pub fn camera_probe(rom_path: &Path, level: u8) {
+    use cart_model::rom::offset;
+    let Some(base) = crate::console::load(rom_path) else { return };
+    for v in [0u8, 8] {
+        let mut g = base.clone();
+        let mut rom = g.cart().rom().to_vec();
+        rom[offset(0, 0x1F51) + level as usize] = v;
+        g.cart_mut().set_rom(&rom);
+        g.boot_to_map();
+        if !g.enter_level(level) {
+            println!("{v}: level not entered");
+            continue;
+        }
+        let cam = |g: &mut gb_core::Gb| g.read(0xFFC8) as i32 | (g.read(0xFFC9) as i32) << 8;
+        let (mut up, mut down) = (Vec::new(), Vec::new());
+        let mut last = cam(&mut g);
+        for f in 0..1500 {
+            let b = if f % 70 < 30 { Buttons::A | Buttons::RIGHT } else { Buttons::RIGHT };
+            g.run_frame_with(b);
+            g.clear_audio();
+            let now = cam(&mut g);
+            let screen = g.read(0xFF99);
+            if now < last && !up.contains(&screen) {
+                up.push(screen);
+            }
+            if now > last && !down.contains(&screen) {
+                down.push(screen);
+            }
+            last = now;
+        }
+        up.sort();
+        down.sort();
+        println!("margin {v}: camera up with Mario at screen y {:?}; down at {:?}", up.iter().take(3).chain(up.iter().rev().take(1)).collect::<Vec<_>>(), down.iter().take(1).chain(down.iter().rev().take(3)).collect::<Vec<_>>());
+    }
+}
+
+/// Level `level` with the auto-scroll table (0:1F71) at `value`, from its start or (`near`)
+/// `near` pixels left of its finish block; with `walk` Mario walks right and jumps now and
+/// then. Prints Mario, the camera and the game mode when the mode changes and every 60 frames.
+pub fn scroll_probe(rom_path: &Path, level: u8, value: u8, near: u16, walk: bool) {
+    use cart_model::{level_goals::{self, Goal}, level_start::Start, levels, rom::offset};
+    let Some(mut g) = crate::console::load(rom_path) else { return };
+    let mut rom = g.cart().rom().to_vec();
+    rom[offset(0, 0x1F71) + level as usize] = value;
+    if near > 0 {
+        let map = levels::decode(&rom, levels::map_location(&rom, levels::header(&rom, level as usize)).1).0;
+        let Some(&(fx, fy)) = level_goals::cells(&map, Goal::Finish).first() else {
+            println!("no finish");
+            return;
+        };
+        let h = levels::header(&rom, level as usize).at;
+        Start::standing((fx * 16) as u16 - near, (fy * 16) as u16).write(&mut rom[h..h + 8]);
+        println!("finish block at {},{}", fx * 16, fy * 16);
+    }
+    g.cart_mut().set_rom(&rom);
+    g.boot_to_map();
+    if !g.enter_level(level) {
+        println!("level not entered");
+        return;
+    }
+    let w = |g: &mut gb_core::Gb, a: u16| g.read(a) as u16 | (g.read(a + 1) as u16) << 8;
+    let mut last_mode = 0xFF;
+    for f in 0..3600 {
+        let b = if walk { if f % 50 < 12 { Buttons::RIGHT | Buttons::A } else { Buttons::RIGHT } } else { Buttons::NONE };
+        g.run_frame_with(b);
+        g.clear_audio();
+        let mode = g.read(GAME_MODE);
+        if mode != last_mode || f % 60 == 0 {
+            println!("frame {f:4}: mario {},{} camera {} mode {mode:02x}", w(&mut g, PLAYER_X), w(&mut g, PLAYER_Y), w(&mut g, 0xFFCA));
+            last_mode = mode;
+        }
+        if mode == 0x0C {
+            break;
+        }
+    }
+}
+
+/// Level `level`'s animated tiles (0:35EA) as they are and turned off ($FF): over 120 frames,
+/// how many times the first four background tiles ($9200-$923F) change, and whether the rest
+/// of the background tiles end the same in both runs.
+pub fn animation_probe(rom_path: &Path, level: u8) {
+    use cart_model::rom::offset;
+    let Some(base) = crate::console::load(rom_path) else { return };
+    let mut ends = Vec::new();
+    for off in [false, true] {
+        let mut g = base.clone();
+        let mut rom = g.cart().rom().to_vec();
+        if off {
+            rom[offset(0, 0x35EA) + level as usize] = 0xFF;
+        }
+        g.cart_mut().set_rom(&rom);
+        g.boot_to_map();
+        if !g.enter_level(level) {
+            println!("level not entered");
+            return;
+        }
+        let mut changes = 0;
+        let mut last = g.video().vram()[0x1200..0x1240].to_vec();
+        for _ in 0..120 {
+            g.run_frame_with(Buttons::NONE);
+            g.clear_audio();
+            let now = g.video().vram()[0x1200..0x1240].to_vec();
+            changes += (now != last) as usize;
+            last = now;
+        }
+        println!("table {:02x}: first four tiles changed {changes} times", if off { 0xFF } else { rom[offset(0, 0x35EA) + level as usize] });
+        ends.push(g.video().vram()[0x1240..0x1800].to_vec());
+    }
+    println!("rest of the background tiles the same: {}", ends[0] == ends[1]);
+}
+
+/// Level `level` played as it is and with the boss list (02:4DFF, `cp $05` first) giving it
+/// index `index` (its number written into that `cp`): $AFC0-$AFCA, $A267, the music request,
+/// the timer and how much of the screen differs after `frames` frames standing still.
+pub fn boss_probe(rom_path: &Path, level: u8, index: usize, frames: u32) {
+    use cart_model::rom::offset;
+    const CPS: [u16; 6] = [0x4E03, 0x4E08, 0x4E0D, 0x4E12, 0x4E17, 0x4E1C];
+    let Some(base) = crate::console::load(rom_path) else { return };
+    let mut screens = Vec::new();
+    for patched in [false, true] {
+        let mut g = base.clone();
+        let mut rom = g.cart().rom().to_vec();
+        if patched {
+            rom[offset(2, CPS[index])] = level;
+        }
+        // Mario a little left of the level's last object (a boss level's boss)
+        let objs = cart_model::objects::read(&rom, level as usize).0;
+        if let Some(last) = objs.iter().max_by_key(|o| o.x) {
+            let h = cart_model::levels::header(&rom, level as usize).at;
+            cart_model::level_start::Start::standing(last.x.saturating_sub(120), last.y).write(&mut rom[h..h + 8]);
+            if !patched {
+                println!("last object: type {:02x} at {},{}", last.kind, last.x, last.y);
+            }
+        }
+        g.cart_mut().set_rom(&rom);
+        g.boot_to_map();
+        if !g.enter_level(level) {
+            println!("level not entered");
+            return;
+        }
+        for _ in 0..frames {
+            g.run_frame_with(Buttons::NONE);
+            g.clear_audio();
+        }
+        let r = |g: &mut gb_core::Gb, a: u16| g.read(a);
+        println!("{}: AFC0 {:02x} AFC1 {:02x} AFC5 {:02x} AFCA {:02x} A267 {:02x} music {:02x} timer {:02x}{:02x} mode {:02x}", if patched { "patched" } else { "as is  " }, r(&mut g, 0xAFC0), r(&mut g, 0xAFC1), r(&mut g, 0xAFC5), r(&mut g, 0xAFCA), r(&mut g, 0xA267), r(&mut g, 0xA468), r(&mut g, 0xA255), r(&mut g, 0xA254), r(&mut g, GAME_MODE));
+        screens.push(g.screen().to_vec());
+    }
+    let diff = screens[0].iter().zip(&screens[1]).filter(|(a, b)| a != b).count();
+    println!("screen pixels that differ: {diff}");
+}
+
+/// The per-level tables and blank levels in the emulator: level 01's tables written into a copy
+/// and read by the game; a new level with space gravity played over level 01, which keeps its
+/// own; blank levels made from levels 01 and 18, entered with Mario standing on their floor.
+pub fn tables_check(rom_path: &Path) {
+    use cart_model::extra_levels::{apply, based_on, writes_for};
+    use cart_model::level_start::Start;
+    use cart_model::level_tables::Tables;
+    use cart_model::{blank_level, patch};
+    let Some(gb) = crate::console::load(rom_path) else { return };
+    let Ok(rom) = patch::expand(gb.cart().rom()) else { return };
+    let Ok(mut g0) = gb_core::Gb::new(rom.clone(), 44100) else { return };
+    g0.boot_to_map();
+    let game = |g: &mut gb_core::Gb| [g.read(0xA287), g.read(0xA2C8), g.read(0xA2D9), g.read(0xA299)];
+    // a game level's own tables
+    let mut copy = rom.clone();
+    let t = Tables { gravity: 8, scroll: 1, camera: 8, animation: 0xFF };
+    t.write(&mut copy, 1);
+    let mut g = g0.clone();
+    g.cart_mut().set_rom(&copy);
+    let entered = g.enter_level(1);
+    let got = game(&mut g);
+    println!("level 01's tables read by the game: {}", if entered && got == [8, 1, 8, 0] { "ok".to_string() } else { format!("FAILED {got:02x?}") });
+    // a new level with space gravity over level 01
+    let mut e = based_on(&rom, 1);
+    e.tables.set_space_gravity(true, &Tables::read(&rom, 1));
+    let mut g = g0.clone();
+    let undo = apply(g.cart_mut().rom_mut(), &writes_for(&rom, &e));
+    let entered = g.enter_level(1);
+    let new_gravity = g.read(0xA287);
+    g.back_to_map();
+    for _ in 0..300 {
+        g.run_frame_with(Buttons::NONE);
+    }
+    apply(g.cart_mut().rom_mut(), &undo);
+    let base_entered = g.enter_level(1);
+    let base_gravity = g.read(0xA287);
+    println!("new level with space gravity: {}", if entered && base_entered && new_gravity == 8 && base_gravity == 0 { "ok".to_string() } else { format!("FAILED new {new_gravity:02x} base {base_gravity:02x}") });
+    // blank levels
+    for base in [1u8, 18] {
+        let mut e = based_on(&rom, base);
+        let (map, start) = blank_level::blank(&e.map, &Start::read(&e.header));
+        e.map = map;
+        e.objs.clear();
+        start.write(&mut e.header);
+        let mut g = g0.clone();
+        apply(g.cart_mut().rom_mut(), &writes_for(&rom, &e));
+        let entered = g.enter_level(base);
+        let y0 = g.read(PLAYER_Y) as u16 | (g.read(PLAYER_Y + 1) as u16) << 8;
+        for _ in 0..180 {
+            g.run_frame_with(Buttons::NONE);
+        }
+        let y1 = g.read(PLAYER_Y) as u16 | (g.read(PLAYER_Y + 1) as u16) << 8;
+        let playing = g.read(GAME_MODE) == 0x04;
+        println!("blank level from {base:02}: {}", if entered && playing && y0 == y1 && y0 == start.mario_y { "ok".to_string() } else { format!("FAILED entered {entered} playing {playing} y {y0} -> {y1} (start {})", start.mario_y) });
+    }
+}
+
+/// For each object type: in how many enemy-sprite groups (`level_graphics`) of each catalogue
+/// the game's levels use it.
+pub fn type_groups(rom_path: &Path) {
+    use cart_model::{level_graphics, objects};
+    let Ok(rom) = std::fs::read(rom_path) else { return };
+    let mut groups: Vec<([u8; 4], bool)> = Vec::new();
+    let mut uses: Vec<Vec<usize>> = vec![Vec::new(); 128];
+    for l in 0..32 {
+        let g = level_graphics::object_group(&rom, l);
+        let gi = groups.iter().position(|x| *x == g).unwrap_or_else(|| { groups.push(g); groups.len() - 1 });
+        for o in objects::read(&rom, l).0 {
+            if !uses[o.kind as usize].contains(&gi) {
+                uses[o.kind as usize].push(gi);
+            }
+        }
+    }
+    let per_cat = |cat: bool| groups.iter().filter(|g| g.1 == cat).count();
+    println!("groups: {} in levels 0-9, {} in 10-31", per_cat(false), per_cat(true));
+    for (k, u) in uses.iter().enumerate().filter(|(_, u)| !u.is_empty()) {
+        let (a, b) = (u.iter().filter(|&&g| !groups[g].1).count(), u.iter().filter(|&&g| groups[g].1).count());
+        println!("type {k:02x}: {a} / {b}");
+    }
+}
+
+/// Objects near Mario's start: a blank level made from `base` with one object of `kind`
+/// `dx` pixels right of Mario at his height; the objects alive after the level begins, after
+/// walking right a little, and after walking back.
+pub fn start_objects_probe(rom_path: &Path, base: u8, kind: u8, dx: u16) {
+    use cart_model::extra_levels::{apply, based_on, writes_for};
+    use cart_model::level_start::Start;
+    use cart_model::objects::Obj;
+    use cart_model::{blank_level, cheats, patch};
+    let Some(gb) = crate::console::load(rom_path) else { return };
+    let Ok(rom) = patch::expand(gb.cart().rom()) else { return };
+    let Ok(mut g) = gb_core::Gb::new(rom.clone(), 44100) else { return };
+    g.boot_to_map();
+    let mut e = based_on(&rom, base);
+    let (map, start) = blank_level::blank(&e.map, &Start::read(&e.header));
+    e.map = map;
+    let feet = start.mario_y + cart_model::level_start::FEET;
+    e.objs = vec![Obj { x: (start.mario_x + dx) / 8 * 8, y: (feet - 16) / 8 * 8, kind, flag: false }];
+    start.write(&mut e.header);
+    apply(g.cart_mut().rom_mut(), &writes_for(&rom, &e));
+    g.enter_level(base);
+    let report = |g: &mut gb_core::Gb, when: &str| {
+        let a = cheats::active_objects(g);
+        println!("{when}: {} alive {:?}", a.len(), a.iter().map(|o| (o.kind, o.x, o.y)).collect::<Vec<_>>());
+    };
+    for _ in 0..30 {
+        g.run_frame_with(Buttons::NONE);
+    }
+    report(&mut g, "after the start");
+    for _ in 0..40 {
+        g.run_frame_with(Buttons::RIGHT);
+    }
+    report(&mut g, "walked right");
+    for _ in 0..120 {
+        g.run_frame_with(Buttons::RIGHT);
+    }
+    report(&mut g, "walked further");
+}
+
+/// The game's levels' objects that are on the first screen (the camera of the level's start).
+pub fn first_screen_objects(rom_path: &Path) {
+    use cart_model::{level_start::Start, levels, objects};
+    let Ok(rom) = std::fs::read(rom_path) else { return };
+    for l in 0..32 {
+        let h = levels::header(&rom, l).at;
+        let s = Start::read(&rom[h..h + 8]);
+        let (left, right) = (s.camera_x as i32 - 0x50, s.camera_x as i32 + 0x50);
+        let (top, bottom) = (s.camera_y as i32 - 0x48, s.camera_y as i32 + 0x48);
+        let on: Vec<(u8, u16, u16)> = objects::read(&rom, l).0.iter().filter(|o| (left..right).contains(&(o.x as i32)) && (top..bottom).contains(&(o.y as i32))).map(|o| (o.kind, o.x, o.y)).collect();
+        if !on.is_empty() {
+            println!("level {l:02}: screen x {left}-{right} y {top}-{bottom}: {on:?}");
+        }
+    }
+}

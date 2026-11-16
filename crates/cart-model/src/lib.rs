@@ -7,7 +7,10 @@
 //! | `levels` | Level headers, map locations, the map compression (decode/encode) |
 //! | `level_goals` | Where a level ends: goal blocks $4A and $4B, the bell |
 //! | `checkpoint` | Midway bells and where Mario starts again; several per level through a hook |
+//! | `level_graphics` | Which levels draw the same objects (enemy sprites and object catalogue) |
 //! | `level_settings` | A level's start time, music and background shades (header bytes) |
+//! | `blank_level` | An empty map and start made from a game level's |
+//! | `level_tables` | A level's gravity, auto-scroll, camera margin and animated tiles (bank-0 tables) |
 //! | `level_start` | Where Mario begins a level (header bytes $00-$07) |
 //! | `secret_exits` | Where each level's secret exit takes Mario (a hook in the map code) |
 //! | `extra_levels` | Levels beyond the 32, played in place of a base level |
@@ -30,6 +33,7 @@
 //! | `error` | `CartError` and what a save used |
 pub mod added_points;
 pub mod art;
+pub mod blank_level;
 pub mod checkpoint;
 pub mod cheats;
 pub mod doors;
@@ -38,7 +42,9 @@ pub mod error;
 pub mod extra_levels;
 pub mod layout;
 pub mod level_goals;
+pub mod level_graphics;
 pub mod level_settings;
+pub mod level_tables;
 pub mod level_start;
 pub mod secret_exits;
 pub mod levels;

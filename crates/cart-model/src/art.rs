@@ -72,6 +72,9 @@ pub struct Look {
     /// Where the picture's top-left sits relative to the object's position.
     pub dx: i32,
     pub dy: i32,
+    /// The sprite tile sets it uses (`level_graphics::SETS` bits): it looks the same in
+    /// levels that load the same graphics into those.
+    pub sets: u8,
 }
 
 fn sprites(g: &Gb) -> Vec<[u8; 4]> {
@@ -129,7 +132,9 @@ pub fn capture_look(map_state: &Gb, rom: &[u8], original: &[u8], level: usize, k
     let cam_y = cy as i32 - (oam[0] as i32 - 16);
     let dx = (x0 - 8 + cam_x) - obj.x as i32;
     let dy = (y0 - 16 + cam_y) - obj.y as i32;
-    Some(Look { w, h, px, dx: dx.clamp(-32, 32), dy: dy.clamp(-32, 32) })
+    let tall = g1.video().lcdc() & 0x04 != 0;
+    let sets = new.iter().fold(0, |m, s| m | crate::level_graphics::set_of(s[2]) | if tall { crate::level_graphics::set_of(s[2] | 1) } else { 0 });
+    Some(Look { w, h, px, dx: dx.clamp(-32, 32), dy: dy.clamp(-32, 32), sets })
 }
 
 /// Mario as he stands at the start of level 0 (all the sprites then are his); `dx`/`dy`
@@ -146,7 +151,7 @@ pub fn capture_mario(map_state: &Gb) -> Option<Look> {
     let (sx, sy) = (at(&mut g, 0xFFCA) - 0x50, at(&mut g, 0xFFC8) - 0x48);
     let dx = x0 - 8 + sx - at(&mut g, 0xFFC2);
     let dy = y0 - 16 + sy - at(&mut g, 0xFFC0);
-    Some(Look { w, h, px, dx, dy })
+    Some(Look { w, h, px, dx, dy, sets: 0 })
 }
 
 /// The picture the sprites `new` draw: width, height, shades, and its top-left in OAM terms.

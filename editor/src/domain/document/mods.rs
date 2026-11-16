@@ -37,7 +37,7 @@ impl EditorDocument {
         let levels = (0..LEVELS)
             .map(|l| {
                 let (a, b) = (level_from(rom, l), level_from(original, l));
-                a.map != b.map || a.objs != b.objs || a.start != b.start || a.settings != b.settings || secrets.iter().any(|&(s, _)| s == l)
+                a.map != b.map || a.objs != b.objs || a.start != b.start || a.settings != b.settings || a.tables != b.tables || secrets.iter().any(|&(s, _)| s == l)
             })
             .collect();
         let (routes, first) = (map_routes::read(rom), map_routes::read(original));

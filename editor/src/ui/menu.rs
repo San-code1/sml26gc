@@ -8,9 +8,10 @@ use cart_model::levels::LEVELS;
 use cart_model::original_points::OnMap;
 
 /// The File menu, top to bottom (None: a separator). An entry's id is its place here + 1.
-const FILE_MENU: [Option<Action>; 12] = [
+const FILE_MENU: [Option<Action>; 13] = [
     Some(Action::Save),
     None,
+    Some(Action::NewBlankLevel),
     Some(Action::ExportLevel),
     Some(Action::ImportLevel),
     Some(Action::ReplaceLevel),
@@ -26,6 +27,7 @@ const FILE_MENU: [Option<Action>; 12] = [
 fn label(es: bool, a: Action) -> &'static str {
     match a {
         Action::Save => tr(es, "Save", "Guardar"),
+        Action::NewBlankLevel => tr(es, "New blank level...", "Nivel en blanco..."),
         Action::ExportLevel => tr(es, "Export level...", "Exportar nivel..."),
         Action::ImportLevel => tr(es, "Import level as a new level...", "Importar nivel como nivel nuevo..."),
         Action::ReplaceLevel => tr(es, "Replace this level from a file...", "Reemplazar este nivel con un fichero..."),
@@ -61,7 +63,7 @@ impl Editor {
         for (i, a) in FILE_MENU.iter().enumerate() {
             let Some(a) = *a else { continue };
             let on = match a {
-                Action::ExportLevel | Action::ImportLevel => !self.in_world,
+                Action::ExportLevel | Action::ImportLevel | Action::NewBlankLevel => !self.in_world,
                 Action::ReplaceLevel => !self.in_world && self.cur >= LEVELS,
                 Action::ExportZone => self.in_world && self.zone_exportable(),
                 Action::ImportZone => self.in_world,

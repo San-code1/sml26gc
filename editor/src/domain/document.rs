@@ -21,6 +21,8 @@ use cart_model::error::{BankUsage, ObjectsUsage};
 use cart_model::extra_levels::{self, Extra};
 use cart_model::level_goals::{self, Goal};
 use cart_model::level_settings::Settings;
+use cart_model::blank_level;
+use cart_model::level_tables::Tables;
 use cart_model::level_start::Start;
 use cart_model::secret_exits::{self, SecretTo};
 use cart_model::levels::{self, COLS, LEVELS, ROWS};
@@ -60,6 +62,8 @@ pub struct LevelContent {
     pub start: Start,
     /// Start time, music and background shades (header bytes $13, $0E, $0F).
     pub settings: Settings,
+    /// Gravity, auto-scroll, camera margin and animated tiles (the game's per-level tables).
+    pub tables: Tables,
     /// What the cells under the finish and the secret exit had before they were placed
     /// there (while editing; not saved).
     pub under: [Vec<u8>; 2],
@@ -93,9 +97,11 @@ impl LevelDoc {
     }
 }
 
-/// A level from a file or a stored new level: its start is in its header.
-fn content_with(f: LevelFile) -> LevelContent {
-    LevelContent { map: f.map, objs: f.objs, start: Start::read(&f.stand_in.header), settings: Settings::read(&f.stand_in.header), stand_in: Some(f.stand_in), name: f.name, under: Default::default(), secret: f.secret }
+/// A level from a file or a stored new level: its start is in its header; a file without
+/// tables gets its base level's in `original`.
+fn content_with(f: LevelFile, original: &[u8]) -> LevelContent {
+    let tables = f.tables.unwrap_or_else(|| Tables::read(original, f.stand_in.base as usize));
+    LevelContent { map: f.map, objs: f.objs, start: Start::read(&f.stand_in.header), settings: Settings::read(&f.stand_in.header), tables, stand_in: Some(f.stand_in), name: f.name, under: Default::default(), secret: f.secret }
 }
 
 /// `objs` with each checkpoint bell where the game finds it (x order within its page), as a
@@ -131,7 +137,7 @@ pub enum Saved {
     NewLevels(usize, usize),
     /// The new zones: how many, bytes used.
     NewZones(usize, usize),
-    /// Levels of the 32 whose start moved.
+    /// Levels of the 32 whose start or settings changed.
     Starts(usize),
     /// The levels whose secret exit leads where the user chose.
     SecretExits(usize),
@@ -205,7 +211,7 @@ fn entries_of(rom: &[u8]) -> Vec<u8> {
 fn level_from(rom: &[u8], l: usize) -> LevelContent {
     let (_, start) = levels::map_location(rom, levels::header(rom, l));
     let h = levels::header(rom, l).at;
-    LevelContent { map: levels::decode(rom, start).0, objs: objects::read(rom, l).0, stand_in: None, name: String::new(), start: Start::read(&rom[h..h + 8]), settings: Settings::read(&rom[h..h + 20]), under: Default::default(), secret: None }
+    LevelContent { map: levels::decode(rom, start).0, objs: objects::read(rom, l).0, stand_in: None, name: String::new(), start: Start::read(&rom[h..h + 8]), settings: Settings::read(&rom[h..h + 20]), tables: Tables::read(rom, l), under: Default::default(), secret: None }
 }
 
 impl EditorDocument {
@@ -222,7 +228,7 @@ impl EditorDocument {
         let doc = |content| LevelDoc::new(content, false);
         let mut levels: Vec<LevelDoc> = (0..LEVELS).map(|l| doc(level_from(&rom, l))).collect();
         let stored = extra_levels::read(&rom);
-        levels.extend(stored.into_iter().map(|e| doc(content_with(LevelFile { stand_in: StandIn { base: e.base, header: e.header }, map: e.map, objs: e.objs, name: e.name, secret: None }))));
+        levels.extend(stored.into_iter().map(|e| doc(content_with(LevelFile { stand_in: StandIn { base: e.base, header: e.header }, map: e.map, objs: e.objs, name: e.name, secret: None, tables: Some(e.tables) }, &original))));
         for (l, to) in secret_exits::read(&rom) {
             if let Some(lv) = levels.get_mut(l) {
                 lv.content.secret = Some(to);
@@ -377,6 +383,26 @@ impl EditorDocument {
         self.levels[l].content.settings
     }
 
+    pub fn level_tables(&self, l: usize) -> Tables {
+        self.levels[l].content.tables
+    }
+
+    /// Level `l`'s tables as the game has them for its base level.
+    pub fn game_tables(&self, l: usize) -> Tables {
+        Tables::read(&self.original, self.base_of(l))
+    }
+
+    /// Change level `l`'s gravity, auto-scroll, camera margin or animated tiles, with an undo
+    /// step.
+    pub fn set_level_tables(&mut self, l: usize, t: Tables) {
+        if self.levels[l].content.tables != t {
+            self.snapshot(l);
+            let lv = &mut self.levels[l];
+            lv.content.tables = t;
+            lv.start_dirty = true;
+        }
+    }
+
     /// Change level `l`'s settings, with an undo step.
     pub fn set_level_settings(&mut self, l: usize, s: Settings) {
         if self.levels[l].content.settings != s {
@@ -425,6 +451,19 @@ impl EditorDocument {
         self.push_level(content)
     }
 
+    /// A new blank level after the others that plays as game level `base` (its header,
+    /// settings and tables as the game has them): its sky, a floor and Mario's start, no
+    /// objects (`blank_level`). None when there is no room.
+    pub fn add_blank_level(&mut self, base: usize) -> Option<usize> {
+        let mut content = level_from(&self.original, base);
+        let at = levels::header(&self.original, base).at;
+        let header: [u8; 20] = self.original[at..at + 20].try_into().ok()?;
+        let (map, start) = blank_level::blank(&content.map, &content.start);
+        (content.map, content.start, content.objs) = (map, start, Vec::new());
+        content.stand_in = Some(StandIn { base: base as u8, header });
+        self.push_level(content)
+    }
+
     /// Add `content` (a new level's) after the others, or None when there is no room.
     fn push_level(&mut self, content: LevelContent) -> Option<usize> {
         if self.new_levels() >= extra_levels::MAX {
@@ -444,12 +483,13 @@ impl EditorDocument {
         });
         c.start.write(&mut stand_in.header);
         c.settings.write(&mut stand_in.header);
-        LevelFile { stand_in, map: c.map.clone(), objs: c.objs.clone(), name: c.name.clone(), secret: c.secret }
+        LevelFile { stand_in, map: c.map.clone(), objs: c.objs.clone(), name: c.name.clone(), secret: c.secret, tables: Some(c.tables) }
     }
 
     /// A new level after the others from a level file; None when there is no room.
     pub fn import_level(&mut self, f: LevelFile) -> Option<usize> {
-        self.push_level(content_with(f))
+        let content = content_with(f, &self.original);
+        self.push_level(content)
     }
 
     /// Replace new level `l` whole with a level file (undoable). The 32 are never replaced.
@@ -458,8 +498,9 @@ impl EditorDocument {
             return false;
         }
         self.snapshot(l);
+        let content = content_with(f, &self.original);
         let lv = &mut self.levels[l];
-        lv.content = content_with(f);
+        lv.content = content;
         lv.all_dirty();
         true
     }
@@ -509,7 +550,7 @@ impl EditorDocument {
             .into_iter()
             .enumerate()
             .map(|(l, f)| {
-                let mut content = content_with(f);
+                let mut content = content_with(f, &self.original);
                 if l < LEVELS {
                     (content.stand_in, content.name) = (None, String::new());
                 }
@@ -573,7 +614,7 @@ impl EditorDocument {
                 let mut s = lv.content.stand_in?;
                 lv.content.start.write(&mut s.header);
                 lv.content.settings.write(&mut s.header);
-                Some(Extra { base: s.base, header: s.header, map: lv.content.map.clone(), objs: bells_in_order(&lv.content.objs), name: lv.content.name.clone() })
+                Some(Extra { base: s.base, header: s.header, map: lv.content.map.clone(), objs: bells_in_order(&lv.content.objs), name: lv.content.name.clone(), tables: lv.content.tables })
             })
             .collect()
     }
@@ -965,9 +1006,11 @@ impl EditorDocument {
         for l in 0..LEVELS {
             let at = levels::header(&self.rom, l).at;
             let c = &self.levels[l].content;
-            if Start::read(&self.rom[at..at + 8]) != c.start || Settings::read(&self.rom[at..at + 20]) != c.settings {
+            if Start::read(&self.rom[at..at + 8]) != c.start || Settings::read(&self.rom[at..at + 20]) != c.settings || Tables::read(&self.rom, l) != c.tables {
                 c.start.write(&mut self.rom[at..at + 8]);
                 c.settings.write(&mut self.rom[at..at + 20]);
+                let tables = c.tables;
+                tables.write(&mut self.rom, l);
                 moved += 1;
             }
             self.levels[l].start_dirty = false;
@@ -1259,6 +1302,34 @@ mod tests {
         assert!(doc.map_undo());
         assert_eq!(doc.points, before);
         assert!(doc.map_redo() && doc.points[0] == before[0] + 2);
+    }
+
+    /// Gravity on a game level and on a new one: undone, saved into the copy (the game level's
+    /// tables, the new level's store), kept when the copy is opened again, filed, restored.
+    #[test]
+    fn level_tables_are_saved_filed_and_restored() {
+        let Some(mut doc) = open() else {
+            eprintln!("no cartridge found: document test skipped");
+            return;
+        };
+        let own = doc.level_tables(1);
+        let mut space = own;
+        space.set_space_gravity(true, &doc.game_tables(1));
+        doc.set_level_tables(1, space);
+        assert!(doc.undo(1) && doc.level_tables(1) == own);
+        assert!(doc.redo(1));
+        let n = doc.add_blank_level(1).unwrap();
+        doc.set_level_tables(n, space);
+        assert!(doc.levels[n].content.objs.is_empty() && !doc.levels[n].content.start.blocked(&doc.levels[n].content.map), "a blank level, Mario free");
+        doc.commit().unwrap();
+        assert_eq!(Tables::read(&doc.rom, 1), space);
+        let again = EditorDocument::open(doc.original.clone(), Some(doc.rom.clone()));
+        assert_eq!((again.level_tables(1), again.level_tables(n)), (space, space));
+        assert!(again.mods.level(1), "the game level differs from the game's");
+        let filed = doc.import_level(files::read_level(&files::level_text(&doc.level_file(n))).unwrap()).unwrap();
+        assert_eq!(doc.level_tables(filed), space);
+        doc.restore_level(1);
+        assert_eq!(doc.level_tables(1), own);
     }
 
     /// The original game's special points, and a zone entrance's twin that changes with it.

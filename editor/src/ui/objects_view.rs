@@ -17,7 +17,7 @@ impl Editor {
         let base = self.doc.base_of(self.cur);
         if self.mode == Mode::Objects && !self.in_world {
             let mut want: Vec<(usize, u8)> = self.doc.levels[self.cur].content.objs.iter().map(|o| (base, o.kind)).collect();
-            want.push((base, self.kind));
+            want.extend(self.kind.map(|k| (base, k)));
             want.retain(|key| !self.looks.contains_key(key));
             self.look_loader.prefer(&want);
         }
@@ -33,6 +33,9 @@ impl Editor {
 
     pub(super) fn add_look(&mut self, l: usize, k: u8, look: Option<Look>) {
         let v = look.as_ref().map(|lk| (look_texture(lk), lk.dx as f32, lk.dy as f32));
+        if let Some(lk) = &look {
+            self.captured.insert((l, k), lk.clone());
+        }
         self.looks.insert((l, k), v);
         self.look_data.push((l, k, look));
     }
@@ -67,12 +70,14 @@ impl Editor {
             if let Some(i) = self.object_at(w) {
                 let o = self.doc.levels[l].content.objs[i];
                 self.sel_obj = Some(i);
-                self.kind = o.kind;
+                self.kind = Some(o.kind);
                 self.drag_obj = Some((i, w - vec2(o.x as f32, o.y as f32)));
-            } else {
-                let i = self.doc.add_object(l, Obj { x: snap(w.x, 4088.0), y: snap(w.y, 760.0), kind: self.kind, flag: false });
+            } else if let Some(kind) = self.kind {
+                let i = self.doc.add_object(l, Obj { x: snap(w.x, 4088.0), y: snap(w.y, 760.0), kind, flag: false });
                 self.sel_obj = Some(i);
                 self.drag_obj = Some((i, vec2(4.0, 4.0)));
+            } else {
+                self.sel_obj = None;
             }
         }
         if let Some((i, off)) = self.drag_obj {
@@ -83,9 +88,12 @@ impl Editor {
                 self.drag_obj = None;
             }
         }
-        let delete_here = is_mouse_button_pressed(MouseButton::Right) && in_view;
-        if let Some(i) = delete_here.then(|| self.object_at(w)).flatten() {
-            self.delete_object(i);
+        // right click: on an object, delete it; elsewhere, put the palette's type down
+        if is_mouse_button_pressed(MouseButton::Right) && in_view {
+            match self.object_at(w) {
+                Some(i) => self.delete_object(i),
+                None => self.drop_kind(),
+            }
         }
     }
 
@@ -102,12 +110,23 @@ impl Editor {
         }
     }
 
-    /// Pick an object type in the palette: the selected object takes it too.
+    /// Pick an object type in the palette: the selected object takes it too. The type already
+    /// chosen is put down instead.
     pub(super) fn choose_kind(&mut self, k: u8) {
-        self.kind = k;
+        if self.kind == Some(k) {
+            self.drop_kind();
+            return;
+        }
+        self.kind = Some(k);
         if let Some(i) = self.sel_obj {
             self.doc.set_object_kind(self.cur, i, k);
         }
+    }
+
+    /// No type chosen in the palette and no object selected: clicks only pick objects.
+    fn drop_kind(&mut self) {
+        self.kind = None;
+        self.sel_obj = None;
     }
 
     pub(super) fn draw_objects(&self) {
@@ -155,7 +174,10 @@ impl Editor {
                 let o = self.doc.levels[self.cur].content.objs[i];
                 format!("#{:02X}  x {} y {}  {}", o.kind, o.x, o.y, tr(self.es, "drag: move   right click: delete", "arrastra: mover   clic dcho: borrar"))
             }
-            None => format!("{} #{:02X}", tr(self.es, "click: place object", "clic: poner objeto"), self.kind),
+            None => match self.kind {
+                Some(k) => format!("{} #{k:02X}   {}", tr(self.es, "click: place object", "clic: poner objeto"), tr(self.es, "right click: none", "clic dcho: ninguno")),
+                None => tr(self.es, "choose an object in the palette to place it", "elige un objeto en la paleta para ponerlo").to_string(),
+            },
         };
         draw_text(&tip, self.panel + 8.0, ch - 8.0, 20.0, WHITE);
     }

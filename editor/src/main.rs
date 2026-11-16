@@ -116,6 +116,14 @@ async fn main() {
     if flag("--secret-leads") {
         ed.choose_secret();
     }
+    // --all-objects: the object palette shows every type
+    if flag("--all-objects") {
+        ed.show_all_objects();
+    }
+    // --blank N: the New blank level chooser on game level N
+    if let Some(n) = value("--blank").and_then(|v| v.parse::<usize>().ok()) {
+        ed.show_blank_chooser(n);
+    }
     if shot.is_some() {
         ed.capture_level_looks();
     }

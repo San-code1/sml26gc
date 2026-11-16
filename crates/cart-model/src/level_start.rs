@@ -58,6 +58,20 @@ impl Start {
         }
     }
 
+    /// The screen the level begins on (left, top, width, height in level pixels). The game
+    /// brings an object to life only when it comes in at the screen's edge, so the objects
+    /// already on this screen never appear (research `startobjects`; none of the game's
+    /// levels has one there, `firstscreen`).
+    pub fn first_screen(&self) -> (u16, u16, u16, u16) {
+        (self.camera_x.saturating_sub(0x50), self.camera_y.saturating_sub(0x48), 0xA0, 0x90)
+    }
+
+    /// Is level pixel `(x, y)` on the screen the level begins on?
+    pub fn on_first_screen(&self, x: u16, y: u16) -> bool {
+        let (l, t, w, h) = self.first_screen();
+        (l..l + w).contains(&x) && (t..t + h).contains(&y)
+    }
+
     /// The top left corner of Mario's sprite, in level pixels.
     pub fn sprite_at(&self) -> (u16, u16) {
         (self.mario_x, self.mario_y + SPRITE_TOP)
