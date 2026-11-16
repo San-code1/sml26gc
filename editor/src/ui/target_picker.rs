@@ -5,17 +5,21 @@
 use super::shortcuts::{with_keys, Action};
 use super::widgets::*;
 use super::Editor;
+use cart_model::added_points;
 use cart_model::doors::{self, Leads};
+use cart_model::level_goals;
 use cart_model::new_zones;
-use cart_model::original_points::OnMap;
+use cart_model::original_points::{self, OnMap};
+use cart_model::secret_exits::SecretTo;
 use macroquad::prelude::*;
 
-/// What is being chosen: where world point `p`'s door leads, or where exit `i` of the zone
-/// that was shown leads.
+/// What is being chosen: where world point `p`'s door leads, where exit `i` of the zone that
+/// was shown leads, or where level `l`'s secret exit leads.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Picking {
     Door(u8),
     Exit(usize),
+    Secret(usize),
 }
 
 pub(super) struct Picker {
@@ -37,7 +41,7 @@ impl Editor {
     /// The maps the target can be on: the world map (exits only), the zones a door enters, the
     /// new zones.
     fn picker_maps(&self, what: Picking) -> Vec<OnMap> {
-        let world = matches!(what, Picking::Exit(_)).then_some(OnMap::World);
+        let world = matches!(what, Picking::Exit(_) | Picking::Secret(_)).then_some(OnMap::World);
         world.into_iter().chain(doors::INTO.iter().map(|d| OnMap::Zone(d.zone))).chain((0..self.doc.new_zones.len()).map(OnMap::NewZone)).collect()
     }
 
@@ -70,11 +74,46 @@ impl Editor {
         self.status = tr(self.es, "Click where it leads: a world map point, or the point of a zone Mario enters on (it becomes the zone's entry). Tabs: the maps. Esc: cancel.", "Haz clic adonde lleva: un punto del mapa del mundo, o el punto de una zona por el que entra Mario (pasa a ser la entrada de la zona). Pestanas: los mapas. Esc: cancelar.").into();
     }
 
+    /// Start choosing where the shown level's secret exit leads (from the level editor).
+    pub(super) fn start_secret_picking(&mut self) {
+        let l = self.cur;
+        self.placing = None;
+        self.enter_world(true);
+        self.world_tab = super::TAB_POINTS;
+        self.picker = Some(Picker { what: Picking::Secret(l), back: self.world_map, point: self.point, cam: self.cam });
+        let first = match self.doc.level_secret(l) {
+            Some(SecretTo::NewZone(k)) => OnMap::NewZone(k),
+            Some(SecretTo::Point(p)) => original_points::SPOTS.iter().find(|s| s.point == p).map_or(OnMap::World, |s| s.map),
+            None => OnMap::World,
+        };
+        self.show_picking(first);
+        self.status = tr(self.es, "Click where the secret exit leads: a world map point, a zone's point (or the world point shown in it) or a new zone's (it becomes its entry). Boss points cannot be chosen. Esc: cancel.", "Haz clic adonde lleva la salida secreta: un punto del mapa del mundo, uno de una zona (o el punto del mundo que se ve en ella) o uno de una zona nueva (pasa a ser su entrada). Los puntos de jefe no se pueden elegir. Esc: cancelar.").into();
+    }
+
     /// Back to the map that was shown; `to`: the target chosen.
     fn finish_picking(&mut self, to: Option<Option<(Leads, Option<u8>)>>) {
         let Some(pk) = self.picker.take() else { return };
         self.show_map(pk.back);
         (self.point, self.cam) = (pk.point, pk.cam);
+        if let Picking::Secret(l) = pk.what {
+            self.enter_world(false);
+            let secret = match to {
+                None => {
+                    self.status = tr(self.es, "Nothing changed.", "No se ha cambiado nada.").into();
+                    return;
+                }
+                Some(None) => None,
+                Some(Some((Leads::NewZone(k), Some(p)))) => {
+                    self.doc.zone_set_entry(k, p);
+                    Some(SecretTo::NewZone(k))
+                }
+                Some(Some((Leads::World(p), _) | (_, Some(p)))) => Some(SecretTo::Point(p)),
+                Some(Some(_)) => return,
+            };
+            self.doc.set_level_secret(l, secret);
+            self.status = format!("{} {}", tr(self.es, "The secret exit now leads to", "La salida secreta lleva ahora a"), self.secret_leads());
+            return;
+        }
         let Some(to) = to else {
             self.status = tr(self.es, "Nothing changed.", "No se ha cambiado nada.").into();
             return;
@@ -102,8 +141,17 @@ impl Editor {
     /// shown to enter it on.
     fn target_at(&self, m: Vec2) -> Option<(Leads, Option<u8>)> {
         let p = self.point_at(m)?.0;
+        // the map shown with an added number is the one whose added points are in place
+        if added_points::index(p).is_some() {
+            return None;
+        }
+        let secret = matches!(self.picker.as_ref().map(|pk| pk.what), Some(Picking::Secret(_)));
+        if secret && level_goals::BOSS_LEVELS.contains(&(self.level_of(p as usize) as usize)) {
+            return None;
+        }
         match self.world_map {
             OnMap::World => self.is_world_point(p).then_some((Leads::World(p), None)),
+            OnMap::Zone(_) if secret && self.is_world_point(p) => Some((Leads::World(p), None)),
             OnMap::Zone(z) => {
                 let i = doors::INTO.iter().position(|d| d.zone == z)?;
                 new_zones::base_of(z).is_some_and(|b| b.has(p)).then_some((Leads::Zone(i), Some(p)))
@@ -210,12 +258,14 @@ impl Editor {
         let title = match what {
             Picking::Door(_) => format!("{} {from:02X} {}", tr(self.es, "Door of", "Puerta de"), tr(self.es, "leads into:", "entra en:")),
             Picking::Exit(_) => format!("{} {from:02X} {}", tr(self.es, "Exit on", "Salida en"), tr(self.es, "leads to:", "lleva a:")),
+            Picking::Secret(l) => format!("{} {l:02} {}", tr(self.es, "Secret exit of level", "Salida secreta del nivel"), tr(self.es, "leads to:", "lleva a:")),
         };
         draw_text(&title, 10.0, y + 16.0, 18.0, col(3));
         y += 28.0;
         let note = match what {
             Picking::Door(_) => tr(self.es, "Choose a zone with the tabs over the map and click the point Mario enters on: it becomes the zone's entry, for every door and exit into it.", "Elige una zona con las pestanas sobre el mapa y haz clic en el punto por el que entra Mario: pasa a ser la entrada de la zona, para todas las puertas y salidas a ella."),
             Picking::Exit(_) => tr(self.es, "World map: click the point Mario comes out on. A zone: click the point Mario enters on (it becomes the zone's entry).", "Mapa del mundo: haz clic en el punto donde sale Mario. Una zona: haz clic en el punto por el que entra Mario (pasa a ser la entrada de la zona)."),
+            Picking::Secret(_) => tr(self.es, "Click the point Mario is taken to; he stays there. A new zone's point becomes its entry.", "Haz clic en el punto al que va Mario; se queda alli. El punto de una zona nueva pasa a ser su entrada."),
         };
         for line in wrap(note, 36) {
             draw_text(&line, 10.0, y + 12.0, 15.0, col(2));
@@ -223,6 +273,10 @@ impl Editor {
         }
         y += 8.0;
         if matches!(what, Picking::Door(_)) && button(Rect::new(10.0, y, 276.0, 26.0), tr(self.es, "No door", "Sin puerta"), false, 15.0) {
+            self.finish_picking(Some(None));
+            return None;
+        }
+        if matches!(what, Picking::Secret(_)) && button(Rect::new(10.0, y, 276.0, 26.0), tr(self.es, "The game's way", "Como en el juego"), false, 15.0) {
             self.finish_picking(Some(None));
             return None;
         }

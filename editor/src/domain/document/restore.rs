@@ -10,7 +10,7 @@ use cart_model::{world, zone_maps};
 
 impl EditorDocument {
     /// The points of the world map: drawn there, where Mario walks out of a zone, or new.
-    fn world_points(&self) -> Vec<u8> {
+    pub(super) fn world_points(&self) -> Vec<u8> {
         let mut v: Vec<u8> = SPOTS.iter().filter(|s| s.map == OnMap::World).map(|s| s.point).chain(ZONE_EXITS.iter().map(|z| z.1)).chain(self.routes.added.iter().copied()).collect();
         v.sort_unstable();
         v.dedup();
@@ -68,6 +68,8 @@ impl EditorDocument {
                 self.world_snapshot();
                 self.points_record();
                 self.zones[z] = zone_maps::read(&self.original, z);
+                self.show_added(map);
+                self.take_added();
                 let world_points = self.world_points();
                 let own: Vec<u8> = SPOTS.iter().filter(|s| s.map == map && !world_points.contains(&s.point)).map(|s| s.point).collect();
                 for &p in &own {

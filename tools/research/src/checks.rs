@@ -455,6 +455,58 @@ pub fn route_check(rom_path: &Path) {
     }
 }
 
+/// A point of the world map or a game zone moved `dx` pixels, as the editor drags it (paths
+/// to and from it straight): walk to it from each neighbour and back, and where Mario stands.
+pub fn drag_check(rom_path: &Path, point: u8, dx: i32) {
+    use cart_model::map_routes::{read, write, Place, Way, POINTS};
+    use cart_model::ram_map::MAP_POINT;
+    let Some(gb) = load(rom_path) else { return };
+    let Ok(mut rom) = cart_model::patch::expand(gb.cart().rom()) else { return };
+    let mut r = read(&rom);
+    let i = point as usize;
+    let world = cart_model::original_points::SPOTS.iter().find(|s| s.point == point).is_none_or(|s| s.map == cart_model::original_points::OnMap::World);
+    let stand = |p: &Place| if world { p.on_world() } else { (p.x as i32, p.y as i32) };
+    let (x, y) = r.places[i].on_world();
+    r.places[i] = if world { Place { rest: r.places[i].rest, ..Place::at_world(x + dx, y) } } else { Place { x: (r.places[i].x as i32 + dx) as u8, ..r.places[i] } };
+    let mut into = Vec::new();
+    for q in 0..POINTS {
+        for d in 0..4 {
+            let Some(w) = r.ways[q][d].clone() else { continue };
+            if q != i && w.to != point {
+                continue;
+            }
+            let (a, b) = (stand(&r.places[q]), stand(&r.places[w.to as usize]));
+            r.ways[q][d] = Some(Way::through(&[(b.0 - a.0, b.1 - a.1)], w.to));
+            if w.to == point {
+                into.push((q as u8, d));
+            }
+        }
+    }
+    println!("write: {}", shown(&write(&mut rom, &r).map(|n| format!("{n} bytes added"))));
+    let pad = [Buttons::RIGHT, Buttons::LEFT, Buttons::UP, Buttons::DOWN];
+    let back = [1, 0, 3, 2];
+    let walk = |g: &mut Gb, b: Buttons| {
+        for f in 0..300u32 {
+            g.run_frame_with(if f < 6 { b } else { Buttons::NONE });
+            g.clear_audio();
+        }
+        g.read(MAP_POINT)
+    };
+    let want = r.places[i];
+    for (q, d) in into {
+        let Ok(mut g) = Gb::new(rom.clone(), 44100) else { return };
+        if !g.boot_to_map() {
+            println!("could not reach the map");
+            return;
+        }
+        g.show_map_at(q);
+        let on = walk(&mut g, pad[d]);
+        let stand = (g.read(0xA842), g.read(0xA843), g.read(0xFF43), g.read(0xFF42));
+        let home = walk(&mut g, pad[back[d]]);
+        println!("from {q:02x} {}: on {on:02x}, Mario ({:02x},{:02x}) scroll ({:02x},{:02x}), place ({:02x},{:02x}) cam ({:x},{:x}); back to {home:02x}", ["right", "left", "up", "down"][d], stand.0, stand.1, stand.2, stand.3, want.x, want.y, want.cam_x, want.cam_y);
+    }
+}
+
 /// Leaving a zone on an edited copy: the zone exit point follows its entrance's paths.
 /// From zone point `from` press `first` (out of the zone), then `then` on the world map.
 pub fn exit_check(rom_path: &Path, from: u8, first: &str, then: &str) {

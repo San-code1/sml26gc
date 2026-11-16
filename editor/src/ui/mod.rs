@@ -10,6 +10,8 @@ mod names_view;
 mod objects_view;
 mod palette;
 mod shortcuts;
+mod goal_view;
+mod start_view;
 mod status_bar;
 mod target_picker;
 mod widgets;
@@ -28,6 +30,7 @@ use grid_edit::Brush;
 use palette::PaletteView;
 use shortcuts::{Action, Ctx};
 use cart_model::levels::{COLS, LEVELS, ROWS};
+use cart_model::map_routes::Place;
 use cart_model::original_points::OnMap;
 use cart_model::zone_maps::ZONES;
 use macroquad::prelude::*;
@@ -102,10 +105,22 @@ pub struct Editor {
     placing_point: bool,
     /// A new zone's point being dragged with the mouse.
     drag_point: Option<u8>,
+    /// Where a drag of a world map or game zone point began: the point's place, the mouse.
+    drag_from: Option<(Place, Vec2)>,
     dialogs: Box<dyn FileDialogs>,
     text_files: Box<dyn TextFiles>,
     /// A file action waiting for the keys and buttons to be let go (see `run_pending_file`).
     pending_file: Option<Action>,
+    /// Mario's picture at a level's start (None: not captured yet; Some(None): no picture).
+    mario: Option<Option<(Texture2D, f32, f32)>>,
+    /// What a click on the level places, when not painting or moving objects.
+    placing: Option<start_view::Placing>,
+    /// Mario's start being dragged.
+    drag_start: bool,
+    /// The finish or secret exit being dragged.
+    drag_goal: Option<cart_model::level_goals::Goal>,
+    /// A level pixel to bring into view on the next frame (true: even when it is in view).
+    look: Option<(Vec2, bool)>,
     /// A new level's or zone's name being typed.
     naming: Option<names_view::Naming>,
     /// Where a door or exit leads, being chosen on the maps.
@@ -205,10 +220,16 @@ impl Editor {
             route_draw: None,
             placing_point: false,
             drag_point: None,
+            drag_from: None,
             level_cam: Vec2::ZERO,
             dialogs,
             text_files,
             pending_file: None,
+            mario: None,
+            placing: None,
+            drag_start: false,
+            drag_goal: None,
+            look: None,
             naming: None,
             picker: None,
             menu,
@@ -295,7 +316,12 @@ impl Editor {
             Action::Cut => self.copy_selection(true),
             Action::Paste => self.start_paste(),
             Action::ClearSelection => self.clear_selection_cells(),
+            Action::Escape if self.placing.is_some() => self.placing = None,
             Action::Escape => self.escape_grid(),
+            Action::PlaceStart => self.toggle_placing(start_view::Placing::Start),
+            Action::PlaceFinish if !self.doc.ends_with_boss(self.cur) => self.toggle_placing(start_view::Placing::Finish),
+            Action::PlaceSecret => self.toggle_placing(start_view::Placing::Secret),
+            Action::SecretLeads => self.start_secret_picking(),
             Action::DeleteObject => self.delete_selected_object(),
             a if a.uses_files() => self.queue_file(a),
             _ => self.run_points(a),
@@ -336,8 +362,8 @@ impl Editor {
     fn navigate(&mut self, m: Vec2, ctrl: bool, size: Vec2) -> (bool, Vec2, Vec2) {
         let speed = 600.0 * get_frame_time() / self.scale();
         let mut d = Vec2::ZERO;
-        // Shift + arrows are shortcuts
-        let arrows = !(is_key_down(KeyCode::LeftShift) || is_key_down(KeyCode::RightShift));
+        // Shift + arrows and Ctrl + arrows are shortcuts
+        let arrows = !(ctrl || is_key_down(KeyCode::LeftShift) || is_key_down(KeyCode::RightShift));
         if (arrows && is_key_down(KeyCode::Left)) || (!ctrl && is_key_down(KeyCode::A)) {
             d.x -= speed;
         }
@@ -431,21 +457,31 @@ impl Editor {
             return;
         }
         self.world_map = map;
+        self.doc.show_added(map);
         self.cam = Vec2::ZERO;
         self.leave_grid();
         self.ensure_world_art();
+    }
+
+    /// Bring the view to the level pixel asked for (in `look`), a little left of and below its
+    /// middle; unless it is already in view, when asked so.
+    fn look_now(&mut self) {
+        let Some((p, always)) = self.look.take() else { return };
+        let view = vec2(screen_width() - self.panel, screen_height() - STATUS_H) / self.scale();
+        if !always && Rect::new(self.cam.x, self.cam.y, view.x, view.y).contains(p) {
+            return;
+        }
+        let at = vec2(p.x - 2.0 * BLOCK, p.y - view.y * 0.6);
+        self.cam = at.clamp(Vec2::ZERO, (LEVEL_SIZE - view).max(Vec2::ZERO)).floor();
     }
 
     pub fn select_level(&mut self, l: usize) {
         self.cur = l;
         self.leave_grid();
         self.ensure_art(l);
-        // Start the view on the part of the map that isn't the background filler.
-        let (c0, r0, r1) = self.doc.content_area(l);
-        let view_h = (screen_height() - STATUS_H) / self.scale();
-        let content_h = (r1 + 1 - r0) as f32 * BLOCK;
-        let y = if content_h <= view_h { (r1 + 1) as f32 * BLOCK - view_h } else { r0 as f32 * BLOCK };
-        self.cam = vec2(c0 as f32 * BLOCK, y.max(0.0));
+        // Start the view where Mario begins the level.
+        let s = self.doc.level_start(l);
+        self.look = Some((vec2(s.mario_x as f32, s.mario_y as f32), true));
         self.overview_stale = true;
         let shared = self.doc.sharing(l);
         self.status = if shared.is_empty() {
@@ -563,6 +599,8 @@ impl Editor {
                         Saved::Routes(n) => format!("{} ({n} bytes)", tr(es, "map paths", "caminos del mapa")),
                         Saved::NewLevels(n, used) => format!("{n} {} {used} bytes", tr(es, "new levels", "niveles nuevos")),
                         Saved::NewZones(n, used) => format!("{n} {} {used} bytes", tr(es, "new zones", "zonas nuevas")),
+                        Saved::Starts(n) => format!("{n} {}", tr(es, "level starts", "inicios de nivel")),
+                        Saved::SecretExits(n) => format!("{n} {}", tr(es, "secret exits", "salidas secretas")),
                     })
                     .collect();
                 self.status = format!(
@@ -612,6 +650,22 @@ impl Editor {
         for _ in 0..self.doc.levels[self.cur].content.objs.len() + 1 {
             self.pump_looks();
         }
+        self.pump_mario();
+    }
+
+    /// Choose "Place start" (for the command line).
+    pub fn place_start(&mut self) {
+        self.toggle_placing(start_view::Placing::Start);
+    }
+
+    /// Choose "Place finish" (for the command line).
+    pub fn place_finish(&mut self) {
+        self.toggle_placing(start_view::Placing::Finish);
+    }
+
+    /// Choose where the level's secret exit leads (for the command line).
+    pub fn choose_secret(&mut self) {
+        self.start_secret_picking();
     }
 
 }

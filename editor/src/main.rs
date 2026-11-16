@@ -97,7 +97,19 @@ async fn main() {
             ed.choose_target();
         }
     }
-    if shot.is_some() && ed.mode == Mode::Objects {
+    // --place-start: "Place start" chosen
+    if flag("--place-start") {
+        ed.place_start();
+    }
+    // --place-finish: "Place finish" chosen
+    if flag("--place-finish") {
+        ed.place_finish();
+    }
+    // --secret-leads: choose where the level's secret exit leads
+    if flag("--secret-leads") {
+        ed.choose_secret();
+    }
+    if shot.is_some() {
         ed.capture_level_looks();
     }
     let mut frames = 0;

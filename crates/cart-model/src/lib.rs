@@ -5,11 +5,15 @@
 //! |---|---|
 //! | `rom` | Banks and words in the ROM file |
 //! | `levels` | Level headers, map locations, the map compression (decode/encode) |
+//! | `level_goals` | Where a level ends: goal blocks $4A and $4B, the bell |
+//! | `level_start` | Where Mario begins a level (header bytes $00-$07) |
+//! | `secret_exits` | Where each level's secret exit takes Mario (a hook in the map code) |
 //! | `extra_levels` | Levels beyond the 32, played in place of a base level |
 //! | `new_zones` | Zones beyond the eight, played in place of a base zone |
 //! | `objects` | Object lists per level: 3-byte format, reading, re-packing |
 //! | `world` | World map picture and which level each map point opens |
 //! | `doors` | Doors between the world map and the zones (which point enters which zone, where exits lead) |
+//! | `added_points` | Points numbered from $80 on every map (hooks in the map code) |
 //! | `map_routes` | The paths between map points (walk scripts) and where Mario stands on each |
 //! | `zone_maps` | The zones' own one-screen maps (pictures) |
 //! | `original_points` | Where the game draws its own map points (measured) |
@@ -20,12 +24,16 @@
 //! | `art` | Pictures captured from the running game (blocks, map tiles, object looks) |
 //! | `driver` | `GameDriver`: boot to the map, enter a level, back to the map... |
 //! | `error` | `CartError` and what a save used |
+pub mod added_points;
 pub mod art;
 pub mod doors;
 pub mod driver;
 pub mod error;
 pub mod extra_levels;
 pub mod layout;
+pub mod level_goals;
+pub mod level_start;
+pub mod secret_exits;
 pub mod levels;
 pub mod live;
 pub mod map_routes;

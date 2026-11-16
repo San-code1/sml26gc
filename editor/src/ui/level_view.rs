@@ -2,6 +2,7 @@
 //! whole-level overview, painting with the chosen tool, and the side panel.
 use super::names_view::Named;
 use super::shortcuts::{with_keys, Action};
+use super::start_view::Placing;
 use super::widgets::*;
 use super::{Editor, Mode, LEVEL_SIZE};
 use crate::domain::tools::ToolKind;
@@ -34,6 +35,7 @@ impl Editor {
     }
 
     pub(super) fn update_level(&mut self) {
+        self.look_now();
         let m: Vec2 = mouse_position().into();
         let ctrl = is_key_down(KeyCode::LeftControl) || is_key_down(KeyCode::RightControl);
         let (space, view, max) = self.navigate(m, ctrl, LEVEL_SIZE);
@@ -45,11 +47,15 @@ impl Editor {
             self.cam = (target - view * 0.5).clamp(Vec2::ZERO, max);
             return;
         }
+        self.pump_mario();
+        self.pump_looks();
         if self.pan.is_some() || space {
             return;
         }
+        if self.update_goal(m) || self.update_start(m) {
+            return;
+        }
         if self.mode == Mode::Objects {
-            self.pump_looks();
             self.update_objects(m);
             return;
         }
@@ -119,7 +125,9 @@ impl Editor {
     /// Objects, overview, panel and status bar, over the level.
     fn finish_level_frame(&mut self, cw: f32, ch: f32) {
         self.draw_objects();
-        if self.mode == Mode::Objects {
+        self.draw_goals();
+        self.draw_start();
+        if self.mode == Mode::Objects && self.placing.is_none() {
             self.object_tip(ch);
         }
         self.draw_overview(cw, ch);
@@ -174,8 +182,16 @@ impl Editor {
             if button(Rect::new(cx, cy, 33.0, 23.0), &label, l == self.cur, 16.0) {
                 pick = Some(l);
             }
+            if self.doc.mods.level(l) {
+                // a saved change from the game's level: a corner mark
+                draw_triangle(vec2(cx + 33.0, cy), vec2(cx + 25.0, cy), vec2(cx + 33.0, cy + 8.0), col(2));
+            }
         }
         y += count.div_ceil(8) as f32 * 25.0 + 4.0;
+        if self.doc.mods.level(self.cur) {
+            draw_text(&format!("{} {:02}: mod ({})", tr(self.es, "Level", "Nivel"), self.cur, tr(self.es, "saved changes from the game's", "cambios guardados respecto al del juego")), 10.0, y + 12.0, 15.0, col(2));
+            y += 18.0;
+        }
         let es = self.es;
         let mut act = None;
         let mut b = |r: Rect, name: &str, a: Action, on: bool| {
@@ -207,6 +223,20 @@ impl Editor {
         if button(Rect::new(col2(1), y, w2, 26.0), &with_keys(tr(es, "Objects", "Objetos"), Action::BlocksObjects), !blocks, 16.0) {
             self.set_mode(Mode::Objects);
         }
+        y += 30.0;
+        b(Rect::new(10.0, y, 160.0, 26.0), tr(es, "Place start", "Colocar inicio"), Action::PlaceStart, self.placing == Some(Placing::Start));
+        self.start_coords(y);
+        y += 30.0;
+        if !self.doc.ends_with_boss(self.cur) {
+            b(Rect::new(10.0, y, 160.0, 26.0), tr(es, "Place finish", "Colocar meta"), Action::PlaceFinish, self.placing == Some(Placing::Finish));
+        }
+        self.finish_note(y);
+        y += 30.0;
+        b(Rect::new(10.0, y, 160.0, 26.0), tr(es, "Secret exit", "Salida secreta"), Action::PlaceSecret, self.placing == Some(Placing::Secret));
+        self.secret_note(y);
+        y += 30.0;
+        b(Rect::new(10.0, y, 100.0, 26.0), tr(es, "Leads to", "Lleva a"), Action::SecretLeads, false);
+        draw_text(&self.secret_leads(), 118.0, y + 18.0, 15.0, col(2));
         y += 30.0;
         let tool = self.tool.kind();
         if self.mode == Mode::Blocks {

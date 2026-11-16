@@ -35,7 +35,7 @@ use crate::error::CartError;
 use crate::map_routes::{self, Place, Way};
 use crate::patch::{is_expanded, TWIN};
 use crate::rom::{offset, word, BANK_SIZE};
-use crate::{world, zone_maps};
+use crate::{added_points, world, zone_maps};
 use gb_core::Gb;
 use std::ops::RangeInclusive;
 
@@ -75,18 +75,19 @@ impl Base {
         self.numbers().contains(&p)
     }
 
-    /// The numbers a new zone of this base can give its points: its block, then `SPARE`.
+    /// The numbers a new zone of this base can give its points: its block, `SPARE`, then the
+    /// added points' (`added_points`).
     pub fn usable(&self) -> impl Iterator<Item = u8> {
-        self.numbers().chain(SPARE)
+        self.numbers().chain(SPARE).chain(added_points::numbers())
     }
 
     pub fn holds(&self, p: u8) -> bool {
-        self.has(p) || SPARE.contains(&p)
+        self.has(p) || SPARE.contains(&p) || added_points::index(p).is_some()
     }
 
     /// How many points a new zone of this base can have.
     pub fn room(&self) -> usize {
-        self.numbers().count() + SPARE.len()
+        self.numbers().count() + SPARE.len() + added_points::MAX
     }
 }
 
@@ -164,11 +165,12 @@ pub fn flags(rom: &[u8], b: &Base) -> Vec<u8> {
 /// The map code's hook: a spare number is read as the base's first.
 fn write_hook(n: &mut [u8], b: &Base) -> Result<(), CartError> {
     let at = offset(0x0F, MAP_PICK);
-    if n[at..at + 3] != [0xFA, 0x40, 0xA8] {
+    let read: [u8; 3] = n[at..at + 3].try_into().unwrap_or_default();
+    if read != [0xFA, 0x40, 0xA8] && read != added_points::read_point() {
         return Err(CartError::UnknownVersion);
     }
     let list = HOOK + 19;
-    let mut code = vec![0xFA, 0x40, 0xA8, 0xE5, 0x21, list as u8, (list >> 8) as u8, 0xCB, 0x7E, 0x20, 0x06, 0xBE, 0x23, 0x20, 0xF8, 0x3E, b.first, 0xE1, 0xC9];
+    let mut code = vec![read[0], read[1], read[2], 0xE5, 0x21, list as u8, (list >> 8) as u8, 0xCB, 0x7E, 0x20, 0x06, 0xBE, 0x23, 0x20, 0xF8, 0x3E, b.first, 0xE1, 0xC9];
     code.extend(SPARE);
     code.push(0xFF);
     for (i, &c) in code.iter().enumerate() {
@@ -287,10 +289,15 @@ pub fn writes_for(rom: &[u8], zones: &[NewZone], k: usize) -> Result<Vec<(usize,
         levels[p as usize] = world::NO_LEVEL;
     }
     let own = flags(rom, b);
+    let mut shuts = [0; added_points::MAX];
     for p in &z.points {
         routes.ways[p.number as usize] = p.ways.clone();
         routes.places[p.number as usize] = p.place;
         levels[p.number as usize] = p.level;
+        if let Some(j) = added_points::index(p.number) {
+            shuts[j] = p.shut;
+            continue;
+        }
         set(&mut n, offset(0x0F, FLAGS) + p.number as usize, p.flag);
         if own.contains(&p.flag) {
             set(&mut n, offset(0x0F, SHUT) + p.flag as usize, p.shut);
@@ -298,6 +305,12 @@ pub fn writes_for(rom: &[u8], zones: &[NewZone], k: usize) -> Result<Vec<(usize,
     }
     map_routes::write(&mut n, &routes)?;
     world::write_point_levels(&mut n, &levels);
+    if added_points::installed(&n) {
+        let first = added_points::FIRST as usize;
+        added_points::write(&mut n, &levels[first..], &shuts, zone_maps::ZONES[b.zone].point);
+    } else if z.points.iter().any(|p| added_points::index(p.number).is_some()) {
+        return Err(CartError::UnknownVersion);
+    }
     write_code(&mut n, rom, b, z)?;
     write_hook(&mut n, b)?;
     let mut d = doors::read(rom);
@@ -353,7 +366,7 @@ pub fn set_progress(g: &mut Gb, file: u8, flags: &[u8], values: &[u8]) {
 }
 
 /// The bytes of `b` that differ from `a`, as runs (file offset, bytes).
-fn runs(a: &[u8], b: &[u8]) -> Vec<(usize, Vec<u8>)> {
+pub(crate) fn runs(a: &[u8], b: &[u8]) -> Vec<(usize, Vec<u8>)> {
     let mut v: Vec<(usize, Vec<u8>)> = Vec::new();
     for (i, (x, y)) in a.iter().zip(b).enumerate() {
         if x == y {
@@ -383,23 +396,49 @@ fn encode(z: &NewZone) -> Result<Vec<u8>, CartError> {
     }
     v.push(z.points.len() as u8);
     for p in &z.points {
-        v.push(p.number);
-        v.extend_from_slice(&p.place.bytes());
-        let pass = p.pass.unwrap_or(0xFFFF);
-        v.extend_from_slice(&[p.level, p.flag, p.shut, pass as u8, (pass >> 8) as u8]);
-        for w in &p.ways {
-            match w {
-                Some(w) if w.steps.len() < 0xFF => {
-                    v.push(w.steps.len() as u8);
-                    v.extend_from_slice(&w.steps);
-                    v.push(w.to);
-                }
-                Some(w) => return Err(CartError::RoutesFull { need: w.steps.len(), capacity: 0xFE }),
-                None => v.push(0xFF),
-            }
-        }
+        encode_point(p, &mut v)?;
     }
     Ok(v)
+}
+
+pub(crate) fn encode_point(p: &ZonePoint, v: &mut Vec<u8>) -> Result<(), CartError> {
+    v.push(p.number);
+    v.extend_from_slice(&p.place.bytes());
+    let pass = p.pass.unwrap_or(0xFFFF);
+    v.extend_from_slice(&[p.level, p.flag, p.shut, pass as u8, (pass >> 8) as u8]);
+    for w in &p.ways {
+        match w {
+            Some(w) if w.steps.len() < 0xFF => {
+                v.push(w.steps.len() as u8);
+                v.extend_from_slice(&w.steps);
+                v.push(w.to);
+            }
+            Some(w) => return Err(CartError::RoutesFull { need: w.steps.len(), capacity: 0xFE }),
+            None => v.push(0xFF),
+        }
+    }
+    Ok(())
+}
+
+pub(crate) fn decode_point(r: &[u8], i: &mut usize) -> Option<ZonePoint> {
+    let mut take = |n: usize| -> Option<&[u8]> {
+        let s = r.get(*i..*i + n)?;
+        *i += n;
+        Some(s)
+    };
+    let number = take(1)?[0];
+    let place = Place::from(take(8)?);
+    let f = take(5)?.to_vec();
+    let mut ways: [Option<Way>; 4] = Default::default();
+    for w in ways.iter_mut() {
+        let len = take(1)?[0];
+        if len != 0xFF {
+            let steps = take(len as usize)?.to_vec();
+            *w = Some(Way { steps, to: take(1)?[0] });
+        }
+    }
+    let pass = f[3] as u16 | (f[4] as u16) << 8;
+    Some(ZonePoint { number, place, ways, level: f[0], flag: f[1], shut: f[2], pass: (pass != 0xFFFF).then_some(pass) })
 }
 
 fn decode(r: &[u8], i: &mut usize, named: bool) -> Option<NewZone> {
@@ -429,19 +468,7 @@ fn decode(r: &[u8], i: &mut usize, named: bool) -> Option<NewZone> {
     let n = take(1)?[0] as usize;
     let mut points = Vec::new();
     for _ in 0..n {
-        let number = take(1)?[0];
-        let place = Place::from(take(8)?);
-        let f = take(5)?.to_vec();
-        let mut ways: [Option<Way>; 4] = Default::default();
-        for w in ways.iter_mut() {
-            let len = take(1)?[0];
-            if len != 0xFF {
-                let steps = take(len as usize)?.to_vec();
-                *w = Some(Way { steps, to: take(1)?[0] });
-            }
-        }
-        let pass = f[3] as u16 | (f[4] as u16) << 8;
-        points.push(ZonePoint { number, place, ways, level: f[0], flag: f[1], shut: f[2], pass: (pass != 0xFFFF).then_some(pass) });
+        points.push(decode_point(r, i)?);
     }
     base_of(h[0] as usize)?;
     Some(NewZone { base: h[0] as usize, picture, points, entry: h[2], exits, door: h[1], name })

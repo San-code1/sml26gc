@@ -2,7 +2,7 @@
 //! to the world map once (from the cartridge as it was when first needed), then each level
 //! is entered on a copy of that state to see its blocks; object pictures and the world
 //! map's tiles come from the same state, and each zone map's tiles from a copy taken there.
-use cart_model::art::{capture_look, LevelArt, Look, WorldArt};
+use cart_model::art::{capture_look, capture_mario, LevelArt, Look, WorldArt};
 use cart_model::levels::LEVELS;
 use cart_model::zone_maps::ZONES;
 use cart_model::GameDriver;
@@ -83,5 +83,10 @@ impl ArtService {
     /// booted; Some(None) when the object draws nothing.
     pub fn look(&self, rom: &[u8], original: &[u8], l: usize, kind: u8) -> Option<Option<Look>> {
         Some(capture_look(self.boot.as_ref()?, rom, original, l, kind))
+    }
+
+    /// What Mario looks like at a level's start. None while the console isn't booted.
+    pub fn mario(&self) -> Option<Option<Look>> {
+        Some(capture_mario(self.boot.as_ref()?))
     }
 }

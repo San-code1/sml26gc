@@ -46,6 +46,9 @@ Each module documents the ROM addresses and formats it relies on.
 | `rom` | `offset(bank, addr)`, `word`, `set_word` |
 | `ram_map` | Named RAM addresses and `GameMode` |
 | `levels` | Level headers, map locations, map compression (`decode`/`encode`) |
+| `level_goals` | Where a level ends: the finish block $4A and the secret exit block $4B in its map, the bell (object $16) above the finish, the boss levels that have none |
+| `secret_exits` | Where a level's secret exit takes Mario: a hook at 0F:6F62 and its table at 0F:7E40 (level to target point; a new level takes its base's entry while played) |
+| `level_start` | Where Mario begins a level: header bytes $00-$07 (his y and x, the camera's), the camera worked out from his place |
 | `objects` | Object lists: 3-byte format, reading, re-packing |
 | `patch` | The 1 MB edited copy (twin banks $20-$3F) that gives levels and objects more room |
 | `layout` | Each zone's space for its maps and packing edited maps back |
@@ -54,7 +57,8 @@ Each module documents the ROM addresses and formats it relies on.
 | `world` | World map picture and the level each map point opens |
 | `zone_maps` | The zones' one-screen map pictures |
 | `original_points` | Where the game draws its map points (measured) |
-| `map_routes` | Paths between map points (walk scripts), where Mario stands on each, new points; moved to bank $36 in the edited copy |
+| `map_routes` | Paths between map points (walk scripts), where Mario stands on each, new points; moved to bank $36 in the edited copy, room for 256 numbers |
+| `added_points` | Points numbered from $80 on every map: hooks in bank $0F (level, flag, map pick), their flag bytes at $A1A0, the game zones' kept in bank $24 |
 | `doors` | Which world points enter which zone and where each zone exit leads |
 | `art` | Pictures captured from the running game (blocks, map tiles, object looks) |
 | `live` | What the running game has loaded |
@@ -115,7 +119,7 @@ trace, ROM views, and checks that play the edited data in the emulator (`routech
 | Start the game | `game.exe <rom> [--level N]` (no rom: start screen to choose one) |
 | Edited copy | `edits/<name> (edit).gb` |
 | Battery saves | `saves/<name>.sav` |
-| New zone progress (game only) | `saves/<name>.zones` |
+| New zone and added point progress (game only) | `saves/<name>.zones` |
 | Last cartridge chosen | `last_cartridge.txt` |
 | Settings (the editor reads the language) | `settings.cfg` |
 | Editor settings (palette zoom) | `editor.cfg` |

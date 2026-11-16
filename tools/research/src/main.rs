@@ -5,9 +5,11 @@
 //! Commands are rows of `COMMANDS`: a name and a function reading its arguments. They
 //! only read the cartridge (and write pictures where asked); nothing here is used by the
 //! game or the editor.
+mod added;
 mod checks;
 mod console;
 mod disasm;
+mod levels;
 mod memory;
 mod probe;
 mod rom_views;
@@ -72,6 +74,7 @@ const COMMANDS: &[(&str, Run)] = &[
     ("storecheck", |r, _| checks::store_check(r)),
     ("extracheck", |r, _| checks::extra_check(r)),
     ("routecheck", |r, _| checks::route_check(r)),
+    ("dragcheck", |r, a| checks::drag_check(r, a.hex(1) as u8, a.num(2) as i32)),
     ("doortry", |r, a| checks::door_try(r, &a.s(1), a.hex(2) as u8, &a.s(3), &a.path(4))),
     ("doorcheck", |r, _| checks::door_check(r)),
     ("exitcheck", |r, a| checks::exit_check(r, a.hex(1) as u8, &a.s(2), &a.s(3))),
@@ -92,12 +95,21 @@ const COMMANDS: &[(&str, Run)] = &[
     ("zonetry", |r, _| zones::zone_try(r)),
     ("zoneplaces", |r, _| zones::zone_places(r)),
     ("clearram", |r, _| zones::clear_ram(r)),
+    ("ramfree", |r, _| zones::ram_free(r)),
+    ("pointcheck", |r, _| added::point_check(r)),
     ("newzonecheck", |r, _| zones::new_zone_check(r)),
     ("sparecheck", |r, _| zones::spare_check(r)),
+    ("startprobe", |r, _| levels::start_probe(r)),
+    ("startcheck", |r, _| levels::start_check(r)),
+    ("secretprobe", |r, _| levels::secret_probe(r)),
+    ("finishcheck", |r, _| levels::finish_check(r)),
+    ("secretcheck", |r, _| levels::secret_check(r)),
+    ("walkprobe", |r, a| levels::walk_probe(r, a.s(1) == "own")),
+    ("goalprobe", |r, a| levels::goal_probe(r, a.num(1) as u8, a.hex(2), a.hex(3), &a.s(4))),
 ];
 
 const USAGE: &str = "research [--with-save]: disasm BANK ADDR N | table OFF LEN ROW | find SCRIPT | watch SCRIPT ADDRS FROM TO | trace SCRIPT ADDRS FROM TO\n\
-                     \x20         poke | leave | cmpmap | diff | worldshot | looks | worldcheck | objcheck | objects | reads | free | storecheck | extracheck | routecheck | levels | modes ...\n\
+                     \x20         poke | leave | cmpmap | diff | worldshot | looks | worldcheck | objcheck | objects | reads | free | storecheck | extracheck | routecheck | dragcheck | finishcheck | secretcheck | pointcheck | walkprobe | ramfree | levels | modes ...\n\
                      RESEARCH_ROM=<file> uses that cartridge file\n\
                      (menushots belongs to the game: game --research menushots DIR)";
 
@@ -127,6 +139,6 @@ mod tests {
         let a = Args(["watch", "x", "ffc2,a200-a202", "0x10", "12"].map(String::from).to_vec());
         assert_eq!(a.list(2), vec![0xFFC2, 0xA200, 0xA201, 0xA202]);
         assert_eq!((a.hex(3), a.big(3), a.num(4), a.num(9)), (0x10, 0x10, 12, 0));
-        assert_eq!(COMMANDS.len(), 38);
+        assert_eq!(COMMANDS.len(), 48);
     }
 }
