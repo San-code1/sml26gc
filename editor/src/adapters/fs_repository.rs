@@ -1,7 +1,8 @@
 //! The cartridge files: the original (read only) and the edited copy in `edits\`
 //! (paths: `host::paths`).
 use crate::domain::document::EditorDocument;
-use crate::ports::EditedCopyStore;
+use crate::domain::prefs::Prefs;
+use crate::ports::{EditedCopyStore, PrefsStore, TextFiles};
 use std::path::{Path, PathBuf};
 
 pub struct EditedCopyFile {
@@ -42,7 +43,31 @@ pub fn open(original_path: &Path) -> Result<Opened, String> {
     Ok(Opened { doc: EditorDocument::open(original, edited), store: EditedCopyFile { path }, had_copy })
 }
 
+/// `editor.cfg` next to the editor; a missing or unreadable file gives the defaults.
+pub struct PrefsFile;
+
+impl PrefsStore for PrefsFile {
+    fn load(&self) -> Prefs {
+        std::fs::read_to_string(host::editor_settings_path()).map(|t| Prefs::from_text(&t)).unwrap_or_default()
+    }
+    fn save(&self, prefs: &Prefs) {
+        let _ = std::fs::write(host::editor_settings_path(), prefs.to_text());
+    }
+}
+
 /// Language from the game's settings file (English unless Spanish was chosen).
 pub fn spanish() -> bool {
     host::settings_file::language().as_deref() == Some("es")
+}
+
+/// Level and project files, wherever the person chose.
+pub struct TextFile;
+
+impl TextFiles for TextFile {
+    fn read(&self, path: &Path) -> std::io::Result<String> {
+        std::fs::read_to_string(path)
+    }
+    fn write(&self, path: &Path, text: &str) -> std::io::Result<()> {
+        std::fs::write(path, text)
+    }
 }

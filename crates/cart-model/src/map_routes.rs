@@ -19,18 +19,23 @@
 //!   0:39E2  di / push af / ld a,1 / ld ($4000),a / pop af / call $3E8F
 //!   0:39ED  push af / xor a / ld ($4000),a / pop af / ret
 //! and every `ld a,$18 / call $3E7B|$3E8F` of the map code becomes `ld a,$16 / call $39D5|$39E2`.
-//! Bank $36: "RTE1", the number of new points and their numbers ($4004), the ways table
-//! ($4010), the places table ($4410), the game's scripts as they are ($4810) and scripts for
-//! changed ways after them.
+//! Bank $36: "RTE2", the ways table ($4010) and the places table ($4810) for 256 points (an
+//! added point, `added_points`, can be numbered up to $FF), the new points ($5010: their
+//! count, then their numbers), the game's scripts as they are ($5040) and scripts for changed
+//! ways after them. ("RTE1" had 128 points: places at $4410, new points at $4004, scripts at
+//! $4810.)
 //!
 //! New points take numbers the game leaves unused (`FREE_POINTS`); each gets a "cleared"
 //! flag no point uses (`FREE_FLAG`, at 0F:650E) so finishing its level marks nothing else.
+use crate::added_points;
 use crate::error::CartError;
 use crate::patch::{is_expanded, TWIN};
 use crate::rom::{offset, set_word, word};
 
-/// Points that have ways and places ($00-$7F).
+/// The game's point numbers ($00-$7F).
 pub const POINTS: usize = 0x80;
+/// Point numbers with ways and places in an edited copy (added points too).
+pub const ALL: usize = 0x100;
 /// Ways out of a point, in this order.
 pub const DIRS: [char; 4] = ['R', 'L', 'U', 'D'];
 pub const RIGHT: u8 = 0x01;
@@ -47,13 +52,17 @@ const OLD_PLACES: u16 = 0x5EE6;
 
 /// Where an edited copy keeps them.
 pub const BANK: usize = 0x36;
-const MAGIC: &[u8; 4] = b"RTE1";
-const ADDED: u16 = 0x4004;
+const MAGIC: &[u8; 4] = b"RTE2";
+const MAGIC_128: &[u8; 4] = b"RTE1";
 const FLAGS: u16 = 0x650E;
 const NO_FLAG: u8 = 0xFE;
 const NEW_WAYS: u16 = 0x4010;
-const NEW_PLACES: u16 = 0x4410;
-const NEW_SCRIPTS: u16 = 0x4810;
+const NEW_PLACES: u16 = 0x4810;
+const ADDED: u16 = 0x5010;
+const NEW_SCRIPTS: u16 = 0x5040;
+const PLACES_128: u16 = 0x4410;
+const ADDED_128: u16 = 0x4004;
+const SCRIPTS_128: u16 = 0x4810;
 /// The game's own scripts, moved as they are.
 const KEPT: usize = (OLD_PLACES - OLD_SCRIPTS) as usize;
 /// Room for scripts of changed ways, after the game's.
@@ -102,11 +111,11 @@ const MARIO_Y: i32 = 0x4C;
 const FEET: i32 = 4;
 
 impl Place {
-    fn from(b: &[u8]) -> Place {
+    pub(crate) fn from(b: &[u8]) -> Place {
         Place { cam_x: (b[0] as u16) << 8 | b[1] as u16, cam_y: (b[2] as u16) << 8 | b[3] as u16, x: b[4], y: b[5], rest: [b[6], b[7]] }
     }
 
-    fn bytes(&self) -> [u8; 8] {
+    pub(crate) fn bytes(&self) -> [u8; 8] {
         [(self.cam_x >> 8) as u8, self.cam_x as u8, (self.cam_y >> 8) as u8, self.cam_y as u8, self.x, self.y, self.rest[0], self.rest[1]]
     }
 
@@ -174,7 +183,7 @@ impl Way {
         Way { steps, to }
     }
 
-    fn bytes(&self) -> Vec<u8> {
+    pub(crate) fn bytes(&self) -> Vec<u8> {
         let mut v: Vec<u8> = self.steps.iter().map(|&s| if s == 0 { RIGHT } else { s }).collect();
         v.push(0);
         v.push(self.to);
@@ -223,9 +232,22 @@ impl MapRoutes {
     }
 }
 
+/// The layout of bank $36 in this copy: (places, new points, scripts, points), if the
+/// routes are there.
+fn layout(rom: &[u8]) -> Option<(u16, u16, u16, usize)> {
+    if !is_expanded(rom) || rom[offset(0, STUB_AT as u16)..STUB_AT + STUB.len()] != STUB {
+        return None;
+    }
+    match &rom[offset(BANK, 0x4000)..offset(BANK, 0x4004)] {
+        m if m == MAGIC => Some((NEW_PLACES, ADDED, NEW_SCRIPTS, ALL)),
+        m if m == MAGIC_128 => Some((PLACES_128, ADDED_128, SCRIPTS_128, POINTS)),
+        _ => None,
+    }
+}
+
 /// Has this copy got the routes in bank $36?
 pub fn moved(rom: &[u8]) -> bool {
-    is_expanded(rom) && rom[offset(BANK, 0x4000)..offset(BANK, 0x4004)] == MAGIC[..] && rom[offset(0, STUB_AT as u16)..STUB_AT + STUB.len()] == STUB
+    layout(rom).is_some()
 }
 
 fn script(rom: &[u8], bank: usize, at: u16) -> Way {
@@ -238,15 +260,26 @@ fn script(rom: &[u8], bank: usize, at: u16) -> Way {
     Way { steps, to: rom[offset(bank, a + 1)] }
 }
 
+/// The routes, for all `ALL` numbers (none for the added ones of a copy without room for
+/// them).
 pub fn read(rom: &[u8]) -> MapRoutes {
-    let (bank, ways, places) = if moved(rom) { (BANK, NEW_WAYS, NEW_PLACES) } else { (OLD_BANK, OLD_WAYS, OLD_PLACES) };
-    let mut r = MapRoutes { ways: Vec::with_capacity(POINTS), places: Vec::with_capacity(POINTS), added: Vec::new() };
-    if bank == BANK {
-        let n = (rom[offset(BANK, ADDED)] as usize).min(FREE_POINTS.len());
-        r.added = rom[offset(BANK, ADDED + 1)..offset(BANK, ADDED + 1) + n].iter().copied().filter(|p| FREE_POINTS.contains(p)).collect();
-    }
-    for p in 0..POINTS {
+    let mut r = MapRoutes { ways: Vec::with_capacity(ALL), places: Vec::with_capacity(ALL), added: Vec::new() };
+    let (bank, places, count) = match layout(rom) {
+        Some((places, added, _, count)) => {
+            let n = (rom[offset(BANK, added)] as usize).min(NEW_MAX);
+            r.added = rom[offset(BANK, added + 1)..offset(BANK, added + 1) + n].iter().copied().filter(|&p| is_new_number(p)).collect();
+            (BANK, places, count)
+        }
+        None => (OLD_BANK, OLD_PLACES, POINTS),
+    };
+    let ways = if bank == BANK { NEW_WAYS } else { OLD_WAYS };
+    for p in 0..ALL {
         let mut w: [Option<Way>; 4] = Default::default();
+        if p >= count {
+            r.ways.push(w);
+            r.places.push(Place::from(&[0; 8]));
+            continue;
+        }
         for (d, slot) in w.iter_mut().enumerate() {
             let at = word(rom, offset(bank, ways + (p * 8 + d * 2) as u16));
             if at != 0xFFFF {
@@ -260,8 +293,16 @@ pub fn read(rom: &[u8]) -> MapRoutes {
     r
 }
 
+/// A number a new world point can have.
+fn is_new_number(p: u8) -> bool {
+    FREE_POINTS.contains(&p) || added_points::index(p).is_some()
+}
+
+/// How many new points the world map can have.
+const NEW_MAX: usize = FREE_POINTS.len() + added_points::MAX;
+
 /// The map code patch, in a half of the copy (`base` 0 or `TWIN`).
-fn patch_code(rom: &mut [u8], base: usize) {
+fn patch_code(rom: &mut [u8], base: usize, script_ref: u16) {
     rom[base + STUB_AT..base + STUB_AT + STUB.len()].copy_from_slice(&STUB);
     for (sites, to) in [(&READS_HL[..], READ_HL), (&READS_BC[..], READ_BC)] {
         for &s in sites {
@@ -272,9 +313,7 @@ fn patch_code(rom: &mut [u8], base: usize) {
     }
     set_word(rom, base + offset(0x0F, WAYS_REF), NEW_WAYS);
     set_word(rom, base + offset(0x0F, PLACES_REF), NEW_PLACES);
-    let s = word(rom, offset(0x0F, SCRIPT_REF));
-    let s = if (OLD_SCRIPTS..OLD_PLACES).contains(&s) { s - OLD_SCRIPTS + NEW_SCRIPTS } else { s };
-    set_word(rom, base + offset(0x0F, SCRIPT_REF), s);
+    set_word(rom, base + offset(0x0F, SCRIPT_REF), script_ref);
 }
 
 /// Can these routes go in this copy? It must be the 1 MB edited copy of the version the
@@ -300,15 +339,18 @@ pub fn write(rom: &mut [u8], r: &MapRoutes) -> Result<usize, CartError> {
     if !can_write(rom) {
         return Err(CartError::UnknownVersion);
     }
-    // the game's scripts, as they are, and where each started
-    let game: Vec<u8> = if moved(rom) {
-        rom[offset(BANK, NEW_SCRIPTS)..offset(BANK, NEW_SCRIPTS) + KEPT].to_vec()
-    } else {
-        rom[offset(OLD_BANK, OLD_SCRIPTS)..offset(OLD_BANK, OLD_SCRIPTS) + KEPT].to_vec()
+    // the game's scripts, as they are, and the script the code walks by itself among them
+    let kept_at = match layout(rom) {
+        Some((_, _, scripts, _)) => offset(BANK, scripts),
+        None => offset(OLD_BANK, OLD_SCRIPTS),
     };
+    let game: Vec<u8> = rom[kept_at..kept_at + KEPT].to_vec();
+    let own = word(rom, offset(0x0F, SCRIPT_REF));
+    let own_from = layout(rom).map_or(OLD_SCRIPTS, |l| l.2);
+    let script_ref = if (own_from..own_from + KEPT as u16).contains(&own) { own - own_from + NEW_SCRIPTS } else { own };
     let mut added: Vec<u8> = Vec::new();
-    let mut table = vec![0xFFu8; POINTS * 8];
-    for (p, w) in r.ways.iter().enumerate().take(POINTS) {
+    let mut table = vec![0xFFu8; ALL * 8];
+    for (p, w) in r.ways.iter().enumerate().take(ALL) {
         for (d, way) in w.iter().enumerate() {
             let Some(way) = way else { continue };
             let b = way.bytes();
@@ -331,7 +373,7 @@ pub fn write(rom: &mut [u8], r: &MapRoutes) -> Result<usize, CartError> {
     let bank = offset(BANK, 0x4000);
     rom[bank..bank + 0x4000].fill(0xFF);
     rom[bank..bank + 4].copy_from_slice(MAGIC);
-    let n = r.added.len().min(FREE_POINTS.len());
+    let n = r.added.len().min(NEW_MAX);
     rom[offset(BANK, ADDED)] = n as u8;
     rom[offset(BANK, ADDED + 1)..offset(BANK, ADDED + 1) + n].copy_from_slice(&r.added[..n]);
     for p in FREE_POINTS {
@@ -345,20 +387,14 @@ pub fn write(rom: &mut [u8], r: &MapRoutes) -> Result<usize, CartError> {
     rom[o + KEPT..o + KEPT + added.len()].copy_from_slice(&added);
     let o = offset(BANK, NEW_WAYS);
     rom[o..o + table.len()].copy_from_slice(&table);
-    for (p, pl) in r.places.iter().enumerate().take(POINTS) {
+    for (p, pl) in r.places.iter().enumerate().take(ALL) {
         let o = offset(BANK, NEW_PLACES + (p * 8) as u16);
         rom[o..o + 8].copy_from_slice(&pl.bytes());
     }
-    if !moved_code(rom) {
-        for base in [0, TWIN] {
-            patch_code(rom, base);
-        }
+    for base in [0, TWIN] {
+        patch_code(rom, base, script_ref);
     }
     Ok(added.len())
-}
-
-fn moved_code(rom: &[u8]) -> bool {
-    word(rom, offset(0x0F, WAYS_REF)) == NEW_WAYS
 }
 
 /// A zone's entrance on the world map and the point Mario stands on when he walks out of

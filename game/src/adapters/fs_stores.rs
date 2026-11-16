@@ -1,7 +1,8 @@
-//! Settings and battery saves kept in files (where: `host::paths`), plus
+//! Settings, battery saves and new zone progress kept in files (where: `host::paths`), plus
 //! stores that keep nothing, for unattended checks.
 use crate::domain::settings::Settings;
-use crate::ports::{SaveStore, SettingsStore};
+use crate::domain::zone_progress::ZoneProgress;
+use crate::ports::{SaveStore, SettingsStore, ZoneProgressStore};
 use gb_core::Gb;
 use std::path::PathBuf;
 
@@ -38,4 +39,32 @@ impl SaveStore for BatteryFile {
             eprintln!("could not write the save file: {e}");
         }
     }
+}
+
+/// `saves/<cartridge>.zones`.
+pub struct ZoneFile {
+    pub rom: PathBuf,
+}
+
+impl ZoneProgressStore for ZoneFile {
+    fn load(&self) -> Option<ZoneProgress> {
+        ZoneProgress::from_text(&std::fs::read_to_string(host::zones_path(&self.rom)).ok()?)
+    }
+    fn save(&self, progress: &ZoneProgress) {
+        let p = host::zones_path(&self.rom);
+        let written = p.parent().map_or(Ok(()), std::fs::create_dir_all).and_then(|_| std::fs::write(&p, progress.to_text()));
+        if let Err(e) = written {
+            eprintln!("could not write the new zones' progress: {e}");
+        }
+    }
+}
+
+/// No progress kept (checks must not touch the player's files).
+pub struct NoZoneProgress;
+
+impl ZoneProgressStore for NoZoneProgress {
+    fn load(&self) -> Option<ZoneProgress> {
+        None
+    }
+    fn save(&self, _: &ZoneProgress) {}
 }

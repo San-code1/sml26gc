@@ -4,3 +4,4 @@ pub mod keys;
 pub mod menu;
 pub mod overlay;
 pub mod settings;
+pub mod zone_progress;

@@ -1,0 +1,163 @@
+# editor/keyboard-shortcuts Specification
+
+## Purpose
+
+Every action of the editor's side panel can be done from the keyboard, and the panel shows
+which key does it.
+
+## Requirements
+
+### Requirement: A shortcut for every panel action
+Every action a panel button does SHALL also have a keyboard shortcut, active only in the view
+and tab where the button is shown. Shortcut keys SHALL sit in the same place on US and Spanish
+keyboards.
+
+#### Scenario: Shortcut outside its tab
+- **WHEN** the Picture tab is shown and the user presses N
+- **THEN** no new point is placed
+
+### Requirement: Existing keys kept
+Keys in use before this change SHALL keep their meaning: arrows/WASD and Space pan, G grid,
+B Pencil, R Box, M overview, Tab Blocks/Objects, Del/Backspace delete the selected object, F5
+play, Ctrl+S save, Ctrl+Z undo, Ctrl+Y or Ctrl+Shift+Z redo.
+
+#### Scenario: Pan keys
+- **WHEN** the user holds D in any view
+- **THEN** the view pans right and no action runs
+
+### Requirement: Level and map navigation shortcuts
+The editor SHALL provide these shortcuts:
+
+| Action | Shortcut |
+|---|---|
+| Previous / next level (level editor); previous / next map (map editor) | PageUp / PageDown |
+| New level (copy) | Ctrl+N |
+| Delete level (new levels only) | Ctrl+Delete |
+| World map editor / Back to the levels | F2 |
+| Picture / Points tab | Tab |
+| Restore | Ctrl+Shift+R |
+
+#### Scenario: New level from the keyboard
+- **WHEN** the level editor is shown and the user presses Ctrl+N
+- **THEN** a new level is made as with the New level (copy) button
+
+#### Scenario: Next map
+- **WHEN** the world map editor is shown and the user presses PageDown
+- **THEN** the next map is shown as with the > button
+
+#### Scenario: Restore from the keyboard
+- **WHEN** the Pumpkin Zone is shown and the user presses Ctrl+Shift+R
+- **THEN** the Pumpkin Zone is restored as with the Restore button
+
+### Requirement: Tool, palette and clipboard shortcuts
+The editor SHALL provide these shortcuts in Blocks mode and the Picture tab:
+
+| Action | Shortcut |
+|---|---|
+| Select tool | E |
+| Palette zoom out / in | Ctrl+Minus / Ctrl+Plus |
+| Copy / cut / paste | Ctrl+C / Ctrl+X / Ctrl+V |
+| Fill the selection with the background | Delete |
+| Clear the selection or leave Paste | Esc |
+
+#### Scenario: Select tool key
+- **WHEN** Blocks mode is shown and the user presses E
+- **THEN** the Select tool is chosen
+
+### Requirement: Points tab shortcuts
+The editor SHALL provide these shortcuts in the Points tab:
+
+| Action | Shortcut |
+|---|---|
+| Previous / next point | , / . |
+| Level the point opens: previous / next | J / K |
+| Door or Exit to: choose on the map | U |
+| Make it the exit (first / second exit of the zone) | T / Shift+T |
+| Make it the entry (new zones) | H |
+| Delete the path right, left, up, down | Shift+Right, Shift+Left, Shift+Up, Shift+Down |
+| New path / New point / Delete point | P / N / Delete |
+
+#### Scenario: Next point
+- **WHEN** point $04 is chosen and the user presses .
+- **THEN** point $05 is chosen, as with the Point + button
+
+### Requirement: No shortcut does two things
+Within one view and tab, each key combination SHALL trigger at most one action.
+
+#### Scenario: Delete in Blocks and Objects mode
+- **WHEN** a selection exists in Blocks mode and the user presses Delete
+- **THEN** the selection is filled with the background and no object is deleted
+
+### Requirement: Shortcuts shown on the buttons
+Every button with a shortcut SHALL show it in its label (for example "Undo (Ctrl+Z)"); for the
+small - and + buttons the keys SHALL be shown beside the row's label. A label too long for its
+button SHALL be drawn smaller so it fits inside it.
+
+#### Scenario: Undo label
+- **WHEN** the level editor panel is shown
+- **THEN** the Undo button reads "Undo (Ctrl+Z)" (Spanish: "Deshacer (Ctrl+Z)") and the text stays inside the button
+
+#### Scenario: Point row
+- **WHEN** the Points tab is shown
+- **THEN** the Point row shows ", ." next to its - and + buttons
+
+### Requirement: Level and project file shortcuts
+The editor SHALL run the level and project file actions from the keyboard, and their File
+menu entries SHALL show the keys. Level file keys SHALL work in the level editor, project file
+keys in both editors.
+
+| Action | Keys |
+|---|---|
+| Export level | Ctrl+E |
+| Import level as a new level | Ctrl+Shift+N |
+| Replace this new level from a file | Ctrl+I |
+| Export project | Ctrl+Shift+E |
+| Import project | Ctrl+Shift+I |
+
+#### Scenario: Export a level from the keyboard
+- **WHEN** the level editor is shown and the user presses Ctrl+E
+- **THEN** the Save dialog for a level file opens
+
+#### Scenario: Project from the world map editor
+- **WHEN** the world map editor is shown and the user presses Ctrl+Shift+E
+- **THEN** the Save dialog for a project file opens
+
+### Requirement: New zone and zone file shortcuts
+The world map editor SHALL run the new zone and zone file actions from the keyboard while a
+zone map is shown, with the same keys as their level counterparts, and their buttons and File
+menu entries SHALL show the keys.
+
+| Action | Keys |
+|---|---|
+| New zone (copy of the zone shown) | Ctrl+N |
+| Delete the new zone shown | Ctrl+Delete |
+| Export zone | Ctrl+E |
+| Import zone as a new zone | Ctrl+Shift+N |
+| Replace this new zone from a file | Ctrl+I |
+
+#### Scenario: New zone from the keyboard
+- **WHEN** the Macro Zone is shown in the world map editor and the user presses Ctrl+N
+- **THEN** a new zone made from the Macro Zone is added and shown
+
+#### Scenario: On the world map
+- **WHEN** the world map is shown and the user presses Ctrl+E
+- **THEN** nothing is exported and the status bar says zones are exported from a zone map
+
+### Requirement: Level start and goal shortcuts
+The level editor SHALL provide these shortcuts in both its modes (Blocks and Objects), shown
+on their buttons like the others; pressing the key of the mode already chosen, or Esc,
+SHALL leave it and go back to the tool chosen before:
+
+| Action | Shortcut |
+|---|---|
+| Place start | I |
+| Place finish | F |
+| Place secret exit | Shift+F |
+
+#### Scenario: Place the start from the keyboard
+- **WHEN** level 05 is shown in Objects mode and the user presses I, then clicks on the level
+- **THEN** Mario's start is placed where the user clicked
+
+#### Scenario: Leave placing
+- **WHEN** "Place finish" was chosen with F and the user presses Esc
+- **THEN** the tool chosen before is back and nothing was placed

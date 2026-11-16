@@ -46,14 +46,19 @@ Each module documents the ROM addresses and formats it relies on.
 | `rom` | `offset(bank, addr)`, `word`, `set_word` |
 | `ram_map` | Named RAM addresses and `GameMode` |
 | `levels` | Level headers, map locations, map compression (`decode`/`encode`) |
+| `level_goals` | Where a level ends: the finish block $4A and the secret exit block $4B in its map, the bell (object $16) above the finish, the boss levels that have none |
+| `secret_exits` | Where a level's secret exit takes Mario: a hook at 0F:6F62 and its table at 0F:7E40 (level to target point; a new level takes its base's entry while played) |
+| `level_start` | Where Mario begins a level: header bytes $00-$07 (his y and x, the camera's), the camera worked out from his place |
 | `objects` | Object lists: 3-byte format, reading, re-packing |
 | `patch` | The 1 MB edited copy (twin banks $20-$3F) that gives levels and objects more room |
 | `layout` | Each zone's space for its maps and packing edited maps back |
 | `extra_levels` | Levels 32+, stored in banks $38-$3F and played in place of a base level |
+| `new_zones` | New zones, stored in bank $31 and played in place of a base zone (point numbers, entry code, progress kept apart) |
 | `world` | World map picture and the level each map point opens |
 | `zone_maps` | The zones' one-screen map pictures |
 | `original_points` | Where the game draws its map points (measured) |
-| `map_routes` | Paths between map points (walk scripts), where Mario stands on each, new points; moved to bank $36 in the edited copy |
+| `map_routes` | Paths between map points (walk scripts), where Mario stands on each, new points; moved to bank $36 in the edited copy, room for 256 numbers |
+| `added_points` | Points numbered from $80 on every map: hooks in bank $0F (level, flag, map pick), their flag bytes at $A1A0, the game zones' kept in bank $24 |
 | `doors` | Which world points enter which zone and where each zone exit leads |
 | `art` | Pictures captured from the running game (blocks, map tiles, object looks) |
 | `live` | What the running game has loaded |
@@ -65,8 +70,9 @@ Each module documents the ROM addresses and formats it relies on.
 ```
 game/src/
 ├─ domain/        keys, settings (text format), i18n, overlay (bitmap font), pause menu
-├─ application/   preferences (settings + saving), session (one frame of play; new levels)
-├─ ports.rs       Keyboard, AudioOut, Window, SettingsStore, SaveStore
+├─ application/   preferences (settings + saving), session (one frame of play; new levels),
+│                 zones (new zones swapped in and out, their progress)
+├─ ports.rs       Keyboard, AudioOut, Window, SettingsStore, SaveStore, ZoneProgressStore
 ├─ adapters/      macroquad keyboard/display/picker, cpal audio, file stores, Win32
 ├─ checks.rs, selftest.rs   headless checks (--research, --self-test, --dump)
 └─ main.rs        composition root
@@ -80,22 +86,31 @@ ports with fakes.
 ```
 editor/src/
 ├─ domain/        document (everything being edited, dirty flags, commit to the ROM image),
-│                 history (generic undo/redo), tools (Tool trait: pencil, box fill)
-├─ application/   save (commit + write through a port), art_service (captured graphics)
-├─ ports.rs       EditedCopyStore, GameLauncher
-├─ adapters/      file repository, game.exe launcher
-├─ ui/            macroquad panels: level, objects, palette, world map, status bar, widgets
+│                 history (generic undo/redo), tools (Tool trait: pencil, box, select, paste),
+│                 stamp (a rectangle of cells: brush and clipboard), prefs (editor.cfg text),
+│                 files (level, zone and project files: text format); document/zones
+│                 (new zones) and document/restore
+├─ application/   save (commit + write through a port), art_service (captured graphics),
+│                 exchange (level, zone and project files through the dialogs)
+├─ ports.rs       EditedCopyStore, GameLauncher, PrefsStore, FileDialogs, TextFiles, MenuBar
+├─ adapters/      file repository (edited copy, editor.cfg, text files), Win32 file dialogs
+│                 and menu bar, game.exe launcher
+├─ ui/            macroquad panels: level, objects, palettes, world map, status bar, widgets;
+│                 grid_edit (painting and clipboard shared by both views), shortcuts (one
+│                 table for keys and button labels), menu (the File menu), files_view
+│                 (file actions and their messages), names_view (naming new levels and
+│                 zones), target_picker (where a door or exit leads, chosen on the maps)
 └─ main.rs        composition root
 ```
 
-The world map editor has two tabs: Picture (paint the world and zone maps) and Points (the
-level each point opens, paths, new points, doors).
+The world map editor has two tabs: Picture (paint the world, zone and new zone maps) and
+Points (the level each point opens, paths, new points, doors, exits, entries).
 
 ## `tools/research/`
 
 A table of commands (`COMMANDS` in `main.rs`) over the cartridge: disassembly, memory watch and
 trace, ROM views, and checks that play the edited data in the emulator (`routecheck`,
-`doorcheck`...). `all_commands.sh` runs a fixed set and saves the output to compare builds.
+`doorcheck`, `newzonecheck`, `sparecheck`...). `all_commands.sh` runs a fixed set and saves the output to compare builds.
 
 ## Contract between game and editor
 
@@ -104,8 +119,11 @@ trace, ROM views, and checks that play the edited data in the emulator (`routech
 | Start the game | `game.exe <rom> [--level N]` (no rom: start screen to choose one) |
 | Edited copy | `edits/<name> (edit).gb` |
 | Battery saves | `saves/<name>.sav` |
+| New zone and added point progress (game only) | `saves/<name>.zones` |
 | Last cartridge chosen | `last_cartridge.txt` |
 | Settings (the editor reads the language) | `settings.cfg` |
+| Editor settings (palette zoom) | `editor.cfg` |
+| Level, zone and project files (editor only) | `exports/*.nmblevel`, `exports/*.nmbzone`, `exports/*.nmbproject` |
 
 Paths and names live in `host::paths`, so both programs compute them the same way.
 

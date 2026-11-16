@@ -229,7 +229,7 @@ exp.after_store.rom = 9e2e6cc1b783d0e2
 exp.edit.space = (6389, 15104)
 exp.edit.store = Ok("bank 09: 6389/15104 bytes")
 exp.edit.reread_ok = true
-exp.after_edit.rom = ed267ede17a02175
+exp.after_edit.rom = 9192bbbc58c913d1
 exp.play.level00 = boot=true entered=true abfad1705b604e13
 emu.f0059.screen = 14e3b442c87545e2
 emu.f0059.sound = 90258 88fa6ddebcf1e6c5

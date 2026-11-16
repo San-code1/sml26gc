@@ -17,6 +17,8 @@ use gb_core::Gb;
 use std::path::PathBuf;
 
 const SAMPLE_RATE: u32 = 44_100;
+/// Point levels the legacy port knew: the game's table ($00-$81).
+const LEGACY_POINTS: usize = 0x82;
 
 /// FNV-1a, 64 bit: tiny, dependency-free and stable across versions.
 fn fnv(data: impl AsRef<[u8]>) -> String {
@@ -172,7 +174,7 @@ fn rom_data(rom: &[u8], out: &mut Out) {
     out.put("rom.objects.region", format!("{:?}", objects::region(rom)));
 
     out.put("rom.world.picture", fnv(&world::read(rom)));
-    out.put("rom.world.point_levels", fnv(&world::point_levels(rom)));
+    out.put("rom.world.point_levels", fnv(&world::point_levels(rom)[..LEGACY_POINTS]));
 
     let mut banks: Vec<u8> = (0..levels::LEVELS).map(|l| levels::header(rom, l).bank).collect();
     banks.sort();
@@ -208,7 +210,7 @@ fn rom_data(rom: &[u8], out: &mut Out) {
             out.put("exp.edit.reread_ok", levels::decode(&big, start).0 == map);
 
             world::write(&mut big, &world::read(rom));
-            let mut pts = world::point_levels(rom);
+            let mut pts = world::point_levels(rom)[..LEGACY_POINTS].to_vec();
             pts.reverse();
             world::write_point_levels(&mut big, &pts);
             out.put("exp.after_edit.rom", fnv(&big));

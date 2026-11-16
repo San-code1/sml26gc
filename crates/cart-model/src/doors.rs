@@ -77,6 +77,9 @@ pub enum Leads {
     World(u8),
     /// Into the zone `INTO[i]`.
     Zone(usize),
+    /// Into the editor's new zone k (`new_zones`): the copy keeps an exit to its door point,
+    /// where the port enters it (`new_zones::resolve`).
+    NewZone(usize),
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -142,6 +145,9 @@ pub fn write(rom: &mut [u8], d: &Doors) -> bool {
             match leads {
                 Leads::World(p) => {
                     rom[t..t + 5].copy_from_slice(&[0x3E, p, 0xCD, 0xCA, 0x47]);
+                }
+                Leads::NewZone(_) => {
+                    rom[t..t + 5].copy_from_slice(&[0x3E, NONE, 0xCD, 0xCA, 0x47]);
                 }
                 Leads::Zone(i) => {
                     rom[t] = 0xC3;

@@ -1,7 +1,10 @@
 //! The level view: blocks drawn with the game's own graphics, zoom and camera, grid, the
 //! whole-level overview, painting with the chosen tool, and the side panel.
+use super::names_view::Named;
+use super::shortcuts::{with_keys, Action};
+use super::start_view::Placing;
 use super::widgets::*;
-use super::{left_button, Editor, LevelCanvas, Mode, LEVEL_SIZE};
+use super::{Editor, Mode, LEVEL_SIZE};
 use crate::domain::tools::ToolKind;
 use cart_model::levels::{COLS, LEVELS, ROWS};
 use macroquad::prelude::*;
@@ -9,14 +12,14 @@ use macroquad::prelude::*;
 impl Editor {
     /// Where the whole-level overview sits (top right of the level view).
     pub(super) fn overview_rect(&self) -> Rect {
-        let k = ((screen_width() - PANEL - 20.0) / COLS as f32).min(3.0);
+        let k = ((screen_width() - self.panel - 20.0) / COLS as f32).min(3.0);
         let (w, h) = (COLS as f32 * k, ROWS as f32 * k);
         Rect::new(screen_width() - w - 10.0, 10.0, w, h)
     }
 
     /// The block under the mouse (none over the panel, status bar or overview).
     pub(super) fn cell_at(&self, m: Vec2) -> Option<(i32, i32)> {
-        if m.x < PANEL || m.y > screen_height() - STATUS_H {
+        if m.x < self.panel || m.y > screen_height() - STATUS_H {
             return None;
         }
         if self.show_overview && self.overview_rect().contains(m) {
@@ -32,27 +35,10 @@ impl Editor {
     }
 
     pub(super) fn update_level(&mut self) {
+        self.look_now();
         let m: Vec2 = mouse_position().into();
         let ctrl = is_key_down(KeyCode::LeftControl) || is_key_down(KeyCode::RightControl);
-        let (undo, redo) = undo_keys(ctrl);
-        if undo {
-            self.undo();
-        }
-        if redo {
-            self.redo();
-        }
-        if ctrl && is_key_pressed(KeyCode::S) {
-            self.save();
-        }
-        if is_key_pressed(KeyCode::F5) {
-            self.play();
-        }
-        self.tool_keys(ctrl);
         let (space, view, max) = self.navigate(m, ctrl, LEVEL_SIZE);
-
-        if !ctrl && is_key_pressed(KeyCode::M) {
-            self.show_overview = !self.show_overview;
-        }
         // Click or drag on the overview: centre the view there.
         let ov = self.overview_rect();
         if self.show_overview && ov.contains(m) && is_mouse_button_down(MouseButton::Left) {
@@ -61,32 +47,26 @@ impl Editor {
             self.cam = (target - view * 0.5).clamp(Vec2::ZERO, max);
             return;
         }
-        if !ctrl && (is_key_pressed(KeyCode::Tab) || is_key_pressed(KeyCode::O)) {
-            self.mode = if self.mode == Mode::Blocks { Mode::Objects } else { Mode::Blocks };
-            self.sel_obj = None;
-        }
+        self.pump_mario();
+        self.pump_looks();
         if self.pan.is_some() || space {
             return;
         }
+        if self.update_goal(m) || self.update_start(m) {
+            return;
+        }
         if self.mode == Mode::Objects {
-            self.pump_looks();
             self.update_objects(m);
             return;
         }
         let cell = self.cell_at(m);
-        if is_mouse_button_pressed(MouseButton::Right) {
-            if let Some((c, r)) = cell {
-                self.block = self.doc.block(self.cur, c, r) & 0x7F;
-            }
-        }
-        let mut canvas = LevelCanvas { doc: &mut self.doc, level: self.cur, block: self.block, changed: &mut self.overview_stale };
-        self.tool.handle(&mut canvas, cell, left_button());
+        self.edit_grid(cell);
     }
 
     pub(super) fn draw_level(&mut self) {
         clear_background(col(3));
         let s = self.scale() * BLOCK;
-        let (cw, ch) = (screen_width() - PANEL, screen_height() - STATUS_H);
+        let (cw, ch) = (screen_width() - self.panel, screen_height() - STATUS_H);
         // --- the level
         if let Some(atlas) = &self.atlases[self.doc.base_of(self.cur)] {
             let c0 = (self.cam.x / BLOCK).floor() as i32;
@@ -97,7 +77,7 @@ impl Editor {
             for r in r0..(r0 + nrow).min(ROWS as i32) {
                 for c in c0..(c0 + ncol).min(COLS as i32) {
                     let id = map[r as usize * COLS + c as usize] & 0x7F;
-                    let x = PANEL + (c as f32 * BLOCK - self.cam.x) * self.scale();
+                    let x = self.panel + (c as f32 * BLOCK - self.cam.x) * self.scale();
                     let y = (r as f32 * BLOCK - self.cam.y) * self.scale();
                     draw_texture_ex(
                         atlas,
@@ -115,70 +95,46 @@ impl Editor {
             if self.grid && s >= 16.0 {
                 let gc = Color::new(0.0, 0.0, 0.0, 0.15);
                 for c in c0..=c0 + ncol {
-                    let x = PANEL + (c as f32 * BLOCK - self.cam.x) * self.scale();
+                    let x = self.panel + (c as f32 * BLOCK - self.cam.x) * self.scale();
                     draw_line(x, 0.0, x, ch, 1.0, gc);
                 }
                 for r in r0..=r0 + nrow {
                     let y = (r as f32 * BLOCK - self.cam.y) * self.scale();
-                    draw_line(PANEL, y, screen_width(), y, 1.0, gc);
+                    draw_line(self.panel, y, screen_width(), y, 1.0, gc);
                 }
             }
             // where the level ends
-            let end_x = PANEL + (COLS as f32 * BLOCK - self.cam.x) * self.scale();
+            let end_x = self.panel + (COLS as f32 * BLOCK - self.cam.x) * self.scale();
             let end_y = (ROWS as f32 * BLOCK - self.cam.y) * self.scale();
-            draw_rectangle_lines(PANEL - self.cam.x * self.scale(), -self.cam.y * self.scale(), end_x - (PANEL - self.cam.x * self.scale()), end_y + self.cam.y * self.scale(), 3.0, col(3));
-            // hover / rectangle preview
+            draw_rectangle_lines(self.panel - self.cam.x * self.scale(), -self.cam.y * self.scale(), end_x - (self.panel - self.cam.x * self.scale()), end_y + self.cam.y * self.scale(), 3.0, col(3));
             let m: Vec2 = mouse_position().into();
-            if let (Mode::Blocks, Some((c, r))) = (self.mode, self.cell_at(m)) {
-                let anchor = self.tool.anchor();
-                let (a, b) = match anchor {
-                    Some((c0, r0)) => ((c0.min(c), r0.min(r)), (c0.max(c), r0.max(r))),
-                    None => ((c, r), (c, r)),
-                };
-                let x = PANEL + (a.0 as f32 * BLOCK - self.cam.x) * self.scale();
-                let y = (a.1 as f32 * BLOCK - self.cam.y) * self.scale();
-                let w = (b.0 - a.0 + 1) as f32 * s;
-                let h = (b.1 - a.1 + 1) as f32 * s;
-                if anchor.is_none() {
-                    draw_texture_ex(
-                        atlas,
-                        x,
-                        y,
-                        Color::new(1.0, 1.0, 1.0, 0.6),
-                        DrawTextureParams {
-                            source: Some(Rect::new((self.block % 16) as f32 * 16.0, (self.block / 16) as f32 * 16.0, 16.0, 16.0)),
-                            dest_size: Some(vec2(s, s)),
-                            ..Default::default()
-                        },
-                    );
+            if self.mode == Mode::Blocks {
+                let cell = self.cell_at(m);
+                self.draw_grid_overlay(atlas, cell);
+                if let Some((c, r)) = cell {
+                    let id = self.doc.block(self.cur, c, r);
+                    draw_text(&format!("{c},{r}  #{id:02X}"), self.panel + 8.0, ch - 8.0, 20.0, WHITE);
                 }
-                draw_rectangle_lines(x, y, w, h, 2.0, Color::new(1.0, 1.0, 1.0, 0.9));
-                let id = self.doc.block(self.cur, c, r);
-                draw_text(&format!("{c},{r}  #{id:02X}"), PANEL + 8.0, ch - 8.0, 20.0, WHITE);
             }
         } else {
-            draw_text(tr(self.es, "Loading the level from the game...", "Cargando el nivel desde el juego..."), PANEL + 30.0, 60.0, 26.0, col(0));
+            draw_text(tr(self.es, "Loading the level from the game...", "Cargando el nivel desde el juego..."), self.panel + 30.0, 60.0, 26.0, col(0));
         }
+        self.finish_level_frame(cw, ch);
+    }
+
+    /// Objects, overview, panel and status bar, over the level.
+    fn finish_level_frame(&mut self, cw: f32, ch: f32) {
         self.draw_objects();
-        if self.mode == Mode::Objects {
+        self.draw_goals();
+        self.draw_start();
+        if self.mode == Mode::Objects && self.placing.is_none() {
             self.object_tip(ch);
         }
         self.draw_overview(cw, ch);
         let (act, pick) = self.level_panel();
         self.level_status_bar(cw, ch);
-
-        match act {
-            1 => self.undo(),
-            2 => self.redo(),
-            3 => self.restore_original(),
-            4 => {
-                self.save();
-            }
-            5 => self.play(),
-            9 => self.enter_world(true),
-            10 => self.new_level(),
-            11 => self.delete_level(),
-            _ => {}
+        if let Some(a) = act {
+            self.run(a);
         }
         if let Some(l) = pick {
             self.select_level(l);
@@ -210,10 +166,13 @@ impl Editor {
 
     /// Level buttons, mode, tools, undo, save, play and the palette. Returns the action
     /// chosen (done after drawing) and the level picked.
-    fn level_panel(&mut self) -> (u32, Option<usize>) {
-        draw_rectangle(0.0, 0.0, PANEL, screen_height(), col(0));
-        draw_rectangle(PANEL - 3.0, 0.0, 3.0, screen_height(), col(3));
-        draw_text(tr(self.es, "LEVEL EDITOR", "EDITOR DE NIVELES"), 10.0, 22.0, 24.0, col(3));
+    fn level_panel(&mut self) -> (Option<Action>, Option<usize>) {
+        draw_rectangle(0.0, 0.0, self.panel, screen_height(), col(0));
+        draw_rectangle(self.panel - 3.0, 0.0, 3.0, screen_height(), col(3));
+        draw_text(tr(self.es, "LEVEL EDITOR", "EDITOR DE NIVELES"), 10.0, 22.0, 22.0, col(3));
+        let keys = format!("{} / {}", super::shortcuts::keys(Action::PrevLevel), super::shortcuts::keys(Action::NextLevel));
+        let d = measure_text(&keys, None, 14, 1.0);
+        draw_text(&keys, self.panel - 12.0 - d.width, 22.0, 14.0, col(2));
         let mut y = 34.0;
         let mut pick = None;
         let count = self.doc.levels.len();
@@ -223,68 +182,81 @@ impl Editor {
             if button(Rect::new(cx, cy, 33.0, 23.0), &label, l == self.cur, 16.0) {
                 pick = Some(l);
             }
+            if self.doc.mods.level(l) {
+                // a saved change from the game's level: a corner mark
+                draw_triangle(vec2(cx + 33.0, cy), vec2(cx + 25.0, cy), vec2(cx + 33.0, cy + 8.0), col(2));
+            }
         }
         y += count.div_ceil(8) as f32 * 25.0 + 4.0;
-        let bw = 92.0;
-        let mut act = 0;
-        // new levels: a copy of this one, played in place of the level it is based on
-        if button(Rect::new(10.0, y, 136.0, 24.0), tr(self.es, "New level (copy)", "Nivel nuevo (copia)"), false, 15.0) {
-            act = 10;
+        if self.doc.mods.level(self.cur) {
+            draw_text(&format!("{} {:02}: mod ({})", tr(self.es, "Level", "Nivel"), self.cur, tr(self.es, "saved changes from the game's", "cambios guardados respecto al del juego")), 10.0, y + 12.0, 15.0, col(2));
+            y += 18.0;
         }
-        if self.cur >= LEVELS {
-            if button(Rect::new(150.0, y, 136.0, 24.0), tr(self.es, "Delete level", "Borrar nivel"), false, 15.0) {
-                act = 11;
+        let es = self.es;
+        let mut act = None;
+        let mut b = |r: Rect, name: &str, a: Action, on: bool| {
+            if button(r, &with_keys(name, a), on, 16.0) {
+                act = Some(a);
             }
+        };
+        let (w2, w3) = (136.0, 89.0);
+        let col2 = |i: usize| 10.0 + i as f32 * (w2 + 4.0);
+        let col3 = |i: usize| 10.0 + i as f32 * (w3 + 4.0);
+        // new levels: a copy of this one, played in place of the level it is based on
+        b(Rect::new(col2(0), y, w2, 24.0), tr(es, "New level", "Nivel nuevo"), Action::NewLevel, false);
+        if self.cur >= LEVELS {
+            b(Rect::new(col2(1), y, w2, 24.0), tr(es, "Delete level", "Borrar nivel"), Action::DeleteLevel, false);
             y += 28.0;
-            let t = format!("{} {:02}", tr(self.es, "plays as level", "se juega como el nivel"), self.doc.base_of(self.cur));
+            let t = format!("{} {:02}", tr(es, "plays as level", "se juega como el nivel"), self.doc.base_of(self.cur));
             draw_text(&t, 14.0, y + 14.0, 16.0, col(2));
+            y += 22.0;
+            self.name_field(Rect::new(10.0, y, 276.0, 24.0), Named::Level(self.cur));
             y += 4.0;
         }
         y += 28.0;
-        if button(Rect::new(10.0, y, 276.0, 24.0), tr(self.es, "World map editor", "Editor del mapa de mundos"), false, 16.0) {
-            act = 9;
+        b(Rect::new(10.0, y, 276.0, 24.0), tr(es, "World map editor", "Editor del mapa de mundos"), Action::WorldEditor, false);
+        y += 30.0;
+        let blocks = self.mode == Mode::Blocks;
+        if button(Rect::new(col2(0), y, w2, 26.0), &with_keys(tr(es, "Blocks", "Bloques"), Action::BlocksObjects), blocks, 16.0) {
+            self.set_mode(Mode::Blocks);
+        }
+        if button(Rect::new(col2(1), y, w2, 26.0), &with_keys(tr(es, "Objects", "Objetos"), Action::BlocksObjects), !blocks, 16.0) {
+            self.set_mode(Mode::Objects);
         }
         y += 30.0;
-        if button(Rect::new(10.0, y, 136.0, 26.0), tr(self.es, "Blocks (Tab)", "Bloques (Tab)"), self.mode == Mode::Blocks, 16.0) {
-            self.mode = Mode::Blocks;
-            self.sel_obj = None;
-        }
-        if button(Rect::new(150.0, y, 136.0, 26.0), tr(self.es, "Objects (Tab)", "Objetos (Tab)"), self.mode == Mode::Objects, 16.0) {
-            self.mode = Mode::Objects;
-        }
+        b(Rect::new(10.0, y, 160.0, 26.0), tr(es, "Place start", "Colocar inicio"), Action::PlaceStart, self.placing == Some(Placing::Start));
+        self.start_coords(y);
         y += 30.0;
+        if !self.doc.ends_with_boss(self.cur) {
+            b(Rect::new(10.0, y, 160.0, 26.0), tr(es, "Place finish", "Colocar meta"), Action::PlaceFinish, self.placing == Some(Placing::Finish));
+        }
+        self.finish_note(y);
+        y += 30.0;
+        b(Rect::new(10.0, y, 160.0, 26.0), tr(es, "Secret exit", "Salida secreta"), Action::PlaceSecret, self.placing == Some(Placing::Secret));
+        self.secret_note(y);
+        y += 30.0;
+        b(Rect::new(10.0, y, 100.0, 26.0), tr(es, "Leads to", "Lleva a"), Action::SecretLeads, false);
+        draw_text(&self.secret_leads(), 118.0, y + 18.0, 15.0, col(2));
+        y += 30.0;
+        let tool = self.tool.kind();
         if self.mode == Mode::Blocks {
-            if button(Rect::new(10.0, y, bw, 26.0), tr(self.es, "Pencil (B)", "Lapiz (B)"), self.tool.kind() == ToolKind::Pencil, 16.0) {
-                self.set_tool(ToolKind::Pencil);
-            }
-            if button(Rect::new(10.0 + bw + 4.0, y, bw, 26.0), tr(self.es, "Box (R)", "Caja (R)"), self.tool.kind() == ToolKind::Box, 16.0) {
-                self.set_tool(ToolKind::Box);
-            }
+            b(Rect::new(col3(0), y, w3, 26.0), tr(es, "Pencil", "Lapiz"), Action::Pencil, tool == ToolKind::Pencil);
+            b(Rect::new(col3(1), y, w3, 26.0), tr(es, "Box", "Caja"), Action::BoxFill, tool == ToolKind::Box);
+            b(Rect::new(col3(2), y, w3, 26.0), tr(es, "Select", "Seleccion"), Action::Select, tool == ToolKind::Select);
         } else {
             let n = self.doc.levels[self.cur].content.objs.len();
-            draw_text(&format!("{} {n}", tr(self.es, "objects:", "objetos:")), 14.0, y + 18.0, 18.0, col(3));
-        }
-        if button(Rect::new(10.0 + 2.0 * (bw + 4.0), y, bw - 8.0, 26.0), tr(self.es, "Grid (G)", "Rejilla (G)"), self.grid, 16.0) {
-            self.grid = !self.grid;
+            draw_text(&format!("{} {n}", tr(es, "objects:", "objetos:")), 14.0, y + 18.0, 18.0, col(3));
         }
         y += 30.0;
-        if button(Rect::new(10.0, y, bw, 26.0), tr(self.es, "Undo", "Deshacer"), false, 16.0) {
-            act = 1;
-        }
-        if button(Rect::new(10.0 + bw + 4.0, y, bw, 26.0), tr(self.es, "Redo", "Rehacer"), false, 16.0) {
-            act = 2;
-        }
-        if button(Rect::new(10.0 + 2.0 * (bw + 4.0), y, bw - 8.0, 26.0), tr(self.es, "Original", "Original"), false, 16.0) {
-            act = 3;
-        }
+        b(Rect::new(col2(0), y, w2, 26.0), tr(es, "Undo", "Deshacer"), Action::Undo, false);
+        b(Rect::new(col2(1), y, w2, 26.0), tr(es, "Redo", "Rehacer"), Action::Redo, false);
         y += 30.0;
-        if button(Rect::new(10.0, y, 136.0, 28.0), tr(self.es, "Save (Ctrl+S)", "Guardar (Ctrl+S)"), false, 17.0) {
-            act = 4;
-        }
-        if button(Rect::new(150.0, y, 136.0, 28.0), tr(self.es, "Play (F5)", "Jugar (F5)"), false, 17.0) {
-            act = 5;
-        }
-        y += 36.0;
+        b(Rect::new(col3(0), y, w3, 26.0), tr(es, "Grid", "Rejilla"), Action::Grid, self.grid);
+        b(Rect::new(col3(1), y, 276.0 - w3 - 4.0, 26.0), tr(es, "Restore", "Restaurar"), Action::Restore, false);
+        y += 30.0;
+        b(Rect::new(col2(0), y, w2, 28.0), tr(es, "Save", "Guardar"), Action::Save, false);
+        b(Rect::new(col2(1), y, w2, 28.0), tr(es, "Play", "Jugar"), Action::Play, false);
+        y += 34.0;
         if self.mode == Mode::Objects {
             self.object_palette(y);
         } else {

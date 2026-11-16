@@ -4,15 +4,9 @@ use cart_model::art::{LevelArt, Look, WorldArt};
 use cart_model::levels::{COLS, ROWS};
 use macroquad::prelude::*;
 
-/// Ctrl+Z: undo; Ctrl+Y or Ctrl+Shift+Z: redo. Returns (undo, redo) pressed this frame.
-pub fn undo_keys(ctrl: bool) -> (bool, bool) {
-    let shift = is_key_down(KeyCode::LeftShift) || is_key_down(KeyCode::RightShift);
-    let z = ctrl && is_key_pressed(KeyCode::Z);
-    (z && !shift, (z && shift) || (ctrl && is_key_pressed(KeyCode::Y)))
-}
-
 pub const PAL: [u32; 4] = [0xC4CFA1, 0x8B956D, 0x4D533C, 0x1F1F1F];
-pub const PANEL: f32 = 300.0;
+/// The side panel's narrowest width; it can be dragged wider.
+pub const PANEL_MIN: f32 = 300.0;
 pub const STATUS_H: f32 = 26.0;
 pub const BLOCK: f32 = 16.0;
 pub const ZOOMS: [f32; 7] = [0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 4.0];
@@ -48,14 +42,20 @@ pub fn wrap(t: &str, n: usize) -> Vec<String> {
     lines
 }
 
-/// Draw a button; true when it was clicked this frame.
+/// Draw a button, its label made smaller if it doesn't fit; true when it was clicked this
+/// frame.
 pub fn button(r: Rect, label: &str, active: bool, size: f32) -> bool {
     let m: Vec2 = mouse_position().into();
     let hover = r.contains(m);
     let (bg, fg) = if active { (col(3), col(0)) } else if hover { (col(1), col(3)) } else { (col(0), col(3)) };
     draw_rectangle(r.x, r.y, r.w, r.h, bg);
     draw_rectangle_lines(r.x, r.y, r.w, r.h, 2.0, col(3));
-    let dim = measure_text(label, None, size as u16, 1.0);
+    let mut size = size;
+    let mut dim = measure_text(label, None, size as u16, 1.0);
+    while dim.width > r.w - 6.0 && size > 10.0 {
+        size -= 1.0;
+        dim = measure_text(label, None, size as u16, 1.0);
+    }
     draw_text(label, r.x + (r.w - dim.width) / 2.0, r.y + (r.h + dim.offset_y) / 2.0 - 1.0, size, fg);
     hover && is_mouse_button_pressed(MouseButton::Left)
 }

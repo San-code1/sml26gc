@@ -36,6 +36,12 @@ impl<T> History<T> {
         }
     }
 
+    /// Forget every step.
+    pub fn clear(&mut self) {
+        self.undo.clear();
+        self.redo.clear();
+    }
+
     pub fn redo(&mut self, current: &mut T) -> bool {
         match self.redo.pop() {
             Some(s) => {

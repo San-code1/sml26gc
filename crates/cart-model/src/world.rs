@@ -7,13 +7,17 @@
 //! * Which level each map point opens: byte table at 0F:4218 indexed by the point number
 //!   ($A840); $FE = a point that opens no level. 0F:41A6-0F:41B5 copies the entry to $A269.
 use crate::patch::TWIN;
+use crate::{added_points, map_routes};
 use crate::rom::offset;
 
 pub const W: usize = 64;
 pub const H: usize = 64;
 const PICTURE: usize = offset(0x0D, 0x7000);
 const POINTS: usize = offset(0x0F, 0x4218);
-pub const POINT_COUNT: usize = 0x82;
+/// Point numbers with a level (`point_levels`).
+pub const POINT_COUNT: usize = map_routes::ALL;
+/// The game's points ($00-$7F) in the table.
+const GAME_POINTS: usize = map_routes::POINTS;
 pub const NO_LEVEL: u8 = 0xFE;
 
 fn at(x: usize, y: usize) -> usize {
@@ -37,17 +41,27 @@ pub fn write(rom: &mut [u8], tiles: &[u8]) {
     }
 }
 
+/// The level of every point number ($00-$FF; an added point's from `added_points`, those of
+/// the map in place).
 pub fn point_levels(rom: &[u8]) -> Vec<u8> {
-    rom[POINTS..POINTS + POINT_COUNT].to_vec()
+    let mut v = rom[POINTS..POINTS + GAME_POINTS].to_vec();
+    v.extend(added_points::levels(rom));
+    v.resize(map_routes::ALL, NO_LEVEL);
+    v
 }
 
+/// Write the levels back (the added points' too, if the copy has their hooks).
 pub fn write_point_levels(rom: &mut [u8], v: &[u8]) {
     let twin = rom.len() >= 2 * TWIN;
-    for (i, &l) in v.iter().enumerate().take(POINT_COUNT) {
+    for (i, &l) in v.iter().enumerate().take(GAME_POINTS) {
         rom[POINTS + i] = l;
         if twin {
             rom[POINTS + i + TWIN] = l;
         }
+    }
+    if added_points::installed(rom) && v.len() > GAME_POINTS {
+        let (shuts, rep) = (added_points::shuts(rom), added_points::rep(rom));
+        added_points::write(rom, &v[GAME_POINTS..], &shuts, rep);
     }
 }
 
