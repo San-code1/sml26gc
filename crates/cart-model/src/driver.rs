@@ -107,7 +107,7 @@ impl GameDriver for Gb {
         let table = point_levels(self.cart().rom());
         // Point $00 (where a new game starts) stops taking Start once its level is cleared,
         // so another level point is tried first.
-        let mut points: Vec<u8> = (0..table.len() as u8).filter(|&p| table[p as usize] < 32 && !SPECIAL_MAP_POINTS.contains(&p)).collect();
+        let mut points: Vec<u8> = (0..crate::map_routes::POINTS as u8).filter(|&p| table[p as usize] < 32 && !SPECIAL_MAP_POINTS.contains(&p)).collect();
         points.sort_by_key(|&p| p == 0);
         for p in points.into_iter().take(2) {
             let mut g = self.clone();

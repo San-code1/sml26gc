@@ -4,28 +4,34 @@
 //! what changed.
 //!
 //! A level: `base`, `name` (from version 2), `header` (20 bytes), `map` (48 rows of 256 blocks), `objects` (x y kind
-//! flag). A new zone: `base`, `name`, `entry`, `door`, `picture` (18 rows of 20 tiles), `points`
+//! flag), `secret` (from version 3: `-`, `point` n or `newzone` k). A new zone: `base`, `name`, `entry`, `door`, `picture` (18 rows of 20 tiles), `points`
 //! (number, place, level, flag, shut, pass point code, the four ways) and `exits`. A project:
 //! the cartridge's hash, every level as above, the world and zone pictures, the level each
-//! map point opens, the paths, where Mario stands on each point, the new points, the doors
-//! and (from version 2) the new zones.
+//! map point opens, the paths, where Mario stands on each point, the new points, the doors,
+//! (from version 2) the new zones and (from version 4) all 256 point numbers and the game
+//! zones' added points (`zonepoints`: per zone, its number and its points as a new zone's),
+//! and (from version 5) the pad directions the world map's added points shut (`shuts`).
 use super::document::StandIn;
+use cart_model::added_points::{self, ZoneAdded};
 use cart_model::doors::{Doors, Leads};
 use cart_model::levels::{LEVELS, MAP_BYTES};
-use cart_model::map_routes::{MapRoutes, Place, Way};
+use cart_model::map_routes::{self, MapRoutes, Place, Way};
 use cart_model::new_zones::{self, NewZone, ZonePoint};
 use cart_model::objects::Obj;
+use cart_model::secret_exits::SecretTo;
 use cart_model::{extra_levels, world, zone_maps};
 use std::fmt::Write;
 
 const LEVEL_KIND: &str = "NMB level";
 const PROJECT_KIND: &str = "NMB project";
 const ZONE_KIND: &str = "NMB zone";
-/// Version 1 has no names.
-const LEVEL_VERSION: u32 = 2;
+/// Version 1 has no names, version 2 no secret exit target.
+const LEVEL_VERSION: u32 = 3;
 const ZONE_VERSION: u32 = 1;
-/// Version 1 has no new zones.
-const PROJECT_VERSION: u32 = 2;
+/// Version 1 has no new zones, version 2 no secret exit targets.
+const PROJECT_VERSION: u32 = 5;
+/// Point levels a project file kept before version 4.
+const OLD_LEVELS: usize = 0x82;
 const MAP_ROW: usize = 256;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -53,6 +59,8 @@ pub struct LevelFile {
     pub objs: Vec<Obj>,
     /// A new level's name (empty: none).
     pub name: String,
+    /// Where its secret exit leads (None: the game's way).
+    pub secret: Option<SecretTo>,
 }
 
 /// Everything a project file holds.
@@ -70,6 +78,11 @@ pub struct ProjectFile {
     pub new_zones: Vec<NewZone>,
     /// The point each zone a door enters is entered on (empty in version 1).
     pub entries: Vec<u8>,
+    /// The game zones' added points (from version 4).
+    pub zone_points: Vec<ZoneAdded>,
+    /// The pad directions the world map's added points shut, from `added_points::FIRST`
+    /// (from version 5).
+    pub shuts: Vec<u8>,
 }
 
 /// Tells cartridges apart (64-bit FNV-1a of the whole image).
@@ -100,6 +113,11 @@ fn level_block(out: &mut String, l: &LevelFile) {
     for o in &l.objs {
         let _ = writeln!(out, "{:04x} {:04x} {:02x} {}", o.x, o.y, o.kind, o.flag as u8);
     }
+    let _ = match l.secret {
+        None => writeln!(out, "secret -"),
+        Some(SecretTo::Point(p)) => writeln!(out, "secret point {p:02x}"),
+        Some(SecretTo::NewZone(k)) => writeln!(out, "secret newzone {k:02x}"),
+    };
 }
 
 pub fn level_text(l: &LevelFile) -> String {
@@ -112,7 +130,7 @@ pub fn level_text(l: &LevelFile) -> String {
 pub fn read_level(text: &str) -> Result<LevelFile, FileError> {
     let mut r = Reader::new(text);
     let version = r.kind(LEVEL_KIND, LEVEL_VERSION, FileError::NotLevel)?;
-    let l = r.level(version >= 2)?;
+    let l = r.level(version)?;
     r.end()?;
     Ok(l)
 }
@@ -135,16 +153,20 @@ fn exit_line(out: &mut String, at: u8, leads: Leads) {
 fn zone_block(out: &mut String, z: &NewZone) {
     let _ = writeln!(out, "base {:02x}\nname {}\nentry {:02x}\ndoor {:02x}\npicture", z.base, z.name, z.entry, z.door);
     rows(out, &z.picture, zone_maps::W);
-    let _ = writeln!(out, "points {}", z.points.len());
-    for p in &z.points {
+    point_lines(out, &z.points);
+    let _ = writeln!(out, "exits {}", z.exits.len());
+    for &(at, leads) in &z.exits {
+        exit_line(out, at, leads);
+    }
+}
+
+fn point_lines(out: &mut String, points: &[ZonePoint]) {
+    let _ = writeln!(out, "points {}", points.len());
+    for p in points {
         let pl = &p.place;
         let pass = p.pass.map_or("-".to_string(), |a| format!("{a:04x}"));
         let ways = p.ways.iter().map(way_field).collect::<Vec<_>>().join(" ");
         let _ = writeln!(out, "{:02x} {:04x} {:04x} {:02x} {:02x} {} {:02x} {:02x} {:02x} {pass} {ways}", p.number, pl.cam_x, pl.cam_y, pl.x, pl.y, hex(&pl.rest), p.level, p.flag, p.shut);
-    }
-    let _ = writeln!(out, "exits {}", z.exits.len());
-    for &(at, leads) in &z.exits {
-        exit_line(out, at, leads);
     }
 }
 
@@ -198,6 +220,12 @@ pub fn project_text(p: &ProjectFile) -> String {
     for z in &p.new_zones {
         zone_block(&mut out, z);
     }
+    let _ = writeln!(out, "zonepoints {}", p.zone_points.len());
+    for z in &p.zone_points {
+        let _ = writeln!(out, "zone {:02x}", z.zone);
+        point_lines(&mut out, &z.points);
+    }
+    let _ = writeln!(out, "shuts {}", hex(&p.shuts));
     out.push_str("end\n");
     out
 }
@@ -210,16 +238,21 @@ pub fn read_project(text: &str) -> Result<ProjectFile, FileError> {
     if !(LEVELS..=LEVELS + extra_levels::MAX).contains(&count) {
         return Err(r.damaged());
     }
-    let levels = (0..count).map(|_| r.level(version >= 2)).collect::<Result<Vec<_>, _>>()?;
+    let levels = (0..count).map(|_| r.level(version)).collect::<Result<Vec<_>, _>>()?;
     r.word("world")?;
     let world = r.rows(world::H, world::W)?;
     let zones = (0..r.count("zones", zone_maps::ZONES.len())?).map(|_| r.rows(zone_maps::H, zone_maps::W)).collect::<Result<Vec<_>, _>>()?;
-    let points = r.bytes_field("points")?;
-    if points.len() != world::POINT_COUNT {
+    // before version 4: the game's numbers only ($82 levels, $80 ways and places)
+    let (n_levels, n_points) = if version >= 4 { (world::POINT_COUNT, map_routes::ALL) } else { (OLD_LEVELS, map_routes::POINTS) };
+    let mut points = r.bytes_field("points")?;
+    if points.len() != n_levels {
         return Err(r.damaged());
     }
-    let ways = (0..r.count("ways", cart_model::map_routes::POINTS)?).map(|_| r.ways()).collect::<Result<Vec<_>, _>>()?;
-    let places = (0..r.count("places", cart_model::map_routes::POINTS)?).map(|_| r.place()).collect::<Result<Vec<_>, _>>()?;
+    points.resize(world::POINT_COUNT, world::NO_LEVEL);
+    let mut ways = (0..r.count("ways", n_points)?).map(|_| r.ways()).collect::<Result<Vec<_>, _>>()?;
+    let mut places = (0..r.count("places", n_points)?).map(|_| r.place()).collect::<Result<Vec<_>, _>>()?;
+    ways.resize(map_routes::ALL, Default::default());
+    places.resize(map_routes::ALL, Place { cam_x: 0, cam_y: 0, x: 0, y: 0, rest: [0, 0] });
     let added = r.bytes_field("added")?;
     let into_n = r.number("into")?;
     let into = (0..into_n).map(|_| r.bytes_line()).collect::<Result<Vec<_>, _>>()?;
@@ -235,8 +268,19 @@ pub fn read_project(text: &str) -> Result<ProjectFile, FileError> {
     } else {
         Vec::new()
     };
+    let zone_points = if version >= 4 {
+        let n = r.number("zonepoints")?;
+        (0..n).map(|_| r.zone_added()).collect::<Result<Vec<_>, _>>()?
+    } else {
+        Vec::new()
+    };
+    let mut shuts = if version >= 5 { r.bytes_field("shuts")? } else { Vec::new() };
+    if shuts.len() > added_points::MAX {
+        return Err(r.damaged());
+    }
+    shuts.resize(added_points::MAX, 0);
     r.end()?;
-    Ok(ProjectFile { cartridge, levels, world, zones, points, routes: MapRoutes { ways, places, added }, doors: Doors { into, exits }, new_zones, entries })
+    Ok(ProjectFile { cartridge, levels, world, zones, points, routes: MapRoutes { ways, places, added }, doors: Doors { into, exits }, new_zones, entries, zone_points, shuts })
 }
 
 struct Reader<'a> {
@@ -335,7 +379,8 @@ impl<'a> Reader<'a> {
         Ok(cells)
     }
 
-    fn level(&mut self, named: bool) -> Result<LevelFile, FileError> {
+    fn level(&mut self, version: u32) -> Result<LevelFile, FileError> {
+        let named = version >= 2;
         let base = self.hex::<u8>("base")?;
         if base as usize >= LEVELS {
             return Err(FileError::BaseOutside(base as usize));
@@ -346,7 +391,20 @@ impl<'a> Reader<'a> {
         let map = self.rows(MAP_BYTES / MAP_ROW, MAP_ROW)?;
         let n = self.number("objects")?;
         let objs = (0..n).map(|_| self.object()).collect::<Result<Vec<_>, _>>()?;
-        Ok(LevelFile { stand_in: StandIn { base, header }, map, objs, name })
+        let secret = if version >= 3 { self.secret()? } else { None };
+        Ok(LevelFile { stand_in: StandIn { base, header }, map, objs, name, secret })
+    }
+
+    fn secret(&mut self) -> Result<Option<SecretTo>, FileError> {
+        let v = self.field("secret")?;
+        let f: Vec<&str> = v.split_whitespace().collect();
+        let to = match f[..] {
+            ["-"] => Some(None),
+            ["point", p] => u8::from_str_radix(p, 16).ok().map(|p| Some(SecretTo::Point(p))),
+            ["newzone", k] => usize::from_str_radix(k, 16).ok().filter(|&k| k < new_zones::MAX).map(|k| Some(SecretTo::NewZone(k))),
+            _ => None,
+        };
+        to.ok_or(self.damaged())
     }
 
     fn name(&mut self) -> Result<String, FileError> {
@@ -420,6 +478,17 @@ impl<'a> Reader<'a> {
         Ok(NewZone { base, picture, points, entry, exits, door, name })
     }
 
+    /// A game zone's added points: numbered from $80, at most `added_points::MAX`.
+    fn zone_added(&mut self) -> Result<ZoneAdded, FileError> {
+        let zone = self.hex::<u8>("zone")? as usize;
+        let n = self.number("points")?;
+        let points = (0..n).map(|_| self.zone_point()).collect::<Result<Vec<_>, _>>()?;
+        if zone >= added_points::ZONES || n > added_points::MAX || !points.iter().all(|p| added_points::index(p.number).is_some()) {
+            return Err(self.damaged());
+        }
+        Ok(ZoneAdded { zone, points })
+    }
+
     fn zone_point(&mut self) -> Result<ZonePoint, FileError> {
         let line = self.line()?;
         let f: Vec<&str> = line.split_whitespace().collect();
@@ -485,7 +554,8 @@ mod tests {
     fn level(base: u8) -> LevelFile {
         let map = (0..MAP_BYTES).map(|i| (i % 0x80) as u8).collect();
         let objs = vec![Obj { x: 0x40, y: 0x18, kind: 0x25, flag: true }, Obj { x: 0xFF8, y: 0x3F8, kind: 0x7F, flag: false }];
-        LevelFile { stand_in: StandIn { base, header: core::array::from_fn(|i| i as u8 * 3) }, map, objs, name: format!("Cave {base}") }
+        let secret = [None, Some(SecretTo::Point(0x07)), Some(SecretTo::NewZone(1))][base as usize % 3];
+        LevelFile { stand_in: StandIn { base, header: core::array::from_fn(|i| i as u8 * 3) }, map, objs, name: format!("Cave {base}"), secret }
     }
 
     fn project() -> ProjectFile {
@@ -495,15 +565,17 @@ mod tests {
             levels: (0..LEVELS as u8 + 2).map(|l| level(l % LEVELS as u8)).collect(),
             world: (0..world::W * world::H).map(|i| i as u8).collect(),
             zones: (0..zone_maps::ZONES.len()).map(|z| vec![z as u8; zone_maps::W * zone_maps::H]).collect(),
-            points: (0..world::POINT_COUNT as u8).collect(),
+            points: (0..world::POINT_COUNT).map(|p| p as u8).collect(),
             routes: MapRoutes {
-                ways: (0..cart_model::map_routes::POINTS).map(|p| if p % 3 == 0 { [Some(way.clone()), None, Some(Way { steps: vec![], to: 2 }), None] } else { Default::default() }).collect(),
-                places: (0..cart_model::map_routes::POINTS).map(|p| Place { cam_x: p as u16 * 3, cam_y: 0x150, x: 0x4B, y: p as u8, rest: [1, 2] }).collect(),
-                added: vec![0x6D, 0x7B],
+                ways: (0..map_routes::ALL).map(|p| if p % 3 == 0 { [Some(way.clone()), None, Some(Way { steps: vec![], to: 2 }), None] } else { Default::default() }).collect(),
+                places: (0..map_routes::ALL).map(|p| Place { cam_x: p as u16 * 3, cam_y: 0x150, x: 0x4B, y: p as u8, rest: [1, 2] }).collect(),
+                added: vec![0x6D, 0x7B, 0x80],
             },
             doors: Doors { into: vec![vec![0x02, 0x19], vec![0xFF]], exits: vec![(0x23, Leads::World(0x05)), (0x28, Leads::Zone(2))] },
             new_zones: vec![zone()],
             entries: vec![0x23, 0x28, 0x32, 0x3C, 0x50],
+            zone_points: vec![ZoneAdded { zone: 1, points: vec![ZonePoint { number: 0x80, flag: 0x80, ..zone().points[0].clone() }] }],
+            shuts: (0..added_points::MAX).map(|j| if j == 0 { 0x90 } else { 0 }).collect(),
         }
     }
 
@@ -540,12 +612,18 @@ mod tests {
 
     #[test]
     fn a_level_comes_back_as_it_was_written() {
-        let l = level(12);
+        let l = level(13);
         let text = level_text(&l);
-        assert!(text.starts_with("NMB level 2\nbase 0c\nname Cave 12\n") && text.ends_with("end\n"));
+        assert!(text.starts_with("NMB level 3\nbase 0d\nname Cave 13\n") && text.ends_with("secret point 07\nend\n"));
         assert_eq!(read_level(&text), Ok(l.clone()));
-        let old = text.replacen("NMB level 2", "NMB level 1", 1).replacen("name Cave 12\n", "", 1);
-        assert_eq!(read_level(&old), Ok(LevelFile { name: String::new(), ..l }), "version 1 has no names");
+        for b in [12, 14] {
+            assert_eq!(read_level(&level_text(&level(b))), Ok(level(b)));
+        }
+        let v2 = text.replacen("NMB level 3", "NMB level 2", 1).replacen("secret point 07\n", "", 1);
+        assert_eq!(read_level(&v2), Ok(LevelFile { secret: None, ..l.clone() }), "version 2 has no secret exit target");
+        let old = v2.replacen("NMB level 2", "NMB level 1", 1).replacen("name Cave 13\n", "", 1);
+        assert_eq!(read_level(&old), Ok(LevelFile { name: String::new(), secret: None, ..l }), "version 1 has no names");
+        assert!(matches!(read_level(&text.replace("secret point 07", "secret door 07")), Err(FileError::Damaged(_))));
     }
 
     #[test]
@@ -553,7 +631,7 @@ mod tests {
         let text = level_text(&level(3));
         assert!(matches!(read_level(&text[..text.len() / 2]), Err(FileError::Damaged(_))));
         assert_eq!(read_level(&text.replace("base 03", "base 20")), Err(FileError::BaseOutside(32)));
-        assert_eq!(read_level(&text.replace("NMB level 2", "NMB level 3")), Err(FileError::Newer));
+        assert_eq!(read_level(&text.replace("NMB level 3", "NMB level 4")), Err(FileError::Newer));
         assert_eq!(read_level("hello"), Err(FileError::NotLevel));
         assert_eq!(read_level(""), Err(FileError::NotLevel));
         let short_row = text.replacen("\n0001", "\n01", 1);
@@ -569,12 +647,20 @@ mod tests {
 
     #[test]
     fn a_version_1_project_has_no_new_zones() {
-        let p = project();
+        // the game's point numbers only
+        let mut p = project();
+        p.points.truncate(OLD_LEVELS);
+        p.routes.ways.truncate(map_routes::POINTS);
+        p.routes.places.truncate(map_routes::POINTS);
+        p.routes.added.retain(|&a| a < 0x80);
         let text = project_text(&p);
-        let old = format!("{}end\n", &text[..text.find("entries").unwrap()]).replacen("NMB project 2", "NMB project 1", 1);
-        let old: String = old.lines().filter(|l| !l.starts_with("name ")).map(|l| format!("{l}\n")).collect();
-        let levels = p.levels.iter().map(|l| LevelFile { name: String::new(), ..l.clone() }).collect();
-        assert_eq!(read_project(&old), Ok(ProjectFile { new_zones: Vec::new(), entries: Vec::new(), levels, ..p }));
+        let old = format!("{}end\n", &text[..text.find("entries").unwrap()]).replacen("NMB project 5", "NMB project 1", 1);
+        let old: String = old.lines().filter(|l| !l.starts_with("name ") && !l.starts_with("secret ")).map(|l| format!("{l}\n")).collect();
+        let levels = p.levels.iter().map(|l| LevelFile { name: String::new(), secret: None, ..l.clone() }).collect();
+        p.points.resize(world::POINT_COUNT, world::NO_LEVEL);
+        p.routes.ways.resize(map_routes::ALL, Default::default());
+        p.routes.places.resize(map_routes::ALL, Place { cam_x: 0, cam_y: 0, x: 0, y: 0, rest: [0, 0] });
+        assert_eq!(read_project(&old), Ok(ProjectFile { new_zones: Vec::new(), entries: Vec::new(), zone_points: Vec::new(), shuts: vec![0; added_points::MAX], levels, ..p }));
     }
 
     #[test]

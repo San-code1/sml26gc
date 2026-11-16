@@ -33,13 +33,26 @@ select, language. F11: full screen. Hold Ctrl: fast-forward.
 ## Editor
 
 - Levels: paint blocks, place and move objects (Tab), add new levels (Ctrl+N) and name them.
-  PgUp / PgDn change level, F2 opens the world map editor.
+  PgUp / PgDn change level, F2 opens the world map editor. A game level or map whose saved
+  copy differs from the game's (blocks, objects, start, points, picture) is marked "mod".
+- Where Mario begins a level is drawn on it; Place start (I) puts him on the block clicked, and
+  he can be dragged (the game's camera follows from his place). Place finish (F) moves where
+  the level ends (its goal block; the bell above it goes along); levels that end with their
+  boss have none. Secret exit (Shift+F) places a level's secret exit block, and Leads to (U)
+  chooses on the maps where it takes Mario (a world point, a zone's point or a new zone's);
+  until then a game level's goes where the game's does.
 - World map: paint the world and zone maps (Picture tab); choose each point's level, draw
-  paths, add points (6 on the world map) and set doors and exits (Points tab). Where a door or
-  exit leads is chosen on the maps (U): a world point, or the point a zone is entered on,
-  which becomes that zone's entry.
+  paths, add points (46 new on the world map; up to 40 in all on each zone but the bonus
+  game) and set doors and exits (Points tab). Where a door or exit leads is chosen on the maps
+  (U): a world point, or the point a zone is entered on, which becomes that zone's entry.
+  Points are dragged on every map (their paths become straight); the tab shows how many
+  points the map has and can have. Points added from number $80 work only in this game, which
+  keeps their progress in `saves\<game>.zones`; they cannot be where a door, exit or secret
+  exit leads. Each of their paths can be shut until the point's level is cleared (Ctrl+arrow
+  keys). A path drawn from a point that stands on another path's road replaces that path's
+  way back, so Mario stops at the new point.
 - New zones (Ctrl+N on a zone map, Ctrl+Del deletes): a copy of the Tree, Pumpkin, Macro,
-  Space or Mario zone with its own name, picture, points (up to 20 or 21), paths, levels,
+  Space or Mario zone with its own name, picture, points (up to 40), paths, levels,
   exits and progress, entered from any world point. It plays with its base zone's graphics
   and music, and only in this game: the game puts it in place of its base while Mario is at
   its door or inside, and keeps its progress in `saves\<game>.zones`.

@@ -120,7 +120,38 @@ pub fn capture_look(map_state: &Gb, rom: &[u8], original: &[u8], level: usize, k
     if new.is_empty() {
         return None;
     }
-    let tall = g1.video().lcdc() & 0x04 != 0;
+    let (w, h, px, x0, y0) = cut(&g1, &new)?;
+    // screen position of the object = its world position minus the camera; the camera is
+    // where Mario's world X/Y minus his sprite's screen place puts it (OAM is screen + 8/16)
+    let (cx, cy) = player_position(&mut g1);
+    let oam = g1.video().oam();
+    let cam_x = cx as i32 - (oam[1] as i32 - 8);
+    let cam_y = cy as i32 - (oam[0] as i32 - 16);
+    let dx = (x0 - 8 + cam_x) - obj.x as i32;
+    let dy = (y0 - 16 + cam_y) - obj.y as i32;
+    Some(Look { w, h, px, dx: dx.clamp(-32, 32), dy: dy.clamp(-32, 32) })
+}
+
+/// Mario as he stands at the start of level 0 (all the sprites then are his); `dx`/`dy`
+/// from his position ($FFC2, $FFC0) to the picture's top-left.
+pub fn capture_mario(map_state: &Gb) -> Option<Look> {
+    let mut g = map_state.clone();
+    if !g.enter_level(0) {
+        return None;
+    }
+    let all = sprites(&g);
+    let (w, h, px, x0, y0) = cut(&g, &all)?;
+    let at = |g: &mut Gb, a: u16| g.read(a) as i32 | (g.read(a + 1) as i32) << 8;
+    // the screen's top-left in level pixels: the camera ($FFCA, $FFC8) is its middle
+    let (sx, sy) = (at(&mut g, 0xFFCA) - 0x50, at(&mut g, 0xFFC8) - 0x48);
+    let dx = x0 - 8 + sx - at(&mut g, 0xFFC2);
+    let dy = y0 - 16 + sy - at(&mut g, 0xFFC0);
+    Some(Look { w, h, px, dx, dy })
+}
+
+/// The picture the sprites `new` draw: width, height, shades, and its top-left in OAM terms.
+fn cut(g: &Gb, new: &[[u8; 4]]) -> Option<(usize, usize, Vec<Option<u8>>, i32, i32)> {
+    let tall = g.video().lcdc() & 0x04 != 0;
     let sh = if tall { 16 } else { 8 };
     let x0 = new.iter().map(|s| s[1] as i32).min()?;
     let y0 = new.iter().map(|s| s[0] as i32).min()?;
@@ -130,14 +161,14 @@ pub fn capture_look(map_state: &Gb, rom: &[u8], original: &[u8], level: usize, k
     if w > 64 || h > 64 {
         return None;
     }
-    let vram = g1.video().vram();
+    let vram = g.video().vram();
     let mut px = vec![None; w * h];
-    for s in &new {
+    for s in new {
         let mut tile = s[2] as usize;
         if tall {
             tile &= 0xFE;
         }
-        let pal = g1.video().obp((s[3] >> 4) & 1);
+        let pal = g.video().obp((s[3] >> 4) & 1);
         for row in 0..sh as usize {
             let r = if s[3] & 0x40 != 0 { sh as usize - 1 - row } else { row };
             let a = tile * 16 + r * 2;
@@ -153,13 +184,5 @@ pub fn capture_look(map_state: &Gb, rom: &[u8], original: &[u8], level: usize, k
             }
         }
     }
-    // screen position of the object = its world position minus the camera; the camera is
-    // where Mario's world X/Y minus his sprite's screen place puts it (OAM is screen + 8/16)
-    let (cx, cy) = player_position(&mut g1);
-    let oam = g1.video().oam();
-    let cam_x = cx as i32 - (oam[1] as i32 - 8);
-    let cam_y = cy as i32 - (oam[0] as i32 - 16);
-    let dx = (x0 - 8 + cam_x) - obj.x as i32;
-    let dy = (y0 - 16 + cam_y) - obj.y as i32;
-    Some(Look { w, h, px, dx: dx.clamp(-32, 32), dy: dy.clamp(-32, 32) })
+    Some((w, h, px, x0, y0))
 }

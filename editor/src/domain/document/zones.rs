@@ -3,7 +3,8 @@
 //! they open, their exits and the world point that is their door. A new zone's picture is
 //! `zones[ZONES.len() + k]`, in the world history with the other pictures; the rest is in the
 //! points history. Making or deleting one empties both histories.
-use super::{first_dir, EditorDocument};
+use super::{first_dir, EditorDocument, ZONE_POINTS};
+use cart_model::added_points;
 use cart_model::doors::{self, Leads, NONE};
 use cart_model::map_routes::{Place, Way};
 use cart_model::new_zones::{self, NewZone, ZonePoint};
@@ -35,13 +36,13 @@ impl ZonePoints {
         self.points.iter().find(|x| x.number == p)
     }
 
-    fn point_mut(&mut self, p: u8) -> Option<&mut ZonePoint> {
+    pub(super) fn point_mut(&mut self, p: u8) -> Option<&mut ZonePoint> {
         self.points.iter_mut().find(|x| x.number == p)
     }
 
     /// How many points a zone made from this base can have.
     pub fn room(&self) -> usize {
-        new_zones::base_of(self.base).map_or(0, |b| b.room())
+        new_zones::base_of(self.base).map_or(0, |b| b.room().min(ZONE_POINTS))
     }
 }
 
@@ -236,7 +237,7 @@ impl EditorDocument {
         }
     }
 
-    fn zone_edit(&mut self, k: usize) -> &mut ZonePoints {
+    pub(super) fn zone_edit(&mut self, k: usize) -> &mut ZonePoints {
         self.points_record();
         self.new_zones_dirty = true;
         &mut self.new_zones[k]
@@ -247,10 +248,11 @@ impl EditorDocument {
     pub fn zone_add_point(&mut self, k: usize, x: i32, y: i32) -> Result<u8, ZoneRefusal> {
         let z = &self.new_zones[k];
         let b = new_zones::base_of(z.base).ok_or(ZoneRefusal::NotABase)?;
-        let number = b.usable().find(|&n| z.point(n).is_none()).ok_or(ZoneRefusal::NoNumberLeft(z.room()))?;
+        let number = b.usable().find(|&n| z.point(n).is_none()).filter(|_| z.points.len() < z.room()).ok_or(ZoneRefusal::NoNumberLeft(z.room()))?;
         let pool = new_zones::flags(&self.rom, b);
         let free = pool.iter().copied().find(|f| !SPECIAL_MAP_POINTS.contains(f) && !z.points.iter().any(|p| p.flag == *f));
-        let flag = free.or_else(|| pool.first().copied()).unwrap_or(0);
+        // an added number's flag is the number itself
+        let flag = if added_points::index(number).is_some() { number } else { free.or_else(|| pool.first().copied()).unwrap_or(0) };
         let cam = z.points.first().map_or(Place { cam_x: 0, cam_y: 0, x: 0, y: 0, rest: [0, 0] }, |p| p.place);
         let (x, y) = snapped(z, x, y);
         let place = Place { x, y, ..cam };
@@ -478,7 +480,7 @@ mod tests {
     }
 
     #[test]
-    fn points_of_a_new_zone_take_its_bases_numbers_then_spare_ones() {
+    fn points_of_a_new_zone_take_its_bases_numbers_then_spare_then_added_ones() {
         let Some(mut doc) = open() else {
             eprintln!("no cartridge found: document test skipped");
             return;
@@ -488,8 +490,11 @@ mod tests {
         let spare: Vec<u8> = (0..new_zones::SPARE.len() as i32).map(|i| doc.zone_add_point(k, 30 + 8 * i, 50).unwrap()).collect();
         assert_eq!(spare, new_zones::SPARE.to_vec(), "the Tree Zone uses all its numbers; then come the spare ones");
         assert!(spare.iter().all(|&p| new_zones::flags(&doc.rom, base).contains(&doc.new_zones[k].point(p).unwrap().flag)));
-        assert_eq!(doc.zone_add_point(k, 50, 50), Err(ZoneRefusal::NoNumberLeft(20)));
-        for p in spare {
+        let added: Vec<u8> = (0..20).map(|i| doc.zone_add_point(k, 30 + 4 * (i % 10), 60 + 8 * (i / 10)).unwrap()).collect();
+        assert_eq!(added, (0x80..0x94).collect::<Vec<u8>>(), "then numbers from $80, up to 40 points");
+        assert!(added.iter().all(|&p| doc.new_zones[k].point(p).unwrap().flag == p), "an added number's flag is its own");
+        assert_eq!(doc.zone_add_point(k, 50, 50), Err(ZoneRefusal::NoNumberLeft(ZONE_POINTS)));
+        for p in added.into_iter().chain(spare) {
             assert!(doc.zone_remove_point(k, p));
         }
         assert!(doc.zone_remove_point(k, 0x24));

@@ -9,6 +9,7 @@ use crate::domain::overlay::draw_hint;
 use crate::domain::settings::Settings;
 use crate::ports::{AudioOut, Keyboard, SaveStore, ZoneProgressStore};
 use cart_model::extra_levels;
+use cart_model::secret_exits;
 use cart_model::ram_map::{GAME_MODE, LEVEL_NUMBER};
 use cart_model::{GameDriver, GameMode};
 use gb_core::palette::{Palette, PALETTES};
@@ -24,12 +25,13 @@ pub enum Flow {
 type Undo = Vec<(usize, Vec<u8>)>;
 
 /// The level to ask the game for, to play `level`: a new level (32 and up, see
-/// `extra_levels`) is put in place of its base level in the console's ROM, and the writes
-/// that undo it come back. None if the copy has no such level.
+/// `extra_levels`) is put in place of its base level in the console's ROM (its secret exit's
+/// target too), and the writes that undo it come back. None if the copy has no such level.
 fn stand_in(g: &mut Gb, level: u8) -> Option<(u8, Option<Undo>)> {
     let Some(k) = (level as usize).checked_sub(extra_levels::FIRST) else { return Some((level, None)) };
     let e = extra_levels::read(g.cart().rom()).into_iter().nth(k)?;
-    let writes = extra_levels::writes_for(g.cart().rom(), &e);
+    let mut writes = extra_levels::writes_for(g.cart().rom(), &e);
+    writes.extend(secret_exits::stand_in(g.cart().rom(), level as usize, e.base as usize));
     Some((e.base, Some(extra_levels::apply(g.cart_mut().rom_mut(), &writes))))
 }
 
@@ -269,7 +271,7 @@ impl GameSession {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::zone_progress::ZoneProgress;
+    use crate::domain::zone_progress::{MapKey, ZoneProgress};
     use crate::ports::{SettingsStore, Window};
     use std::cell::{Cell, RefCell};
     use std::rc::Rc;
@@ -461,6 +463,55 @@ mod tests {
         assert!(s.extra.is_none() && s.gb.cart().rom() == &copy[..], "the base level is back");
     }
 
+    /// A new level's secret exit sent into the Pumpkin Zone: played from the level editor's
+    /// Play and from a map point that opens it, Mario comes out on the Pumpkin Zone's $28 and
+    /// stays there.
+    #[test]
+    fn a_new_level_secret_exit_leads_where_chosen() {
+        use cart_model::secret_exits::{self, SecretTo};
+        let Some(rom) = host::find_rom(None) else {
+            eprintln!("no cartridge found: session test skipped");
+            return;
+        };
+        let mut copy = cart_model::patch::expand(&std::fs::read(rom).unwrap()).unwrap();
+        let e = extra_levels::based_on(&copy, 0);
+        extra_levels::store(&mut copy, &[e]).unwrap();
+        let mut points = cart_model::world::point_levels(&copy);
+        points[0] = 32;
+        cart_model::world::write_point_levels(&mut copy, &points);
+        secret_exits::write(&mut copy, &[(32, SecretTo::Point(0x28))], &[]).unwrap();
+        let rec = Record::default();
+        let session = |start_level| {
+            let parts = SessionParts {
+                prefs: Preferences::new(Box::new(rec.clone()), Box::new(rec.clone())),
+                saves: Box::new(rec.clone()),
+                zones: Box::new(rec.clone()),
+                start_level,
+                checking: false,
+            };
+            GameSession::new(Gb::new(copy.clone(), 44100).unwrap(), parts)
+        };
+        let mut keys = FakeKeys::default();
+        for start_level in [Some(32), None] {
+            let mut s = session(start_level);
+            let mut f = 0;
+            while s.gb.mode() != GameMode::Playing {
+                assert!(f < 3000, "never reached a level");
+                keys.set(if f % 150 >= 140 { &[Key::Enter] } else { &[] });
+                s.frame(FRAME_SECONDS as f32, &keys, &Silence);
+                f += 1;
+            }
+            keys.set(&[]);
+            assert_eq!(s.extra.as_ref().map(|x| x.0), Some(32));
+            s.gb.write(0xA2B4, 0xFF);
+            assert!(clear_level(&mut s.gb));
+            for _ in 0..300 {
+                s.frame(FRAME_SECONDS as f32, &keys, &Silence);
+            }
+            assert_eq!((s.gb.read(cart_model::ram_map::MAP_POINT), s.gb.read(0xA68B)), (0x28, 1), "{start_level:?}: on the Pumpkin Zone's $28, staying there");
+        }
+    }
+
     /// Clear the level of the point Mario stands on as at a goal (mode $09), then play on
     /// until the map has been up for a while.
     fn clear_level(g: &mut Gb) -> bool {
@@ -580,5 +631,117 @@ mod tests {
         run(&mut s, &mut keys, &[Key::Down], 900);
         assert_eq!((s.gb.read(MAP_POINT), s.zones.inside()), (0x23, Some(0)));
         assert_eq!(picture(&mut s.gb), z.picture, "in the new zone");
+
+        // level 8's secret exit leads into the new zone: Mario comes back on its door and the
+        // port enters it
+        use cart_model::secret_exits::{self, SecretTo};
+        secret_exits::write(&mut copy, &[(8, SecretTo::NewZone(0))], &[0x07]).unwrap();
+        let mut s = session(Gb::new(copy.clone(), 44100).unwrap());
+        assert!(s.gb.boot_to_map() && s.gb.show_map_at(0x2A) && s.gb.enter_level(8));
+        run(&mut s, &mut keys, &[], 30);
+        s.gb.write(0xA2B4, 0xFF);
+        assert!(clear_level(&mut s.gb));
+        assert_eq!(s.gb.read(MAP_POINT), 0x07, "on the new zone's door");
+        run(&mut s, &mut keys, &[], 400);
+        assert_eq!((s.gb.read(MAP_POINT), s.zones.inside()), (0x23, Some(0)), "in the new zone");
+    }
+
+    /// Added points ($80) on the world map (beside $07) and in the Tree Zone (beside $20):
+    /// walked to and cleared with their own flag bytes, kept per map; a game saved on the
+    /// Tree Zone's resumes there with it cleared, and the world map's stays apart.
+    #[test]
+    fn added_points_are_played_kept_and_resumed() {
+        use cart_model::added_points::{self, ZoneAdded};
+        use cart_model::map_routes::{self, Place, Way};
+        use cart_model::new_zones::ZonePoint;
+        use cart_model::ram_map::MAP_POINT;
+        let Some(rom) = host::find_rom(None) else {
+            eprintln!("no cartridge found: session test skipped");
+            return;
+        };
+        let mut copy = cart_model::patch::expand(&std::fs::read(rom).unwrap()).unwrap();
+        assert!(added_points::install(&mut copy));
+        let p = added_points::FIRST;
+        let step = [(24, 0), (-24, 0), (0, -24), (0, 24)];
+        let keys_of = [Key::Right, Key::Left, Key::Up, Key::Down];
+        let back = [1, 0, 3, 2];
+        let mut r = map_routes::read(&copy);
+        let free = |r: &map_routes::MapRoutes, q: u8| (0..4).find(|&d| r.ways[q as usize][d].is_none()).unwrap();
+        // the world map's: in the routes as written
+        let (dw, dz) = (free(&r, 0x07), free(&r, 0x20));
+        let (x, y) = r.places[0x07].on_world();
+        r.places[p as usize] = Place::at_world(x + step[dw].0, y + step[dw].1);
+        r.ways[0x07][dw] = Some(Way::through(&[step[dw]], p));
+        r.ways[p as usize][back[dw]] = Some(Way::through(&[(-step[dw].0, -step[dw].1)], 0x07));
+        r.added.push(p);
+        // the Tree Zone's: the way to it in the routes, the point kept for the port
+        let at = r.places[0x20];
+        r.ways[0x20][dz] = Some(Way::through(&[step[dz]], p));
+        map_routes::write(&mut copy, &r).unwrap();
+        let mut levels = cart_model::world::point_levels(&copy);
+        levels[p as usize] = 1;
+        cart_model::world::write_point_levels(&mut copy, &levels);
+        let place = Place { x: (at.x as i32 + step[dz].0) as u8, y: (at.y as i32 + step[dz].1) as u8, ..at };
+        let mut ways: [Option<Way>; 4] = Default::default();
+        ways[back[dz]] = Some(Way::through(&[(-step[dz].0, -step[dz].1)], 0x20));
+        let tree = ZonePoint { number: p, place, ways, level: 2, flag: p, shut: 0, pass: None };
+        added_points::store_zones(&mut copy, &[ZoneAdded { zone: 0, points: vec![tree] }]).unwrap();
+
+        let rec = Record::default();
+        let session = |gb: Gb| {
+            let parts = SessionParts {
+                prefs: Preferences::new(Box::new(rec.clone()), Box::new(rec.clone())),
+                saves: Box::new(rec.clone()),
+                zones: Box::new(rec.clone()),
+                start_level: None,
+                checking: false,
+            };
+            GameSession::new(gb, parts)
+        };
+        let run = |s: &mut GameSession, keys: &mut FakeKeys, held: &[Key], n: u32| {
+            for f in 0..n {
+                keys.set(if f < 6 { held } else { &[] });
+                s.frame(FRAME_SECONDS as f32, keys, &Silence);
+            }
+        };
+        let own = |g: &mut Gb| g.read(added_points::FLAG_RAM);
+        let mut keys = FakeKeys::default();
+
+        let mut s = session(Gb::new(copy.clone(), 44100).unwrap());
+        assert!(s.gb.boot_to_map() && s.gb.show_map_at(0x20));
+        run(&mut s, &mut keys, &[], 10);
+        run(&mut s, &mut keys, &[keys_of[dz]], 300);
+        assert_eq!(s.gb.read(MAP_POINT), p, "walked to the Tree Zone's added point");
+        let flags: Vec<u8> = (0xA848..0xA872).map(|a| s.gb.read(a)).collect();
+        assert!(clear_level(&mut s.gb));
+        run(&mut s, &mut keys, &[], 10);
+        assert_eq!((s.gb.read(MAP_POINT), own(&mut s.gb)), (p, 0x80), "back on it, cleared");
+        assert_eq!((0xA848..0xA872).map(|a| s.gb.read(a)).collect::<Vec<u8>>(), flags, "no flag of the game changed");
+        s.finish();
+
+        // resumed on the Tree Zone's added point, with it cleared
+        let ram = s.gb.cart().ram().to_vec();
+        let mut gb = Gb::new(copy.clone(), 44100).unwrap();
+        gb.cart_mut().set_ram(ram);
+        let mut s = session(gb);
+        let mut f = 0;
+        while s.gb.mode() != GameMode::Map {
+            assert!(f < 3000, "never reached the map");
+            run(&mut s, &mut keys, if f % 150 == 140 { &[Key::Enter] } else { &[] }, 1);
+            f += 1;
+        }
+        run(&mut s, &mut keys, &[], 10);
+        assert_eq!((s.gb.read(MAP_POINT), s.gb.read(0xA68B), own(&mut s.gb)), (p, 2, 0x80), "in the Tree Zone");
+        run(&mut s, &mut keys, &[keys_of[back[dz]]], 300);
+        assert_eq!(s.gb.read(MAP_POINT), 0x20);
+
+        // the world map's added point: its own flag, not cleared
+        assert!(s.gb.show_map_at(0x07));
+        run(&mut s, &mut keys, &[], 10);
+        assert_eq!(own(&mut s.gb), 0, "the world map's added point is not cleared");
+        run(&mut s, &mut keys, &[keys_of[dw]], 300);
+        assert_eq!(s.gb.read(MAP_POINT), p, "walked to the world map's added point");
+        assert!(s.gb.cart().rom() == &copy[..], "the world map's added points are the copy's");
+        assert_eq!(rec.zones.borrow().as_ref().unwrap().added[&(MapKey::Zone(0), 0)][0], 0x80, "the Tree Zone's progress is kept");
     }
 }

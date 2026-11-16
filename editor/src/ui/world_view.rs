@@ -8,6 +8,7 @@ use super::names_view::Named;
 use super::{Editor, TAB_PICTURE, TAB_POINTS};
 use crate::domain::document::{EditorDocument, ZoneRefusal};
 use crate::domain::tools::ToolKind;
+use cart_model::added_points;
 use cart_model::doors::{self, Leads};
 use cart_model::map_routes::{self, Way, DIRS};
 use cart_model::original_points::{self, OnMap};
@@ -72,24 +73,49 @@ impl Editor {
         vec2(self.panel + (x as f32 - self.cam.x) * self.scale(), (y as f32 - self.cam.y) * self.scale())
     }
 
-    /// The points drawn on the shown map: the game's own (where it draws them), on the world
-    /// map the new ones, on a new zone its own. (point, x, y, new)
+    /// The points drawn on the shown map: the game's own (where it draws them), the new ones
+    /// of the world map or the game zone, on a new zone its own. (point, x, y, new)
     pub(super) fn map_points(&self) -> Vec<(u8, i32, i32, bool)> {
         if let Some(k) = self.new_zone_shown() {
             return self.doc.new_zones[k].points.iter().map(|p| (p.number, p.place.x as i32, p.place.y as i32 - FEET, true)).collect();
         }
-        let mut v: Vec<(u8, i32, i32, bool)> = original_points::on(self.world_map).map(|s| (s.point, s.x, s.y, false)).collect();
-        if self.world_map == OnMap::World {
-            for &p in &self.doc.routes.added {
-                let (x, y) = self.doc.routes.places[p as usize].on_world();
-                v.push((p, x, y, true));
+        let mut v: Vec<(u8, i32, i32, bool)> = original_points::on(self.world_map).map(|s| self.spot_at(s)).collect();
+        let added_here = self.doc.added_on() == self.world_map;
+        for &p in &self.doc.routes.added {
+            let pl = self.doc.routes.places[p as usize];
+            match self.world_map {
+                OnMap::World if added_here || added_points::index(p).is_none() => v.push((p, pl.on_world().0, pl.on_world().1, true)),
+                OnMap::Zone(_) if added_here && added_points::index(p).is_some() => v.push((p, pl.x as i32, pl.y as i32 - FEET, true)),
+                _ => {}
             }
         }
         v
     }
 
+    /// Can new points be put on the shown map?
+    fn takes_new_points(&self) -> bool {
+        match self.world_map {
+            OnMap::World | OnMap::NewZone(_) => true,
+            OnMap::Zone(z) => z < added_points::ZONES,
+        }
+    }
+
+    /// Where a game's point is drawn: where the game draws it, moved as far as its place was.
+    fn spot_at(&self, s: &original_points::Spot) -> (u8, i32, i32, bool) {
+        let (dx, dy) = self.doc.point_moved(self.world_map, s.point);
+        (s.point, s.x + dx, s.y + dy, false)
+    }
+
+    /// How far a dragged point of the world map or a game zone has moved, as it will be placed.
+    fn drag_offset(&self) -> Option<(i32, i32)> {
+        let (_, from) = self.drag_from?;
+        let d = self.world_pos(mouse_position().into()) - from;
+        let snap = |v: f32| (v / 4.0).round() as i32 * 4;
+        Some((snap(d.x), snap(d.y)))
+    }
+
     /// The level point `p` of the shown map opens (`world::NO_LEVEL`: none).
-    fn level_of(&self, p: usize) -> u8 {
+    pub(super) fn level_of(&self, p: usize) -> u8 {
         match self.new_zone_shown() {
             Some(k) => self.doc.new_zones[k].point(p as u8).map_or(world::NO_LEVEL, |q| q.level),
             None => self.doc.points.get(p).copied().unwrap_or(world::NO_LEVEL),
@@ -117,7 +143,7 @@ impl Editor {
 
     /// Is `p` a point of the world map (drawn there, the twin of a zone's entrance, or new)?
     pub(super) fn is_world_point(&self, p: u8) -> bool {
-        self.doc.routes.added.contains(&p) || map_routes::ZONE_EXITS.iter().any(|z| z.1 == p) || original_points::SPOTS.iter().any(|s| s.point == p && s.map == OnMap::World)
+        (self.doc.routes.added.contains(&p) && (added_points::index(p).is_none() || self.doc.added_on() == OnMap::World)) || map_routes::ZONE_EXITS.iter().any(|z| z.1 == p) || original_points::SPOTS.iter().any(|s| s.point == p && s.map == OnMap::World)
     }
 
     pub(super) fn leads_name(&self, l: Leads) -> String {
@@ -339,13 +365,21 @@ impl Editor {
                 let d = [Action::DeletePathRight, Action::DeletePathLeft, Action::DeletePathUp, Action::DeletePathDown].iter().position(|&x| x == a).unwrap_or(0);
                 match zone {
                     Some(k) => self.doc.zone_set_way(k, self.point as u8, d, None),
-                    None if self.point < map_routes::POINTS => self.doc.set_way(self.point, d, None),
+                    None if self.point < map_routes::ALL => self.doc.set_way(self.point, d, None),
                     None => {}
+                }
+            }
+            Action::ShutRight | Action::ShutLeft | Action::ShutUp | Action::ShutDown => {
+                let d = Self::SHUT_ACTIONS.iter().position(|&x| x == a).unwrap_or(0);
+                if self.doc.can_shut(zone, self.point as u8) {
+                    self.doc.toggle_shut(zone, self.point as u8, d);
+                } else {
+                    self.status = tr(self.es, "Only new points can shut their paths until their level is cleared.", "Solo los puntos nuevos pueden cerrar sus caminos hasta superar su nivel.").into();
                 }
             }
             Action::NewPath => {
                 let drawing = self.route_draw.is_some();
-                let can_draw = self.point < map_routes::POINTS && self.chosen_at().is_some();
+                let can_draw = self.point < map_routes::ALL && self.chosen_at().is_some();
                 self.placing_point = false;
                 self.route_draw = if drawing || !can_draw { None } else { Some(Vec::new()) };
                 if !can_draw {
@@ -355,7 +389,7 @@ impl Editor {
             Action::NewPoint if zone.is_some_and(|k| self.doc.new_zones[k].points.len() >= self.doc.new_zones[k].room()) && !self.placing_point => {
                 self.status = self.zone_full_note(zone.unwrap_or(0));
             }
-            Action::NewPoint if self.world_map == OnMap::World || zone.is_some() => {
+            Action::NewPoint if self.takes_new_points() => {
                 self.route_draw = None;
                 self.placing_point = !self.placing_point;
             }
@@ -385,7 +419,7 @@ impl Editor {
         self.point = p;
         self.route_draw = None;
         if self.doc.routes.added.contains(&(p as u8)) {
-            self.show_map(OnMap::World);
+            self.show_map(if added_points::index(p as u8).is_some() { self.doc.added_on() } else { OnMap::World });
         } else if let Some(s) = original_points::SPOTS.iter().find(|s| s.point as usize == p) {
             self.show_map(s.map);
         }
@@ -424,14 +458,20 @@ impl Editor {
             };
             return;
         }
-        // world points sit 2 pixels below the 4-pixel grid
-        let (x, y) = self.snapped(m, (0, 2));
-        self.status = match self.doc.add_point(x, y) {
+        // world points sit 2 pixels below the 4-pixel grid; a zone's places are Mario's feet
+        let (x, y) = match self.world_map {
+            OnMap::World => self.snapped(m, (0, 2)),
+            _ => {
+                let w = self.world_pos(m);
+                (((w.x / 4.0).round() * 4.0) as i32, ((w.y / 4.0).round() * 4.0) as i32 + FEET)
+            }
+        };
+        self.status = match self.doc.add_point(self.world_map, x, y) {
             Some(p) => {
                 self.point = p as usize;
                 format!("{} {p:02X}", tr(self.es, "New point", "Punto nuevo"))
             }
-            None => tr(self.es, "No free point numbers left.", "No quedan numeros de punto libres.").into(),
+            None => tr(self.es, "This map has as many points as it can have.", "Este mapa ya tiene todos los puntos que puede tener.").into(),
         };
     }
 
@@ -463,7 +503,7 @@ impl Editor {
                 return;
             };
             match self.point_at(m) {
-                Some((p, x, y, _)) if p as usize != self.point && (p as usize) < map_routes::POINTS => {
+                Some((p, x, y, _)) if p as usize != self.point && (p as usize) < map_routes::ALL => {
                     let mut rel: Vec<(i32, i32)> = self.route_draw.take().unwrap_or_default().iter().map(|c| (c.0 - start.0, c.1 - start.1)).collect();
                     rel.push((x - start.0, y - start.1));
                     let made = match self.new_zone_shown() {
@@ -488,19 +528,32 @@ impl Editor {
             }
             return;
         }
-        if let (Some(p), Some(k)) = (self.drag_point, self.new_zone_shown()) {
+        if let Some(p) = self.drag_point {
             if !is_mouse_button_down(MouseButton::Left) {
+                let offset = self.drag_offset();
                 self.drag_point = None;
-                let w = self.world_pos(m);
-                self.doc.zone_move_point(k, p, w.x.round() as i32, w.y.round() as i32 + FEET);
+                let from = self.drag_from.take();
+                match (self.new_zone_shown(), from, offset) {
+                    (Some(k), _, _) => {
+                        let w = self.world_pos(m);
+                        self.doc.zone_move_point(k, p, w.x.round() as i32, w.y.round() as i32 + FEET);
+                    }
+                    (None, Some((place, _)), Some((dx, dy))) if (dx, dy) != (0, 0) => {
+                        self.doc.points_snapshot();
+                        self.doc.move_point(self.world_map, p, place, dx, dy);
+                    }
+                    _ => {}
+                }
             }
             return;
         }
         if clicked {
             if let Some(s) = self.point_at(m) {
                 self.point = s.0 as usize;
-                if self.new_zone_shown().is_some() {
+                let movable = self.new_zone_shown().is_some() || !(self.world_map != OnMap::World && self.is_world_point(s.0));
+                if movable && (s.0 as usize) < map_routes::ALL {
                     self.drag_point = Some(s.0);
+                    self.drag_from = self.doc.routes.places.get(s.0 as usize).map(|&pl| (pl, self.world_pos(m)));
                 }
             }
         }
@@ -679,7 +732,10 @@ impl Editor {
         b(Rect::new(10.0, y, 276.0, 26.0), tr(es, "Back to the levels", "Volver a los niveles"), Action::WorldEditor, false);
         y += 30.0;
         // which map: the world map, a zone map or a new zone
-        let name = self.map_name(self.world_map);
+        let mut name = self.map_name(self.world_map);
+        if self.doc.mods.map(self.world_map) {
+            name.push_str(" (mod)");
+        }
         let d = measure_text(&name, None, 18, 1.0);
         draw_text(&name, 148.0 - d.width / 2.0, y + 15.0, 18.0, col(3));
         let k = format!("{} / {}", keys(Action::PrevMap), keys(Action::NextMap));
@@ -806,9 +862,12 @@ impl Editor {
             }
         }
         if self.placing_point || self.drag_point.is_some() {
+            let dragged = self.drag_point.and_then(|p| Some((pts.iter().find(|s| s.0 == p)?, self.drag_offset()?)));
             let (x, y) = if zone.is_some() {
                 let w = self.world_pos(mouse_position().into());
                 (w.x as i32, w.y as i32)
+            } else if let Some((s, (dx, dy))) = dragged {
+                (s.1 + dx, s.2 + dy)
             } else {
                 self.snapped(mouse_position().into(), (0, 2))
             };
@@ -838,7 +897,8 @@ impl Editor {
             if self.game_entry_shown() == Some(sp.point) {
                 tag = format!("{tag} {}", tr(self.es, "(entry)", "(entrada)"));
             }
-            self.draw_point(sp.point, (sp.x, sp.y), Color::new(0.95, 0.45, 0.1, 1.0), &tag);
+            let (_, x, y, _) = self.spot_at(sp);
+            self.draw_point(sp.point, (x, y), Color::new(0.95, 0.45, 0.1, 1.0), &tag);
         }
         for &(p, x, y, new) in &pts {
             if new {
@@ -848,9 +908,14 @@ impl Editor {
         }
     }
 
-    /// The chosen point: the level it opens, where it leads, its paths; the points of the map.
+    const SHUT_ACTIONS: [Action; 4] = [Action::ShutRight, Action::ShutLeft, Action::ShutUp, Action::ShutDown];
+
+/// The chosen point: the level it opens, where it leads, its paths; the points of the map.
     fn points_panel(&mut self, mut y: f32) -> Option<Action> {
         let zone = self.new_zone_shown();
+        let (used, most) = self.doc.point_count(self.world_map);
+        draw_text(&format!("{} {used} / {most}", tr(self.es, "Points:", "Puntos:")), 10.0, y + 12.0, 16.0, col(3));
+        y += 20.0;
         let mut act = self.stepper(y, tr(self.es, "Point", "Punto"), &format!("{:02X}", self.point), 130.0, (Action::PrevPoint, Action::NextPoint));
         let new = self.doc.routes.added.contains(&(self.point as u8));
         let on_zone = zone.is_some_and(|k| self.doc.new_zones[k].point(self.point as u8).is_some());
@@ -901,11 +966,23 @@ impl Editor {
                 }
             }
             y += 54.0;
+            if self.doc.can_shut(zone, self.point as u8) {
+                draw_text(tr(self.es, "Shut until its level is cleared (Ctrl+arrows):", "Cerrado hasta superar su nivel (Ctrl+flechas):"), 10.0, y + 12.0, 15.0, col(2));
+                y += 18.0;
+                let shut = self.doc.shut_of(zone, self.point as u8);
+                for (d, &a) in Self::SHUT_ACTIONS.iter().enumerate() {
+                    let on = shut & added_points::DIR_BITS[d] != 0;
+                    if button(Rect::new(10.0 + d as f32 * 69.0, y, 65.0, 24.0), &DIRS[d].to_string(), on, 15.0) {
+                        act = Some(a);
+                    }
+                }
+                y += 30.0;
+            }
         }
         if button(Rect::new(10.0, y, 134.0, 26.0), &with_keys(tr(self.es, "New path", "Nuevo camino"), Action::NewPath), self.route_draw.is_some(), 15.0) {
             act = Some(Action::NewPath);
         }
-        if (self.world_map == OnMap::World || zone.is_some()) && button(Rect::new(148.0, y, 138.0, 26.0), &with_keys(tr(self.es, "New point", "Nuevo punto"), Action::NewPoint), self.placing_point, 15.0) {
+        if self.takes_new_points() && button(Rect::new(148.0, y, 138.0, 26.0), &with_keys(tr(self.es, "New point", "Nuevo punto"), Action::NewPoint), self.placing_point, 15.0) {
             act = Some(Action::NewPoint);
         }
         y += 30.0;

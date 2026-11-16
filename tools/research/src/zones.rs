@@ -340,3 +340,45 @@ pub fn spare_check(rom_path: &Path) {
         println!("{} entered on {entry:02x}: {}  Mario ({}, {}) place ({}, {})  {}", zone_maps::ZONES[zone].name, state(&mut g), g.read(0xA842), g.read(0xA843), pl.x, pl.y, if g.read(MAP_POINT) == entry { "ok" } else { "FAIL" });
     }
 }
+
+/// Cartridge RAM the game never writes while it is played (maps, zones, levels, clears,
+/// saving): bytes filled with a mark on the map that still hold it at the end, for two marks.
+pub fn ram_free(rom_path: &Path) {
+    let Some(gb) = load(rom_path) else { return };
+    let ranges = [(0xA0F0u16, 0xA200u16), (0xA300, 0xA400), (0xA872, 0xA880), (0xA8A0, 0xA8C0), (0xA900, 0xAA00), (0xAC00, 0xAE00), (0xB000, 0xBA00), (0xBC00, 0xBE00)];
+    let mut still: Vec<u16> = ranges.iter().flat_map(|&(a, b)| a..b).collect();
+    for mark in [0xA5u8, 0x5A] {
+        let mut g = gb.clone();
+        if !g.boot_to_map() {
+            println!("could not reach the map");
+            return;
+        }
+        for &a in &still {
+            g.write(a, mark);
+        }
+        g.show_map_at(0x28);
+        println!("mark {mark:02x}: pumpkin {:?} {}", clear_here(&mut g), state(&mut g));
+        g.show_map_at(0x07);
+        println!("mark {mark:02x}: world {:?} {}", clear_here(&mut g), state(&mut g));
+        g.show_map_at(0x3C);
+        frames(&mut g, 300, Buttons::NONE);
+        if g.enter_level_anywhere(3) {
+            for f in 0..1500u32 {
+                g.run_frame_with(match f % 50 { 0..=20 => Buttons::RIGHT, 21..=30 => Buttons::A | Buttons::RIGHT, _ => Buttons::RIGHT | Buttons::B });
+                g.clear_audio();
+            }
+        }
+        frames(&mut g, 600, Buttons::NONE);
+        still.retain(|&a| g.read(a) == mark);
+    }
+    let mut runs: Vec<(u16, u16)> = Vec::new();
+    for a in still {
+        match runs.last_mut() {
+            Some(r) if r.1 + 1 == a => r.1 = a,
+            _ => runs.push((a, a)),
+        }
+    }
+    for (a, b) in runs.iter().filter(|r| r.1 - r.0 >= 7) {
+        println!("{a:04x}-{b:04x} ({} bytes)", b - a + 1);
+    }
+}

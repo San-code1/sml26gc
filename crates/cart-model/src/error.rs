@@ -27,6 +27,12 @@ pub enum CartError {
     NoEntryPoint,
     /// A new zone's point has a number outside its base zone's numbers.
     PointOutsideZone { point: u8 },
+    /// The secret exits' table does not fit in its room.
+    SecretExitsFull { need: usize, capacity: usize },
+    /// A map has more added points than the hooks have room for.
+    TooManyPoints { max: usize },
+    /// The game zones' added points don't fit in the space kept for them.
+    AddedPointsFull { need: usize, capacity: usize },
 }
 
 impl fmt::Display for CartError {
@@ -54,6 +60,9 @@ impl fmt::Display for CartError {
             CartError::TooManyPassPoints { max } => write!(f, "this zone can have {max} pass points at most"),
             CartError::NoEntryPoint => write!(f, "a new zone's entry is not one of its points"),
             CartError::PointOutsideZone { point } => write!(f, "point {point:02X} is not one of its zone's numbers"),
+            CartError::SecretExitsFull { need, capacity } => write!(f, "the secret exits need {need} bytes but the cartridge has {capacity} for them; send fewer levels' secret exits elsewhere"),
+            CartError::TooManyPoints { max } => write!(f, "a map can have {max} added points at most"),
+            CartError::AddedPointsFull { need, capacity } => write!(f, "the zones' added points need {need} bytes but the cartridge has {capacity} for them; remove a point or shorten its paths"),
         }
     }
 }
