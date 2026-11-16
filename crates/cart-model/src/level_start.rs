@@ -62,6 +62,27 @@ impl Start {
     pub fn sprite_at(&self) -> (u16, u16) {
         (self.mario_x, self.mario_y + SPRITE_TOP)
     }
+
+    /// Mario's body here is inside solid blocks or outside the level.
+    pub fn blocked(&self, map: &[u8]) -> bool {
+        let (x, top) = self.sprite_at();
+        let bottom = self.mario_y + FEET - 1;
+        if x as usize + SPRITE_W as usize > COLS * 16 || bottom as usize >= ROWS * 16 {
+            return true;
+        }
+        let cols = [x / 16, (x + SPRITE_W - 1) / 16];
+        (top / 16..=bottom / 16).any(|r| cols.iter().any(|&c| solid(map.get(r as usize * COLS + c as usize).copied().unwrap_or(0))))
+    }
+}
+
+/// Blocks Mario cannot be inside (0:1EB4 `cp $38`).
+pub const fn solid(block: u8) -> bool {
+    block < 0x38
+}
+
+/// Blocks Mario can stand on (0:1E60 `cp $48`: solid ones and platforms).
+pub const fn ground(block: u8) -> bool {
+    block < 0x48
 }
 
 #[cfg(test)]
@@ -78,6 +99,16 @@ mod tests {
         s.write(&mut back);
         assert_eq!(back, h);
         assert_eq!(Start::standing(0x22, 0x1F0 + 7), s);
+    }
+
+    #[test]
+    fn a_body_in_a_wall_is_blocked() {
+        let mut map = vec![0x60u8; COLS * ROWS];
+        let s = Start::standing(0x100, 0x1F0);
+        assert!(!s.blocked(&map));
+        map[(0x1F0 / 16 - 1) * COLS + 0x100 / 16] = 0x10;
+        assert!(s.blocked(&map));
+        assert!(Start::standing(4090, 0x100).blocked(&[0x60u8; COLS * ROWS]) == false);
     }
 
     #[test]

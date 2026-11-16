@@ -38,8 +38,7 @@ impl EditorDocument {
                 let picture = zone_maps::read(&self.original, base);
                 let Some(z) = new_zones::from_parts(&self.original, base, &picture, &original, &levels, &doors::read(&self.original)) else { return false };
                 let (door, name) = (self.new_zones[k].door, self.new_zones[k].name.clone());
-                self.world_snapshot();
-                self.points_record();
+                self.map_snapshot();
                 let (points, picture) = ZonePoints::from(z);
                 self.new_zones[k] = ZonePoints { door, name, ..points };
                 self.zones[zone_maps::ZONES.len() + k] = picture;
@@ -48,8 +47,7 @@ impl EditorDocument {
             }
             OnMap::NewZone(_) => false,
             OnMap::World => {
-                self.world_snapshot();
-                self.points_record();
+                self.map_snapshot();
                 self.world = world::read(&self.original);
                 for p in self.world_points() {
                     self.restore_point(p, &original, &levels);
@@ -65,8 +63,7 @@ impl EditorDocument {
                 true
             }
             OnMap::Zone(z) => {
-                self.world_snapshot();
-                self.points_record();
+                self.map_snapshot();
                 self.zones[z] = zone_maps::read(&self.original, z);
                 self.show_added(map);
                 self.take_added();

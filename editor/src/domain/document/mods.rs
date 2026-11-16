@@ -1,5 +1,5 @@
 //! Which of the game's levels and maps the saved copy has changed from the original (shown as
-//! "mod"): a level's blocks, objects, start or secret exit target; a map's picture, its own
+//! "mod"): a level's blocks, objects, start, settings or secret exit target; a map's picture, its own
 //! points (paths, places, levels) or points added to it. A zone's exit point ($19, ...) has
 //! the ways of its world entrance (`map_routes::twin`): those count for the world map.
 use super::{level_from, EditorDocument};
@@ -37,7 +37,7 @@ impl EditorDocument {
         let levels = (0..LEVELS)
             .map(|l| {
                 let (a, b) = (level_from(rom, l), level_from(original, l));
-                a.map != b.map || a.objs != b.objs || a.start != b.start || secrets.iter().any(|&(s, _)| s == l)
+                a.map != b.map || a.objs != b.objs || a.start != b.start || a.settings != b.settings || secrets.iter().any(|&(s, _)| s == l)
             })
             .collect();
         let (routes, first) = (map_routes::read(rom), map_routes::read(original));

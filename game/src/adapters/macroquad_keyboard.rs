@@ -22,7 +22,7 @@ same_names! {
     A B C D E F G H I J K L M N O P Q R S T U V W X Y Z
     Key0 Key1 Key2 Key3 Key4 Key5 Key6 Key7 Key8 Key9
     Kp0 Kp1 Kp2 Kp3 Kp4 Kp5 Kp6 Kp7 Kp8 Kp9
-    Comma Period Minus Slash Escape F11
+    Comma Period Minus Slash Escape F11 F1 F2 F3 F4 F5 F6 F7 F8 F9 F10
 }
 
 impl Keyboard for MacroquadKeyboard {

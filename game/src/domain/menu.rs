@@ -25,6 +25,8 @@ enum Screen {
     Confirm(usize),
     Cheats,
     Summon,
+    /// The level list for "Go to level".
+    Levels,
 }
 
 pub enum Action {
@@ -37,6 +39,7 @@ pub enum Action {
     /// Turn a lasting cheat on or off, or do a one-time one.
     Cheat(Cheat),
     Summon(Item),
+    GoTo(u8),
 }
 
 // Main menu items (indexes into Texts::main).
@@ -50,6 +53,8 @@ const IT_QUIT: usize = 6;
 const IT_MAP: usize = 7;
 const IT_FILES: usize = 8;
 const IT_CHEATS: usize = 9;
+/// Rows of the level list shown at once (Left and Right move by a page).
+const LEVEL_ROWS: usize = 10;
 
 /// The cheats as the menu shows them.
 pub struct CheatMenu {
@@ -58,6 +63,8 @@ pub struct CheatMenu {
     pub icons: Option<[Icon; 5]>,
     /// The level being played has a secret exit.
     pub secret_exit: bool,
+    /// The levels to go to: number and name (the editor's new levels have one).
+    pub levels: Vec<(u8, String)>,
 }
 
 pub struct Menu {
@@ -109,8 +116,12 @@ impl Menu {
         (self.in_level || !c.needs_level()) && secret
     }
 
-    fn summon_row() -> usize {
-        Cheat::ALL.iter().position(|&c| c == Cheat::Summon).unwrap_or(0)
+    fn row_of(c: Cheat) -> usize {
+        Cheat::ALL.iter().position(|&x| x == c).unwrap_or(0)
+    }
+
+    fn level_count(&self) -> usize {
+        self.cheats.as_ref().map_or(0, |m| m.levels.len())
     }
 
     fn pos(&self, item: usize) -> usize {
@@ -129,9 +140,10 @@ impl Menu {
             "confirm" => Screen::Confirm(IT_MAP),
             "cheats" => Screen::Cheats,
             "summon" => Screen::Summon,
+            "levels" => Screen::Levels,
             _ => Screen::Main,
         };
-        let mut m = Menu::new(GameMode::Playing).with_cheats(CheatMenu { state: Cheats { invincible: true, ..Cheats::default() }, icons, secret_exit: true });
+        let mut m = Menu::new(GameMode::Playing).with_cheats(CheatMenu { state: Cheats { invincible: true, ..Cheats::default() }, icons, secret_exit: true, levels: (0..40).map(|l| (l, if l >= 32 { "MY LEVEL".to_string() } else { String::new() })).collect() });
         m.screen = screen;
         m
     }
@@ -140,13 +152,14 @@ impl Menu {
         match self.screen {
             Screen::Main => self.items.len(),
             Screen::Confirm(_) => 2,
-            Screen::Controls => 10,
+            Screen::Controls => keys::KEYS + 2,
             Screen::Display => 4,
             Screen::Sound => 2,
             Screen::Language => 4,
             Screen::Waiting(_) => 0,
             Screen::Cheats => Cheat::ALL.len() + 1,
             Screen::Summon => Item::ALL.len(),
+            Screen::Levels => self.level_count().max(1),
         }
     }
 
@@ -199,7 +212,11 @@ impl Menu {
                 Screen::Confirm(item) => self.pos(item),
                 Screen::Cheats => self.pos(IT_CHEATS),
                 Screen::Summon => {
-                    self.go(Screen::Cheats, Self::summon_row());
+                    self.go(Screen::Cheats, Self::row_of(Cheat::Summon));
+                    return Action::None;
+                }
+                Screen::Levels => {
+                    self.go(Screen::Cheats, Self::row_of(Cheat::GoToLevel));
                     return Action::None;
                 }
                 _ => self.pos(IT_LANGUAGE),
@@ -239,8 +256,8 @@ impl Menu {
             Screen::Controls => {
                 if ok {
                     match self.sel {
-                        0..=7 => self.screen = Screen::Waiting(self.sel),
-                        8 => {
+                        s if s < keys::KEYS => self.screen = Screen::Waiting(s),
+                        s if s == keys::KEYS => {
                             st.keys = DEFAULT_KEYS;
                         }
                         _ => self.go(Screen::Main, self.pos(IT_CONTROLS)),
@@ -292,6 +309,10 @@ impl Menu {
                         self.go(Screen::Summon, 0);
                         return Action::None;
                     }
+                    if c == Cheat::GoToLevel {
+                        self.go(Screen::Levels, 0);
+                        return Action::None;
+                    }
                     if let Some(m) = self.cheats.as_mut() {
                         m.state.toggle(c);
                     }
@@ -304,6 +325,17 @@ impl Menu {
             Screen::Summon => {
                 if ok {
                     return Action::Summon(Item::ALL[self.sel]);
+                }
+            }
+            Screen::Levels => {
+                let n = self.level_count();
+                if n > 0 && step != 0 {
+                    self.sel = (self.sel as i32 + step * LEVEL_ROWS as i32).clamp(0, n as i32 - 1) as usize;
+                }
+                if ok {
+                    if let Some(&(l, _)) = self.cheats.as_ref().and_then(|m| m.levels.get(self.sel)) {
+                        return Action::GoTo(l);
+                    }
                 }
             }
             Screen::Waiting(_) => {}
@@ -350,17 +382,17 @@ impl Menu {
                 c.footer(x, y + h - 2, w, t.footer_language);
             }
             Screen::Controls => {
-                let (x, y, w, h) = (2, 8, 156, 132);
+                let (x, y, w, h) = (2, 5, 156, 136);
                 c.frame(x, y, w, h);
                 c.title(x, y, w, t.controls);
-                for i in 0..10 {
-                    let ty = y + 11 + i as i32 * 11;
-                    if i < 8 {
+                for i in 0..keys::KEYS + 2 {
+                    let ty = y + 9 + i as i32 * 9;
+                    if i < keys::KEYS {
                         c.text(x + 16, ty, t.buttons[i], shade(i));
                         let label = st.keys[i].label(st.lang);
                         c.text(x + w - 8 - text_width(label), ty, label, 3);
                     } else {
-                        c.text(x + 16, ty, if i == 8 { t.restore } else { t.back }, shade(i));
+                        c.text(x + 16, ty, if i == keys::KEYS { t.restore } else { t.back }, shade(i));
                     }
                     if i == self.sel {
                         c.cursor(x + 8, ty, 3);
@@ -458,12 +490,12 @@ impl Menu {
                 c.footer(x, y + h - 2, w, t.footer_language);
             }
             Screen::Cheats => {
-                let (x, y, w, h) = (2, 10, 156, 128);
+                let (x, y, w, h) = (2, 5, 156, 136);
                 c.frame(x, y, w, h);
                 c.title(x, y, w, t.main[IT_CHEATS]);
                 let state = self.cheats.as_ref().map(|m| m.state).unwrap_or_default();
                 for i in 0..=Cheat::ALL.len() {
-                    let ty = y + 11 + i as i32 * 11;
+                    let ty = y + 9 + i as i32 * 9;
                     match Cheat::ALL.get(i) {
                         Some(&cheat) => {
                             let usable = self.usable(cheat);
@@ -492,7 +524,7 @@ impl Menu {
             Screen::Summon => {
                 let (x, y, w, h) = (14, 36, 132, 68);
                 c.frame(x, y, w, h);
-                c.title(x, y, w, t.cheats[Self::summon_row()]);
+                c.title(x, y, w, t.cheats[Self::row_of(Cheat::Summon)]);
                 let icons = self.cheats.as_ref().and_then(|m| m.icons.as_ref());
                 for i in 0..Item::ALL.len() {
                     let ix = x + 10 + i as i32 * 23;
@@ -506,6 +538,22 @@ impl Menu {
                 }
                 let name = t.items[self.sel.min(Item::ALL.len() - 1)];
                 c.text(x + (w - text_width(name)) / 2, y + 38, name, 3);
+                c.footer(x, y + h - 2, w, t.footer_summon);
+            }
+            Screen::Levels => {
+                let (x, y, w, h) = (6, 8, 148, 130);
+                c.frame(x, y, w, h);
+                c.title(x, y, w, t.cheats[Self::row_of(Cheat::GoToLevel)]);
+                let levels = self.cheats.as_ref().map(|m| m.levels.as_slice()).unwrap_or(&[]);
+                let first = self.sel / LEVEL_ROWS * LEVEL_ROWS;
+                for (i, (l, name)) in levels.iter().enumerate().skip(first).take(LEVEL_ROWS) {
+                    let ty = y + 12 + (i - first) as i32 * 10;
+                    let label = if name.is_empty() { format!("{} {l:02}", t.level) } else { format!("{l:02} {}", name.to_uppercase()) };
+                    c.text(x + 16, ty, &label, shade(i));
+                    if i == self.sel {
+                        c.cursor(x + 8, ty, 3);
+                    }
+                }
                 c.footer(x, y + h - 2, w, t.footer_summon);
             }
         }
@@ -559,7 +607,7 @@ mod tests {
     }
 
     fn cheats_menu(mode: GameMode) -> Menu {
-        Menu::new(mode).with_cheats(CheatMenu { state: Cheats::default(), icons: None, secret_exit: false })
+        Menu::new(mode).with_cheats(CheatMenu { state: Cheats::default(), icons: None, secret_exit: false, levels: vec![(0, String::new()), (1, String::new()), (12, String::new()), (32, "Mine".into())] })
     }
 
     #[test]
@@ -581,6 +629,7 @@ mod tests {
         step(&mut m, &mut st, Key::Down);
         assert!(matches!(step(&mut m, &mut st, Key::Enter), Action::None), "no secret exit in this level");
         step(&mut m, &mut st, Key::Down);
+        step(&mut m, &mut st, Key::Down);
         step(&mut m, &mut st, Key::Enter);
         step(&mut m, &mut st, Key::Right);
         step(&mut m, &mut st, Key::Right);
@@ -593,15 +642,35 @@ mod tests {
     }
 
     #[test]
+    fn go_to_a_level_from_the_list() {
+        let mut st = Settings::default();
+        let mut m = cheats_menu(GameMode::Map);
+        step(&mut m, &mut st, Key::Enter);
+        for _ in 0..3 {
+            step(&mut m, &mut st, Key::Down);
+        }
+        step(&mut m, &mut st, Key::Enter);
+        assert!(m.screen == Screen::Levels);
+        step(&mut m, &mut st, Key::Down);
+        step(&mut m, &mut st, Key::Down);
+        assert!(matches!(step(&mut m, &mut st, Key::Enter), Action::GoTo(12)));
+        step(&mut m, &mut st, Key::Right);
+        assert!(matches!(step(&mut m, &mut st, Key::Enter), Action::GoTo(32)));
+    }
+
+    #[test]
     fn level_cheats_are_refused_on_the_map() {
         let mut st = Settings::default();
         let mut m = cheats_menu(GameMode::Map);
         step(&mut m, &mut st, Key::Enter);
         step(&mut m, &mut st, Key::Down);
-        for _ in 0..3 {
+        for _ in 0..2 {
             assert!(matches!(step(&mut m, &mut st, Key::Enter), Action::None));
             step(&mut m, &mut st, Key::Down);
         }
+        step(&mut m, &mut st, Key::Down);
+        assert!(matches!(step(&mut m, &mut st, Key::Enter), Action::None), "summon only in a level");
+        step(&mut m, &mut st, Key::Down);
         assert!(m.screen == Screen::Cheats);
         assert!(matches!(step(&mut m, &mut st, Key::Enter), Action::Cheat(Cheat::FreezeTimer)));
     }

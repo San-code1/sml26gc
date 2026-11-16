@@ -17,6 +17,6 @@ pub mod script;
 
 pub use cart::Cart;
 pub use input::Buttons;
-pub use machine::{GameBoy, Gb, FRAME_CYCLES, FRAME_SECONDS};
+pub use machine::{GameBoy, Gb, State, FRAME_CYCLES, FRAME_SECONDS};
 pub use observer::{BusObserver, NoObserver};
 pub use ppu::Screen;

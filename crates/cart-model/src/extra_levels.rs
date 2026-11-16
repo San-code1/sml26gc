@@ -194,14 +194,16 @@ pub fn writes_for(rom: &[u8], e: &Extra) -> Vec<(usize, Vec<u8>)> {
     let entry = offset(bank, MAP_TABLE) + map * 2;
     let to = [MAP_AT as u8, (MAP_AT >> 8) as u8].to_vec();
     let obj_bank = objects::bank(rom);
-    vec![
+    let mut writes = vec![
         (h.at, e.header.to_vec()),
         (offset(bank | 0x20, MAP_AT), encode(&e.map)),
         (entry, to.clone()),
         (entry + TWIN, to),
         (offset(obj_bank, 0x4000), object_bytes(&e.objs)),
         (offset(obj_bank, 0x6037) + e.base as usize * 2, vec![0x00, 0x40]),
-    ]
+    ];
+    writes.extend(crate::checkpoint::writes(e.base as usize, &e.objs, &e.map));
+    writes
 }
 
 /// Make the writes; returns the writes that undo them.
