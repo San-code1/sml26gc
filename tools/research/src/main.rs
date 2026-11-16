@@ -149,6 +149,12 @@ const COMMANDS: &[(&str, Run)] = &[
     ("typegroups", |r, _a| testing::type_groups(r)),
     ("startobjects", |r, a| testing::start_objects_probe(r, a.num(1) as u8, a.hex(2) as u8, a.num(3) as u16)),
     ("firstscreen", |r, _a| testing::first_screen_objects(r)),
+    ("objecttiles", |r, _a| testing::object_tiles(r)),
+    ("objectlist", |r, a| testing::object_list(r, &a.path(1))),
+    ("walkright", |r, a| testing::walk_probe(r, a.num(1) as u8)),
+    ("enemymix", |r, a| testing::enemy_mix(r, a.num(1) as usize, a.num(2) as usize, a.hex(3) as u8)),
+    ("enemysetcheck", |r, _a| testing::enemy_set_check(r)),
+    ("capturebench", |r, _a| testing::capture_bench(r)),
     ("mapprobe", |r, a| testing::door_probe(r, a.hex(1) as u8, (a.num(2) > 0).then(|| a.num(2) as u8 - 1))),
     ("goalprobe", |r, a| levels::goal_probe(r, a.num(1) as u8, a.hex(2), a.hex(3), &a.s(4))),
 ];
@@ -184,6 +190,6 @@ mod tests {
         let a = Args(["watch", "x", "ffc2,a200-a202", "0x10", "12"].map(String::from).to_vec());
         assert_eq!(a.list(2), vec![0xFFC2, 0xA200, 0xA201, 0xA202]);
         assert_eq!((a.hex(3), a.big(3), a.num(4), a.num(9)), (0x10, 0x10, 12, 0));
-        assert_eq!(COMMANDS.len(), 91);
+        assert_eq!(COMMANDS.len(), 97);
     }
 }

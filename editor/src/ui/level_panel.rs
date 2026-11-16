@@ -436,6 +436,46 @@ impl Editor {
             self.doc.set_level_tables(l, t);
         }
 
+        self.heading(&mut rows, tr(es, "ENEMIES", "ENEMIGOS"));
+        match self.enemy_rows() {
+            None => {
+                Self::explain(&mut rows, w, tr(es, "The game's enemies of the level it plays as. The object catalogue (F3) adds enemies of other levels that fit.", "Los enemigos del juego del nivel como el que se juega. El catalogo de objetos (F3) anade enemigos de otros niveles que quepan."));
+            }
+            Some(list) => {
+                let mut out = None;
+                // removing rebuilds the set's sprite block, which needs every member's tiles
+                let ready = self.set_with_tiles().is_some();
+                for (e, name) in list {
+                    if let Some(y) = rows.next(ROW) {
+                        draw_text(&fit(&name, cw + LABEL_W - 90.0, 15.0), PAD, y + 18.0, 15.0, col(3));
+                        let r = Rect::new(PAD + w - 84.0, y, 84.0, ROW);
+                        if !ready {
+                            draw_rectangle_lines(r.x, r.y, r.w, r.h, 2.0, col(2));
+                            draw_text(tr(es, "Remove", "Quitar"), r.x + 18.0, r.y + 17.0, 14.0, col(2));
+                        } else if button(r, tr(es, "Remove", "Quitar"), false, 14.0) {
+                            out = Some(e);
+                        }
+                    }
+                }
+                if !ready {
+                    Self::explain(&mut rows, w, tr(es, "Enemies can be removed once their tiles are captured (see the box at the bottom right).", "Los enemigos se pueden quitar cuando se capturen sus tiles (mira el recuadro de abajo a la derecha)."));
+                }
+                if let Some(e) = out {
+                    self.remove_enemy(e);
+                }
+                if let Some(y) = rows.next(ROW) {
+                    if button(Rect::new(PAD, y, w, ROW), tr(es, "The game's enemies again", "Volver a los enemigos del juego"), false, 14.0) {
+                        self.game_enemies();
+                    }
+                }
+            }
+        }
+        if let Some(y) = rows.next(ROW) {
+            if button(Rect::new(PAD, y, w, ROW), &format!("{} ({})", tr(es, "Object catalogue", "Catalogo de objetos"), keys(Action::ObjectCatalogue)), false, 14.0) {
+                act = Some(Action::ObjectCatalogue);
+            }
+        }
+
         let warnings = self.doc.warnings(l);
         self.heading(&mut rows, &format!("{} ({})", tr(es, "WARNINGS", "AVISOS"), warnings.len()));
         if warnings.is_empty() {

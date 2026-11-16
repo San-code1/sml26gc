@@ -3,6 +3,8 @@ pub mod document;
 pub mod files;
 pub mod history;
 pub mod look_cache;
+pub mod object_catalogue;
+pub mod object_names;
 pub mod prefs;
 pub mod stamp;
 pub mod tools;

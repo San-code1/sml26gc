@@ -27,6 +27,95 @@ pub fn marker(r: Rect, thick: f32, c: Color) {
     draw_rectangle_lines(r.x, r.y, r.w, r.h, thick, c);
 }
 
+/// What kind of message the status says.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Severity {
+    Info,
+    /// Something was done that changed what is edited.
+    Done,
+    /// Something was not done, or needs a look, without harm.
+    Warning,
+    /// Something failed.
+    Error,
+}
+
+impl Severity {
+    fn colour(self) -> Color {
+        match self {
+            Severity::Info => col(3),
+            Severity::Done => Color::new(0.08, 0.40, 0.14, 1.0),
+            Severity::Warning => Color::new(0.80, 0.42, 0.0, 1.0),
+            Severity::Error => Color::new(0.67, 0.16, 0.12, 1.0),
+        }
+    }
+
+    /// A sign before the text, so the kind shows without the colour too.
+    fn sign(self) -> &'static str {
+        match self {
+            Severity::Info => "",
+            Severity::Done => "+ ",
+            Severity::Warning => "! ",
+            Severity::Error => "x ",
+        }
+    }
+}
+
+/// A message as its kind shows it: a sign, its colour, and bold (drawn twice, a pixel apart)
+/// for all but plain information.
+pub fn message(t: &str, x: f32, y: f32, size: f32, kind: Severity) {
+    kind_text(&format!("{}{t}", kind.sign()), x, y, size, kind);
+}
+
+/// Text in a kind's colour and weight, without its sign (a message's further lines).
+fn kind_text(text: &str, x: f32, y: f32, size: f32, kind: Severity) {
+    let c = kind.colour();
+    draw_text(&text, x, y, size, c);
+    if kind != Severity::Info {
+        draw_text(&text, x + 1.0, y, size, c);
+    }
+}
+
+/// `t` cut into lines no wider than `width` pixels at `size` (a word wider than that has a
+/// line of its own).
+pub fn wrap_px(t: &str, width: f32, size: f32) -> Vec<String> {
+    let mut lines: Vec<String> = vec![String::new()];
+    for w in t.split(' ') {
+        let last = lines.last_mut().expect("never empty");
+        let tried = if last.is_empty() { w.to_string() } else { format!("{last} {w}") };
+        if !last.is_empty() && measure_text(&tried, None, size as u16, 1.0).width > width {
+            lines.push(w.to_string());
+        } else {
+            *last = tried;
+        }
+    }
+    lines
+}
+
+/// A message on as many lines as it needs, from `y` (the first line's base) down; returns the
+/// height it took.
+pub fn message_lines(t: &str, x: f32, y: f32, width: f32, size: f32, kind: Severity) -> f32 {
+    let step = size + 2.0;
+    let lines = wrap_px(&format!("{}{t}", kind.sign()), width - 12.0, size);
+    for (i, line) in lines.iter().enumerate() {
+        kind_text(line, x, y + i as f32 * step, size, kind);
+    }
+    lines.len() as f32 * step
+}
+
+/// A status bar's message: one line in the bar from `left` to `right`, the lines it does not
+/// fit growing above the bar (over the view) on the same background.
+pub fn status_message(t: &str, left: f32, right: f32, bar_top: f32, bar_h: f32, size: f32, kind: Severity) {
+    let width = right - left - 4.0;
+    let lines = wrap_px(&format!("{}{t}", kind.sign()), width - 12.0, size);
+    let extra = (lines.len().max(1) - 1) as f32 * (size + 2.0);
+    if extra > 0.0 {
+        draw_rectangle(left, bar_top - extra, right - left, extra, col(1));
+        draw_rectangle(left, bar_top - extra, right - left, 1.0, col(2));
+    }
+    let base = bar_top + bar_h / 2.0 + size / 2.0 - 4.0 - extra;
+    message_lines(t, left + 8.0, base, width, size, kind);
+}
+
 /// Text with a dark shadow, readable on any picture.
 pub fn marked_text(t: &str, x: f32, y: f32, size: f32, c: Color) {
     draw_text(t, x + 1.0, y + 1.0, size, Color::new(0.0, 0.0, 0.0, c.a));

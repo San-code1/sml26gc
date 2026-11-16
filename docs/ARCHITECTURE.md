@@ -53,6 +53,7 @@ Each module documents the ROM addresses and formats it relies on.
 | `level_settings` | Header bytes of a level's start time ($13), music ($0E) and background shades ($0F) |
 | `level_tables` | A level's entries in the bank-0 tables of gravity, auto-scroll, camera margin and animated tiles |
 | `level_graphics` | Which levels draw the same objects (enemy sprites 0:362A and the object catalogue split at level 10) |
+| `enemy_sets` | A level's enemies chosen from several levels: the sprite block built for them, where the copy keeps it (the low copies of the map banks' maps) and the 0:362A entry |
 | `blank_level` | An empty map and start made from a game level's (its sky, a floor under Mario's start) |
 | `objects` | Object lists: 3-byte format, reading, re-packing |
 | `patch` | The 1 MB edited copy (twin banks $20-$3F) that gives levels and objects more room |
@@ -99,11 +100,12 @@ editor/src/
 │                 stamp (a rectangle of cells: brush and clipboard), prefs (editor.cfg text),
 │                 files (level, zone and project files: text format); document/zones
 │                 (new zones), document/restore and document/check (level warnings),
-│                 look_cache (captured object pictures as text)
+│                 look_cache (captured object pictures and tiles as text), object_catalogue
+│                 (the game's objects once each), object_names (the editor's names for them)
 ├─ application/   save (commit + write through a port), art_service (captured graphics),
 │                 exchange (level, zone and project files through the dialogs), music
 │                 (a level's music played by a console of the copy), look_loader (object
-│                 pictures captured on a background thread)
+│                 pictures and tiles captured on background threads, one per spare core)
 ├─ ports.rs       EditedCopyStore, GameLauncher, PrefsStore, FileDialogs, TextFiles, MenuBar,
 │                 SoundOut, LookStore
 ├─ adapters/      file repository (edited copy, editor.cfg, text files), Win32 file dialogs
