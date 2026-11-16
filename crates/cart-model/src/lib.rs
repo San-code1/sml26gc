@@ -7,6 +7,7 @@
 //! | `levels` | Level headers, map locations, the map compression (decode/encode) |
 //! | `level_goals` | Where a level ends: goal blocks $4A and $4B, the bell |
 //! | `checkpoint` | Midway bells and where Mario starts again; several per level through a hook |
+//! | `enemy_sets` | A level's enemies chosen from several levels: blocks, where the copy keeps them |
 //! | `level_graphics` | Which levels draw the same objects (enemy sprites and object catalogue) |
 //! | `level_settings` | A level's start time, music and background shades (header bytes) |
 //! | `blank_level` | An empty map and start made from a game level's |
@@ -38,6 +39,7 @@ pub mod checkpoint;
 pub mod cheats;
 pub mod doors;
 pub mod driver;
+pub mod enemy_sets;
 pub mod error;
 pub mod extra_levels;
 pub mod layout;

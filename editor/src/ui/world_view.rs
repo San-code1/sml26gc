@@ -303,7 +303,9 @@ impl Editor {
     /// A new zone made from the map shown, then shown.
     pub fn new_zone(&mut self) {
         let from = self.world_map;
-        self.status = match self.doc.add_zone(from) {
+        let made = self.doc.add_zone(from);
+        let refused = made.is_err();
+        self.status = match made {
             Ok(k) => {
                 self.clipboard = None;
                 self.show_map(OnMap::NewZone(k));
@@ -313,12 +315,16 @@ impl Editor {
             Err(ZoneRefusal::TooManyZones(max)) => format!("{} {max}.", tr(self.es, "No more new zones: there can be", "No caben mas zonas nuevas: puede haber")),
             Err(_) => tr(self.es, "New zones are made from the Tree, Pumpkin, Macro, Space or Mario zone, or from a new zone.", "Las zonas nuevas se hacen de la Zona Arbol, Calabaza, Macro, Espacial o Mario, o de otra zona nueva.").into(),
         };
+        if refused {
+            self.mark(Severity::Warning);
+        }
     }
 
     /// Delete the new zone shown; its base is shown.
     fn delete_zone(&mut self) {
         let Some(k) = self.new_zone_shown() else {
             self.status = tr(self.es, "Only new zones can be deleted; the game's are only edited.", "Solo se borran las zonas nuevas; las del juego solo se editan.").into();
+            self.mark(Severity::Warning);
             return;
         };
         let name = self.map_name(OnMap::NewZone(k));
@@ -378,6 +384,7 @@ impl Editor {
                     self.doc.toggle_shut(zone, self.point as u8, d);
                 } else {
                     self.status = tr(self.es, "Only new points can shut their paths until their level is cleared.", "Solo los puntos nuevos pueden cerrar sus caminos hasta superar su nivel.").into();
+                    self.mark(Severity::Warning);
                 }
             }
             Action::NewPath => {
@@ -387,10 +394,12 @@ impl Editor {
                 self.route_draw = if drawing || !can_draw { None } else { Some(Vec::new()) };
                 if !can_draw {
                     self.status = tr(self.es, "Choose a point on the map shown first.", "Elige antes un punto del mapa que se ve.").into();
+                    self.mark(Severity::Warning);
                 }
             }
             Action::NewPoint if zone.is_some_and(|k| self.doc.new_zones[k].points.len() >= self.doc.new_zones[k].room()) && !self.placing_point => {
                 self.status = self.zone_full_note(zone.unwrap_or(0));
+                self.mark(Severity::Warning);
             }
             Action::NewPoint if self.takes_new_points() => {
                 self.route_draw = None;
@@ -400,6 +409,7 @@ impl Editor {
                 Some(k) => {
                     if !self.doc.zone_remove_point(k, self.point as u8) {
                         self.status = tr(self.es, "A new zone keeps at least one point.", "Una zona nueva conserva al menos un punto.").into();
+                        self.mark(Severity::Warning);
                     }
                     self.choose_on_new_zone();
                 }

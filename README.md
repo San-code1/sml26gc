@@ -103,9 +103,24 @@ the tag shown when a level begins lists them with the key that opens the menu.
   seeing only its blocks and the objects it draws right; the new level plays as it (tiles,
   objects, music, time) and starts as an empty sky with a floor and Mario's start.
 - The object palette offers the types the level draws right (its own, and items that look
-  the same there); Show all adds the others, framed, as they may look broken. Clicking the
+  the same there), filtered by category with its < > buttons; Show all adds the others,
+  framed, as they may look broken. It names the chosen type and the one under the mouse as
+  the object catalogue does. Clicking the
   chosen type again, or right-clicking an empty place, leaves none chosen (clicks then only
   pick objects; a right click on an object deletes it).
+- The object catalogue (F3, or Catalogue in the Objects palette) lists the game's objects once
+  each with a name, picture, category and the levels that use them, filtered by category or
+  by what the level shown draws right; Use picks one's type. The palette shows a type's name
+  when the mouse is over it. An enemy of another level of the same catalogue (levels 0-9 or
+  10-31) can be added to the level's own enemy set when its tiles fit in the level's 56 enemy
+  tiles (each enemy's cell says whether it fits before Add, and which enemy it clashes with); the Level tab lists the set, removes
+  enemies (with every object of that type, as they would look broken; one Ctrl+Z brings them
+  back) and goes back to the game's. In the palette the enemies brought from other levels have
+  a corner mark; Remove beside the chosen one, a right click on it, or Remove from this level
+  in the catalogue takes it out the same way. Works for the game's levels and new ones; the copy
+  keeps the sets' sprite blocks where the original maps were.
+- Messages say their kind: done in green (+), warnings in orange (!), errors in red (x), the
+  rest as plain information.
 - Restore (Ctrl+Shift+R) puts back the level or map shown as in the game; a new level or zone,
   as its base.
 - Painting: Pencil (B) and Box (R) paint the palette selection; drag over the palette, or
@@ -129,8 +144,12 @@ the tag shown when a level begins lists them with the key that opens the menu.
   made, whatever the mode or tab: blocks, objects and goals; map pictures and points), Ctrl+S saves
   `edits\<game> (edit).gb` (the original is never changed), F5 saves and plays it (with the cheats on);
   Shift+F5 (Here), then a click on the level, plays it with Mario on the clicked block.
-- Object pictures are captured from the game in the background (the shown level's first) and
-  kept in `cache\` next to the editor, so later starts have them at once.
+- Object pictures are captured from the game in the background (the shown level's first), then
+  the tiles each of the game's objects shows, and kept in `cache\` next to the editor, so later
+  starts have them at once. Until it ends a box at the bottom right shows how far it is, the
+  palette, catalogue and blank level chooser say they are not complete yet, and adding or
+  removing set enemies waits for their tiles. Tools, Capture the object pictures again forgets
+  them and captures them all again.
 
 ## Checks
 

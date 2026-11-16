@@ -1,6 +1,9 @@
 //! Pictures captured from the running game: a level's blocks, the world map's tiles, and
 //! what each object type looks like. The editor draws with these.
 use crate::driver::GameDriver;
+use crate::level_start::Start;
+use crate::patch::is_expanded;
+use crate::{blank_level, extra_levels};
 use crate::levels::LEVELS;
 use crate::live::player_position;
 use crate::objects::{read, store, Obj};
@@ -82,43 +85,125 @@ fn sprites(g: &Gb) -> Vec<[u8; 4]> {
     (0..40).map(|i| [oam[i * 4], oam[i * 4 + 1], oam[i * 4 + 2], oam[i * 4 + 3]]).filter(|s| s[0] != 0 && s[0] < 160).collect()
 }
 
-/// Let the game show one object of type `kind` alone beside Mario at the start of `level`,
-/// and cut out the sprites it draws (compared with the same level with no objects).
-/// `map_state` is a machine standing on the world map; `rom`/`original` the cartridge images.
-pub fn capture_look(map_state: &Gb, rom: &[u8], original: &[u8], level: usize, kind: u8) -> Option<Look> {
-    let lists: Vec<Vec<Obj>> = (0..LEVELS).map(|l| read(rom, l).0).collect();
-    // Mario's start: let the game load the level once with no objects
-    let mut empty = lists.clone();
-    empty[level].clear();
-    let mut r0 = rom.to_vec();
-    store(&mut r0, original, &empty).ok()?;
-    let mut g0 = map_state.clone();
-    g0.cart_mut().set_rom(&r0);
-    if !g0.enter_level(level as u8) {
-        return None;
+/// The start of `level` with no objects, Mario having walked right a little, and the sprites
+/// over the next frames: what every capture in that level compares with, the same for every
+/// object type, so it is played once. In an expanded copy the level is played as a blank level
+/// made from it (`blank_level`: its graphics, catalogue and tables, a flat floor), as Mario
+/// cannot walk on at the start of every level (a wall in level 18). `map_state` is a machine
+/// standing on the world map; `rom`/`original` the cartridge images.
+pub struct Baseline {
+    /// The sprites at the end of the walk and on each frame after it.
+    sprites: Vec<Vec<[u8; 4]>>,
+    /// Where an object goes: just past the right edge of the screen (the game brings objects
+    /// in as the view scrolls), at Mario's height.
+    at: (u16, u16),
+}
+
+/// The level's map and start as captures play it (see `Baseline`), with these objects.
+fn capture_rom(rom: &[u8], original: &[u8], level: usize, objs: Vec<Obj>) -> Option<Vec<u8>> {
+    if is_expanded(rom) {
+        let mut e = extra_levels::based_on(rom, level as u8);
+        let (map, start) = blank_level::blank(&e.map, &Start::read(&e.header));
+        e.map = map;
+        start.write(&mut e.header);
+        e.objs = objs;
+        let mut r = rom.to_vec();
+        extra_levels::apply(&mut r, &extra_levels::writes_for(rom, &e));
+        Some(r)
+    } else {
+        let mut lists: Vec<Vec<Obj>> = (0..LEVELS).map(|l| read(rom, l).0).collect();
+        lists[level] = objs;
+        let mut r = rom.to_vec();
+        store(&mut r, original, &lists).ok()?;
+        Some(r)
     }
-    let (mx, my) = player_position(&mut g0);
-    // just past the right edge of the screen: the game brings objects in as the view
-    // scrolls, so Mario then walks right a little in both runs
-    let obj = Obj { x: ((mx + 216) / 8) * 8, y: (my / 8) * 8, kind, flag: false };
-    let mut one = lists;
-    one[level] = vec![obj];
-    let mut r1 = rom.to_vec();
-    store(&mut r1, original, &one).ok()?;
-    let mut g1 = map_state.clone();
-    g1.cart_mut().set_rom(&r1);
-    if !g1.enter_level(level as u8) {
+}
+
+fn walk(map_state: &Gb, r: &[u8], level: usize) -> Option<Gb> {
+    let mut g = map_state.clone();
+    g.cart_mut().set_rom(r);
+    if !g.enter_level(level as u8) {
         return None;
     }
     for f in 0..150 {
-        let b = if f < 130 { Buttons::RIGHT } else { Buttons::NONE };
-        g0.run_frame_with(b);
-        g1.run_frame_with(b);
+        g.run_frame_with(if f < 130 { Buttons::RIGHT } else { Buttons::NONE });
+        g.clear_audio();
     }
-    let base = sprites(&g0);
-    let new: Vec<[u8; 4]> = sprites(&g1).into_iter().filter(|s| !base.contains(s)).collect();
+    Some(g)
+}
+
+/// Play `level`'s capture start with no objects and keep its sprites for `frames` frames more.
+pub fn baseline(map_state: &Gb, rom: &[u8], original: &[u8], level: usize, frames: u32) -> Option<Baseline> {
+    let r = capture_rom(rom, original, level, Vec::new())?;
+    let mut g = map_state.clone();
+    g.cart_mut().set_rom(&r);
+    if !g.enter_level(level as u8) {
+        return None;
+    }
+    let (mx, my) = player_position(&mut g);
+    let mut g = walk(map_state, &r, level)?;
+    let mut sprites = vec![self::sprites(&g)];
+    for _ in 0..frames {
+        g.run_frame_with(Buttons::NONE);
+        g.clear_audio();
+        sprites.push(self::sprites(&g));
+    }
+    Some(Baseline { sprites, at: (((mx + 216) / 8) * 8, (my / 8) * 8) })
+}
+
+/// The same start as `base` with one object of type `kind`.
+fn with_object(map_state: &Gb, rom: &[u8], original: &[u8], level: usize, kind: u8, base: &Baseline) -> Option<(Gb, Obj)> {
+    let obj = Obj { x: base.at.0, y: base.at.1, kind, flag: false };
+    let r = capture_rom(rom, original, level, vec![obj])?;
+    Some((walk(map_state, &r, level)?, obj))
+}
+
+/// Every sprite tile an object of type `kind` shows in `level` over `frames` frames after it
+/// came in (see `Baseline`), sorted. Mario is invincible, so an enemy reaching him does not
+/// change his sprites.
+pub fn object_tiles(map_state: &Gb, rom: &[u8], original: &[u8], level: usize, kind: u8, frames: u32) -> Vec<u8> {
+    match baseline(map_state, rom, original, level, frames) {
+        Some(base) => object_tiles_with(map_state, rom, original, level, kind, &base),
+        None => Vec::new(),
+    }
+}
+
+/// `object_tiles` against a baseline already played (as many frames as it has).
+pub fn object_tiles_with(map_state: &Gb, rom: &[u8], original: &[u8], level: usize, kind: u8, base: &Baseline) -> Vec<u8> {
+    let mut safe = rom.to_vec();
+    crate::cheats::set_invincible(&mut safe, true);
+    let Some((mut g, _)) = with_object(map_state, &safe, original, level, kind, base) else { return Vec::new() };
+    let mut tiles = Vec::new();
+    for still in &base.sprites {
+        let tall = g.video().lcdc() & 0x04 != 0;
+        for s in sprites(&g).into_iter().filter(|s| !still.contains(s)) {
+            let t = if tall { s[2] & 0xFE } else { s[2] };
+            for t in if tall { vec![t, t | 1] } else { vec![t] } {
+                if !tiles.contains(&t) {
+                    tiles.push(t);
+                }
+            }
+        }
+        g.run_frame_with(Buttons::NONE);
+        g.clear_audio();
+    }
+    tiles.sort_unstable();
+    tiles
+}
+
+/// Let the game show one object of type `kind` alone beside Mario at the start of `level`,
+/// and cut out the sprites it draws (compared with the same level with no objects).
+pub fn capture_look(map_state: &Gb, rom: &[u8], original: &[u8], level: usize, kind: u8) -> Option<Look> {
+    capture_look_with(map_state, rom, original, level, kind, &baseline(map_state, rom, original, level, 0)?)
+}
+
+/// `capture_look` against a baseline already played.
+pub fn capture_look_with(map_state: &Gb, rom: &[u8], original: &[u8], level: usize, kind: u8, base: &Baseline) -> Option<Look> {
+    let (mut g1, obj) = with_object(map_state, rom, original, level, kind, base)?;
+    let still = &base.sprites[0];
+    let new: Vec<[u8; 4]> = sprites(&g1).into_iter().filter(|s| !still.contains(s)).collect();
     if std::env::var("LOOK_DEBUG").is_ok() {
-        eprintln!("mario {mx},{my} obj {:?} rec {:02x?} base {:?} one {:?}", obj, &g1.cart().ram()[0xB00..0xB12], base, sprites(&g1));
+        eprintln!("obj {:?} rec {:02x?} base {:?} one {:?}", obj, &g1.cart().ram()[0xB00..0xB12], still, sprites(&g1));
     }
     if new.is_empty() {
         return None;

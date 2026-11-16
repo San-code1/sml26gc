@@ -51,6 +51,7 @@ impl Editor {
         let l = self.cur;
         if let Some(why) = self.doc.checkpoint_refused(l) {
             self.status = self.refused_text(why);
+            self.mark(Severity::Warning);
             return true;
         }
         self.doc.snapshot(l);

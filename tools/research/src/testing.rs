@@ -1035,3 +1035,269 @@ pub fn first_screen_objects(rom_path: &Path) {
         }
     }
 }
+
+/// Every type the game's levels use: the sprite tiles it shows over 2 and over 10 seconds
+/// alone beside Mario in its own level, and whether the short run missed any.
+pub fn object_tiles(rom_path: &Path) {
+    use cart_model::{art, objects};
+    let Some(g) = crate::console::load(rom_path) else { return };
+    let original = g.cart().rom().to_vec();
+    // the captures play each level as a blank one, which needs the expanded copy
+    let Ok(mut rom) = cart_model::patch::expand(&original) else { return };
+    cart_model::patch::upgrade(&mut rom);
+    let Ok(mut g) = gb_core::Gb::new(rom.clone(), 44100) else { return };
+    g.boot_to_map();
+    let (mut kinds, mut missed) = (0, 0);
+    for l in 0..32 {
+        let mut ks: Vec<u8> = objects::read(&rom, l).0.iter().map(|o| o.kind).collect();
+        ks.sort_unstable();
+        ks.dedup();
+        for k in ks {
+            let short = art::object_tiles(&g, &rom, &original, l, k, 120);
+            let long = art::object_tiles(&g, &rom, &original, l, k, 600);
+            kinds += 1;
+            let more: Vec<u8> = long.iter().copied().filter(|t| !short.contains(t)).collect();
+            missed += !more.is_empty() as usize;
+            println!("level {l:02} type {k:02x}: {:02x?}{}", long, if more.is_empty() { String::new() } else { format!("  (2 s missed {more:02x?})") });
+        }
+    }
+    println!("{kinds} level types, {missed} with tiles only the long run saw");
+}
+
+/// The game's objects once each, per catalogue (levels 0-9, 10-31): the (level, type) pairs
+/// whose captured pictures have the same pixels form one object. Prints each with its index,
+/// type numbers, levels and sprite sets, and writes `DIR/catalogue0.png` and `catalogue1.png`:
+/// the pictures in index order at twice their size, 8 per row, 80 pixels a cell.
+pub fn object_list(rom_path: &Path, dir: &Path) {
+    use cart_model::{art, level_graphics, objects};
+    use gb_core::palette::PALETTES;
+    let Some(g) = crate::console::load(rom_path) else { return };
+    let original = g.cart().rom().to_vec();
+    // the captures play each level as a blank one, which needs the expanded copy
+    let Ok(mut rom) = cart_model::patch::expand(&original) else { return };
+    cart_model::patch::upgrade(&mut rom);
+    let Ok(mut g) = gb_core::Gb::new(rom.clone(), 44100) else { return };
+    g.boot_to_map();
+    for cat in [false, true] {
+        // (picture, [(level, type)])
+        let mut found: Vec<(Option<art::Look>, Vec<(usize, u8)>)> = Vec::new();
+        for l in (0..32).filter(|&l| level_graphics::object_group(&rom, l).1 == cat) {
+            let mut ks: Vec<u8> = objects::read(&rom, l).0.iter().map(|o| o.kind).collect();
+            ks.sort_unstable();
+            ks.dedup();
+            for k in ks {
+                let look = art::capture_look(&g, &rom, &original, l, k);
+                let same = |o: &(Option<art::Look>, Vec<(usize, u8)>)| match (&o.0, &look) {
+                    (Some(a), Some(b)) => (a.w, a.h, &a.px) == (b.w, b.h, &b.px),
+                    (None, None) => o.1.iter().any(|&(_, t)| t == k),
+                    _ => false,
+                };
+                match found.iter_mut().find(|o| same(o)) {
+                    Some(o) => o.1.push((l, k)),
+                    None => found.push((look, vec![(l, k)])),
+                }
+            }
+        }
+        println!("== catalogue {} ({} objects)", if cat { "10-31" } else { "0-9" }, found.len());
+        for (i, (look, uses)) in found.iter().enumerate() {
+            let mut types: Vec<u8> = uses.iter().map(|u| u.1).collect();
+            types.sort_unstable();
+            types.dedup();
+            let levels: Vec<usize> = uses.iter().map(|u| u.0).collect();
+            let what = look.as_ref().map_or("draws nothing".to_string(), |lk| format!("{}x{} sets {}", lk.w, lk.h, lk.sets));
+            println!("{i:3}: types {types:02x?} levels {levels:?} {what}");
+        }
+        let (cell, per_row, zoom) = (80usize, 8usize, 2usize);
+        let rows = found.len().div_ceil(per_row).max(1);
+        let (w, h) = (per_row * cell, rows * cell);
+        let mut rgba = vec![255u8; w * h * 4];
+        for (i, (look, _)) in found.iter().enumerate() {
+            let Some(l) = look else { continue };
+            let (ox, oy) = ((i % per_row) * cell, (i / per_row) * cell);
+            for y in 0..(l.h * zoom).min(cell - 2) {
+                for x in 0..(l.w * zoom).min(cell - 2) {
+                    if let Some(s) = l.px[(y / zoom) * l.w + x / zoom] {
+                        let c = PALETTES[0][s as usize];
+                        let p = ((oy + y) * w + ox + x) * 4;
+                        rgba[p] = (c >> 16) as u8;
+                        rgba[p + 1] = (c >> 8) as u8;
+                        rgba[p + 2] = c as u8;
+                    }
+                }
+            }
+            // a grey line under and right of each cell, to count them
+            for k in 0..cell {
+                for (x, y) in [(ox + k, oy + cell - 1), (ox + cell - 1, oy + k)] {
+                    let p = (y * w + x) * 4;
+                    rgba[p..p + 3].copy_from_slice(&[200, 200, 200]);
+                }
+            }
+        }
+        let out = dir.join(format!("catalogue{}.png", cat as u8));
+        if let Err(e) = host::png_out::write_rgba(&out, w, h, &rgba) {
+            eprintln!("{e}");
+        }
+    }
+}
+
+/// Level `level` entered and RIGHT held for 150 frames (as the object capture does): Mario and
+/// the camera every 30 frames.
+pub fn walk_probe(rom_path: &Path, level: u8) {
+    let Some(mut g) = crate::console::load(rom_path) else { return };
+    g.boot_to_map();
+    if !g.enter_level(level) {
+        println!("not entered");
+        return;
+    }
+    let w = |g: &mut gb_core::Gb, a: u16| g.read(a) as u16 | (g.read(a + 1) as u16) << 8;
+    for f in 0..150 {
+        if f % 30 == 0 {
+            println!("frame {f:3}: mario {},{} camera {} mode {:02x}", w(&mut g, PLAYER_X), w(&mut g, PLAYER_Y), w(&mut g, 0xFFCA), g.read(GAME_MODE));
+        }
+        g.run_frame_with(Buttons::RIGHT);
+    }
+}
+
+/// Can level `base` show its own enemies and `kind` of level `other` (same catalogue) at once?
+/// Builds a $380-byte enemy sprite block: `base`'s, with `kind`'s enemy-area tiles taken from
+/// `other`'s; puts it where the low copy of `base`'s compressed map was (an expanded copy
+/// reads maps from the twin banks), points `base`'s 0:362A entry at it, and compares each
+/// picture with the one in its own level.
+pub fn enemy_mix(rom_path: &Path, base: usize, other: usize, kind: u8) {
+    use cart_model::{art, levels, objects, patch, rom::{offset, word}};
+    let Some(g) = crate::console::load(rom_path) else { return };
+    let original = g.cart().rom().to_vec();
+    let Ok(mut rom) = patch::expand(&original) else { return };
+    patch::upgrade(&mut rom);
+    let Ok(mut g) = gb_core::Gb::new(rom.clone(), 44100) else { return };
+    g.boot_to_map();
+    let enemy = |t: &u8| (0xB0..=0xE7).contains(t);
+    let mine: Vec<u8> = {
+        let mut k: Vec<u8> = objects::read(&rom, base).0.iter().map(|o| o.kind).collect();
+        k.sort_unstable();
+        k.dedup();
+        k
+    };
+    let mut used = Vec::new();
+    for &k in &mine {
+        let t: Vec<u8> = art::object_tiles(&g, &rom, &original, base, k, 600).into_iter().filter(enemy).collect();
+        println!("level {base:02} type {k:02x}: enemy tiles {t:02x?}");
+        used.extend(t);
+    }
+    let theirs: Vec<u8> = art::object_tiles(&g, &rom, &original, other, kind, 600).into_iter().filter(enemy).collect();
+    let clash: Vec<u8> = theirs.iter().copied().filter(|t| used.contains(t)).collect();
+    println!("level {other:02} type {kind:02x}: enemy tiles {theirs:02x?}; clashes with level {base:02}'s: {clash:02x?}");
+    // the two sets as the game loads them: bank, -, address
+    let set = |l: usize| { let e = offset(0, 0x362A) + l * 4; (rom[e] as usize, word(&rom, e + 2)) };
+    let (bb, ba) = set(base);
+    let (ob, oa) = set(other);
+    let mut block = rom[offset(bb, ba)..offset(bb, ba) + 0x380].to_vec();
+    for &t in &theirs {
+        let i = (t - 0xB0) as usize * 16;
+        block[i..i + 16].copy_from_slice(&rom[offset(ob, oa) + i..offset(ob, oa) + i + 16]);
+    }
+    let h = levels::header(&rom, base);
+    let at = word(&rom, levels::map_location(&rom, h).0);
+    let free = offset(h.bank as usize, at);
+    let mut mixed = rom.clone();
+    mixed[free..free + 0x380].copy_from_slice(&block);
+    let e = offset(0, 0x362A) + base * 4;
+    mixed[e] = h.bank;
+    mixed[e + 2..e + 4].copy_from_slice(&at.to_le_bytes());
+    for (pos, w) in [(e, h.bank), (e + 2, at as u8), (e + 3, (at >> 8) as u8)] {
+        mixed[pos + patch::TWIN] = w;
+    }
+    println!("block at {:02x}:{at:04x}", h.bank);
+    for &k in &mine {
+        let own = art::capture_look(&g, &rom, &original, base, k);
+        let now = art::capture_look(&g, &mixed, &original, base, k);
+        println!("level {base:02} type {k:02x} with the mix: {}", if own == now { "same picture" } else { "DIFFERENT" });
+    }
+    let own = art::capture_look(&g, &rom, &original, other, kind);
+    let now = art::capture_look(&g, &mixed, &original, base, kind);
+    let pixels = |l: &Option<art::Look>| l.as_ref().map(|l| (l.w, l.h, l.px.clone()));
+    println!("level {other:02} type {kind:02x} in level {base:02} with the mix: {}", if own.is_some() && pixels(&own) == pixels(&now) { "same picture as in its own level" } else { "DIFFERENT" });
+}
+
+/// `enemy_sets` on a saved copy: level 01 with its hedgehog and bee and level 00's turtle,
+/// stored with `enemy_sets::store`; each picture compared with its own level's, and the set
+/// read back.
+pub fn enemy_set_check(rom_path: &Path) {
+    use cart_model::enemy_sets::{self, Enemy};
+    use cart_model::{art, patch};
+    let Some(g) = crate::console::load(rom_path) else { return };
+    let original = g.cart().rom().to_vec();
+    let Ok(mut rom) = patch::expand(&original) else { return };
+    patch::upgrade(&mut rom);
+    let Ok(mut g) = gb_core::Gb::new(rom.clone(), 44100) else { return };
+    g.boot_to_map();
+    let members = [Enemy { level: 1, kind: 0x21 }, Enemy { level: 1, kind: 0x22 }, Enemy { level: 0, kind: 0x01 }];
+    let with_tiles: Vec<(Enemy, Vec<u8>)> = members.iter().map(|&e| (e, art::object_tiles(&g, &rom, &original, e.level as usize, e.kind, 600))).collect();
+    for (i, (a, ta)) in with_tiles.iter().enumerate() {
+        for (b, tb) in &with_tiles[i + 1..] {
+            if enemy_sets::clash(ta, tb) {
+                println!("clash: {a:?} and {b:?}");
+            }
+        }
+    }
+    let block = enemy_sets::build(&original, 1, &with_tiles);
+    let mut copy = rom.clone();
+    if let Err(e) = enemy_sets::store(&mut copy, &original, &[(1, members.to_vec(), block)]) {
+        println!("store: {e}");
+        return;
+    }
+    let back = enemy_sets::read(&copy);
+    println!("read back: {}", if back.len() == 1 && back[0].level == 1 && back[0].enemies == members { "ok".to_string() } else { format!("FAILED {back:?}") });
+    println!("slots: {}", enemy_sets::slots(&original).len());
+    let pixels = |l: &Option<art::Look>| l.as_ref().map(|l| (l.w, l.h, l.px.clone()));
+    for e in members {
+        let own = art::capture_look(&g, &rom, &original, e.level as usize, e.kind);
+        let now = art::capture_look(&g, &copy, &original, 1, e.kind);
+        println!("{e:?} in level 01: {}", if own.is_some() && pixels(&own) == pixels(&now) { "as in its own level" } else { "DIFFERENT" });
+    }
+    let mut none = copy.clone();
+    let _ = enemy_sets::store(&mut none, &original, &[]);
+    println!("no sets: level 01's entry back to the game's: {}", enemy_sets::own_block(&none, 1) == enemy_sets::own_block(&original, 1));
+}
+
+/// What one object capture costs: entering a level, a frame, a whole `capture_look` and
+/// `object_tiles`, timed in an expanded copy.
+pub fn capture_bench(rom_path: &Path) {
+    use cart_model::{art, patch};
+    use std::time::Instant;
+    let Some(g) = crate::console::load(rom_path) else { return };
+    let original = g.cart().rom().to_vec();
+    let Ok(mut rom) = patch::expand(&original) else { return };
+    patch::upgrade(&mut rom);
+    let Ok(mut g) = gb_core::Gb::new(rom.clone(), 44100) else { return };
+    g.boot_to_map();
+    let t = Instant::now();
+    let mut e = g.clone();
+    e.enter_level(1);
+    println!("enter a level: {:?}", t.elapsed());
+    let t = Instant::now();
+    for _ in 0..600 {
+        e.run_frame_with(Buttons::NONE);
+        e.clear_audio();
+    }
+    println!("600 frames: {:?} ({:?} each)", t.elapsed(), t.elapsed() / 600);
+    for rate in [8000u32, 1000] {
+        let Ok(mut q) = gb_core::Gb::new(rom.clone(), rate) else { return };
+        q.boot_to_map();
+        q.enter_level(1);
+        let t = Instant::now();
+        for _ in 0..600 {
+            q.run_frame_with(Buttons::NONE);
+            q.clear_audio();
+        }
+        println!("600 frames with sound at {rate} Hz: {:?}", t.elapsed());
+    }
+    let t = Instant::now();
+    for k in [0x1F, 0x21, 0x22, 0x1B, 0x40] {
+        art::capture_look(&g, &rom, &original, 1, k);
+    }
+    println!("capture_look: {:?} each", t.elapsed() / 5);
+    let t = Instant::now();
+    art::object_tiles(&g, &rom, &original, 1, 0x21, 600);
+    println!("object_tiles (600 frames): {:?}", t.elapsed());
+}

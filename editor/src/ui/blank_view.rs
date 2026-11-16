@@ -3,7 +3,6 @@
 //! as it (`EditorDocument::add_blank_level`).
 use super::palette::source;
 use super::shortcuts::{keys, Action};
-use super::level_panel::fit;
 use super::widgets::*;
 use super::Editor;
 use cart_model::level_tables::Tables;
@@ -37,6 +36,12 @@ impl Editor {
         }
     }
 
+    /// The chooser open on game level `level`, from the catalogue.
+    pub(super) fn show_blank_chooser_at(&mut self, level: usize) {
+        self.open_blank_chooser();
+        self.blank_choice = Some(level.min(LEVELS - 1));
+    }
+
     /// The chooser's frame, in place of the level editor's.
     pub(super) fn blank_frame(&mut self) {
         let Some(base) = self.blank_choice else { return };
@@ -65,7 +70,11 @@ impl Editor {
             }
         }
         y += LEVELS.div_ceil(per_row) as f32 * (LEVEL_BUTTON.1 + 2.0) + 10.0;
-        for line in self.blank_notes(base).iter().flat_map(|l| wrap(l, 34)) {
+        let mut notes = self.blank_notes(base);
+        if self.pictures_pending(base) {
+            notes.push(tr(es, "Some object pictures are still being captured; they show as numbers until then.", "Algunos dibujos de objetos aun se estan capturando; hasta entonces salen como numeros.").into());
+        }
+        for line in notes.iter().flat_map(|l| wrap(l, 34)) {
             draw_text(&line, PAD, y + 12.0, 15.0, col(3));
             y += 17.0;
         }
@@ -118,7 +127,8 @@ impl Editor {
     fn status_line_blank(&self) {
         let h = 22.0;
         draw_rectangle(self.panel, screen_height() - h, screen_width() - self.panel, h, col(1));
-        draw_text(&fit(&self.status, screen_width() - self.panel - 16.0, 16.0), self.panel + 8.0, screen_height() - 6.0, 16.0, col(3));
+        status_message(&self.status, self.panel, screen_width(), screen_height() - h, h, 16.0, self.severity());
+        self.capture_badge(screen_height() - h);
     }
 
     /// What else comes with game level `base` besides its pictures.
@@ -156,8 +166,12 @@ impl Editor {
                     tr(self.es, "plays as level", "se juega como el nivel"),
                     tr(self.es, "Give it to a map point to reach it in the game.", "Asignalo a un punto del mapa para llegar a el en el juego.")
                 );
+                self.mark(Severity::Done);
             }
-            None => self.status = tr(self.es, "There can't be more levels.", "No caben mas niveles.").into(),
+            None => {
+                self.status = tr(self.es, "There can't be more levels.", "No caben mas niveles.").into();
+                self.mark(Severity::Warning);
+            }
         }
     }
 }

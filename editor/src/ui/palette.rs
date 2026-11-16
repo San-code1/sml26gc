@@ -7,6 +7,7 @@ use super::shortcuts::{self, Action};
 use super::widgets::*;
 use super::testing_view::warn_col;
 use super::Editor;
+use crate::domain::object_names::{Category, CATEGORIES};
 use cart_model::{checkpoint, level_graphics};
 use crate::domain::stamp::{Area, Stamp};
 use crate::domain::tools::ToolKind;
@@ -128,7 +129,11 @@ impl Editor {
     /// The palette's title, then its zoom row; returns where the palette starts.
     fn palette_title(&mut self, y: f32, title: &str) -> f32 {
         draw_text(title, 10.0, y + 14.0, 18.0, col(3));
-        let y = y + 20.0;
+        self.zoom_row(y + 20.0)
+    }
+
+    /// The palette's zoom keys and - + buttons; returns where the palette starts.
+    fn zoom_row(&mut self, y: f32) -> f32 {
         let keys = format!("Zoom  Ctrl {}/{}", shortcuts::keys(Action::ZoomOut).trim_start_matches("Ctrl+"), shortcuts::keys(Action::ZoomIn).trim_start_matches("Ctrl+"));
         draw_text(&keys, 10.0, y + 15.0, 15.0, col(2));
         let right = self.panel - 10.0;
@@ -177,22 +182,75 @@ impl Editor {
     }
 
     /// Object types 00-7F; the ones this level uses are dark.
+    /// The object palette: its header (title and catalogue, the chosen object, the category
+    /// filter and Show all, the zoom), then the types.
     pub(super) fn object_palette(&mut self, y: f32) {
-        let title = match self.kind {
-            Some(k) => format!("{} #{k:02X}", tr(self.es, "OBJECTS", "OBJETOS")),
-            None => tr(self.es, "OBJECTS", "OBJETOS").to_string(),
+        let es = self.es;
+        let right = self.panel - 10.0;
+        let width = right - 10.0;
+        // title and the catalogue
+        draw_text(tr(es, "OBJECTS", "OBJETOS"), 10.0, y + 15.0, 18.0, col(3));
+        let cat_label = format!("{} ({})", tr(es, "Catalogue", "Catalogo"), shortcuts::keys(Action::ObjectCatalogue));
+        let cw = measure_text(&cat_label, None, 14, 1.0).width + 16.0;
+        if button(Rect::new(right - cw, y, cw, 20.0), &cat_label, false, 14.0) {
+            self.run(Action::ObjectCatalogue);
+        }
+        let y = y + 26.0;
+        // the object chosen
+        let chosen = match self.kind {
+            Some(k) => match self.object_label(self.look_key(k)) {
+                Some((n, c)) => format!("#{k:02X}  {n}  ({})", super::catalogue_view::category_name(es, c)),
+                None => format!("#{k:02X}"),
+            },
+            None => tr(es, "No object chosen: pick one below", "Ningun objeto elegido: elige uno abajo").to_string(),
         };
-        let y = self.palette_title(y, &title);
-        let all_label = tr(self.es, "Show all", "Mostrar todos");
-        if button(Rect::new(self.panel - 10.0 - 130.0, y - 46.0, 130.0, 18.0), all_label, self.show_all_objects, 14.0) {
+        // an enemy brought from the catalogue can be taken out from here
+        let imported = self.kind.and_then(|k| self.imported_enemy(k));
+        let remove_label = tr(es, "Remove", "Quitar");
+        let rw = if imported.is_some() { measure_text(remove_label, None, 14, 1.0).width + 16.0 } else { 0.0 };
+        let bw = width - if rw > 0.0 { rw + 6.0 } else { 0.0 };
+        draw_rectangle(10.0, y, bw, 22.0, col(0));
+        draw_rectangle_lines(10.0, y, bw, 22.0, 1.0, col(2));
+        draw_text(&super::level_panel::fit(&chosen, bw - 12.0, 15.0), 16.0, y + 16.0, 15.0, if self.kind.is_some() { col(3) } else { col(2) });
+        if let Some(e) = imported {
+            if button(Rect::new(right - rw, y, rw, 22.0), remove_label, false, 14.0) {
+                self.remove_enemy(e);
+            }
+        }
+        let y = y + 28.0;
+        // the category filter and Show all
+        let all_label = tr(es, "Show all", "Mostrar todos");
+        let aw = measure_text(all_label, None, 14, 1.0).width + 16.0;
+        let fw = width - aw - 6.0;
+        let filters: Vec<Option<Category>> = std::iter::once(None).chain(CATEGORIES.iter().copied().map(Some)).collect();
+        let at = filters.iter().position(|f| *f == self.palette_filter).unwrap_or(0);
+        let mut step = 0i32;
+        if button(Rect::new(10.0, y, 22.0, 22.0), "<", false, 15.0) {
+            step = -1;
+        }
+        if button(Rect::new(10.0 + fw - 22.0, y, 22.0, 22.0), ">", false, 15.0) {
+            step = 1;
+        }
+        let label = super::catalogue_view::category_plural(es, self.palette_filter);
+        let lw = measure_text(label, None, 15, 1.0).width;
+        draw_text(label, 10.0 + (fw - lw) / 2.0, y + 16.0, 15.0, col(3));
+        if step != 0 {
+            self.palette_filter = filters[(at as i32 + step).rem_euclid(filters.len() as i32) as usize];
+        }
+        if button(Rect::new(right - aw, y, aw, 22.0), all_label, self.show_all_objects, 14.0) {
             self.show_all_objects = !self.show_all_objects;
         }
+        let y = self.zoom_row(y + 28.0);
         let area = self.palette_area(y);
         let zoom = self.prefs.level_palette_zoom;
         let cell = Layout::BLOCKS.cell(zoom);
         let used: Vec<u8> = self.doc.levels[self.cur].content.objs.iter().map(|o| o.kind).collect();
-        let offered = self.offered_types(self.doc.base_of(self.cur));
-        let shown: Vec<u8> = if self.show_all_objects { (0..128).collect() } else { offered.clone() };
+        let offered = self.offered_here();
+        let mut shown: Vec<u8> = if self.show_all_objects { (0..128).collect() } else { offered.clone() };
+        if let Some(f) = self.palette_filter {
+            shown.retain(|&k| self.object_label(self.look_key(k)).is_some_and(|l| l.1 == f));
+        }
+        let imported: Vec<u8> = shown.iter().copied().filter(|&k| self.imported_enemy(k).is_some()).collect();
         let layout = Layout { count: shown.len(), ..Layout::BLOCKS };
         let mut view = self.level_palette;
         let hover = cell_grid(area, layout, cell, &mut view, None, |i, r| {
@@ -201,6 +259,10 @@ impl Editor {
             draw_rectangle(r.x, r.y, r.w, r.h, bg);
             if !offered.contains(&k) {
                 draw_rectangle_lines(r.x + 1.0, r.y + 1.0, r.w - 2.0, r.h - 2.0, 2.0, warn_col());
+            }
+            if imported.contains(&k) {
+                // from another level through the catalogue: a corner in the marks' colour
+                draw_triangle(vec2(r.x + r.w, r.y), vec2(r.x + r.w - 10.0, r.y), vec2(r.x + r.w, r.y + 10.0), MARK);
             }
             let fs = (6.0 + 5.0 * zoom as f32).min(18.0);
             if let Some((tex, _, _)) = self.look(k) {
@@ -211,7 +273,7 @@ impl Editor {
             } else {
                 let t = format!("{k:02X}");
                 let dim = measure_text(&t, None, fs as u16, 1.0);
-                let known = self.looks.contains_key(&(self.doc.base_of(self.cur), k));
+                let known = self.looks.contains_key(&self.look_key(k));
                 draw_text(&t, r.x + (r.w - dim.width) / 2.0, r.y + (r.h + dim.offset_y) / 2.0, fs, if known { fg } else { Color::new(fg.r, fg.g, fg.b, 0.5) });
             }
         });
@@ -219,7 +281,29 @@ impl Editor {
         if let (true, Some(&k)) = (is_mouse_button_pressed(MouseButton::Left), hover.and_then(|(c, r)| shown.get((r * 8 + c) as usize))) {
             self.choose_kind(k);
         }
-        let tip = if self.show_all_objects {
+        // a right click on an enemy brought from the catalogue takes it, and its objects, out
+        if let (true, Some(e)) = (is_mouse_button_pressed(MouseButton::Right), hover.and_then(|(c, r)| shown.get((r * 8 + c) as usize)).and_then(|&k| self.imported_enemy(k))) {
+            self.remove_enemy(e);
+        }
+        let base = self.doc.base_of(self.cur);
+        let named = hover.and_then(|(c, r)| shown.get((r * 8 + c) as usize)).copied().map(|k| {
+            let name = match self.object_label(self.look_key(k)) {
+                Some((n, cat)) => format!("#{k:02X} {n} ({})", super::catalogue_view::category_name(self.es, cat)),
+                None => format!("#{k:02X}"),
+            };
+            match self.imported_enemy(k) {
+                Some(e) => {
+                    let n = self.doc.levels[self.cur].content.objs.iter().filter(|o| o.kind == k).count();
+                    format!("{name}, {} {:02}. {} {n} {}", tr(self.es, "from level", "del nivel"), e.level, tr(self.es, "Right click: remove it and its", "Clic derecho: quitarlo con sus"), tr(self.es, "objects", "objetos"))
+                }
+                None => name,
+            }
+        });
+        let tip = if let Some(t) = named {
+            t
+        } else if self.pictures_pending(base) {
+            tr(self.es, "Still capturing pictures: more types will be offered.", "Aun capturando dibujos: se ofreceran mas tipos.").to_string()
+        } else if self.show_all_objects {
             tr(self.es, "Framed: may look broken in this level.", "Con marco: pueden verse rotos en este nivel.").to_string()
         } else {
             format!("{} {}", tr(self.es, "Dark: used here. Delete chosen:", "Oscuros: usados aqui. Borrar elegido:"), shortcuts::keys(Action::DeleteObject))
@@ -249,6 +333,24 @@ impl Editor {
                 levels.iter().any(|&l| group.contains(&l) || level_graphics::same_sets(original, base, l, here.sets) || self.captured.get(&(l, k)).is_some_and(|there| (there.w, there.h, &there.px) == (here.w, here.h, &here.px)))
             })
             .collect()
+    }
+
+    /// The object types the shown level draws right: its game level's (`offered_types`), and
+    /// with its own enemy set, the set's enemies instead of the game's.
+    pub(super) fn offered_here(&mut self) -> Vec<u8> {
+        let base = self.doc.base_of(self.cur);
+        let mut v = self.offered_types(base);
+        if let Some(set) = self.doc.level_enemies(self.cur) {
+            let members: Vec<u8> = set.enemies.iter().map(|e| e.kind).collect();
+            v.retain(|k| members.contains(k) || self.object_tiles.get(&(base, *k)).is_none_or(|t| cart_model::enemy_sets::area_tiles(t).is_empty()));
+            for k in members {
+                if !v.contains(&k) {
+                    v.push(k);
+                }
+            }
+            v.sort_unstable();
+        }
+        v
     }
 
     /// The level's blocks as the game draws them, 8 per row.
