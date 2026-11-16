@@ -63,6 +63,8 @@ pub struct Extra {
     pub name: String,
     /// Its gravity, auto-scroll, camera margin and animated tiles.
     pub tables: Tables,
+    /// Where its own enemy set's block is in the copy (`enemy_sets`), if it has one.
+    pub enemy_block: Option<(u8, u16)>,
 }
 
 /// `name` as the copy can keep it: printable ASCII, at most `NAME_MAX` characters.
@@ -80,7 +82,7 @@ pub fn based_on(rom: &[u8], base: u8) -> Extra {
     let (_, start) = levels::map_location(rom, h);
     let mut header = [0u8; 20];
     header.copy_from_slice(&rom[h.at..h.at + 20]);
-    Extra { base, header, map: decode(rom, start).0, objs: objects::read(rom, base as usize).0, name: String::new(), tables: Tables::read(rom, base as usize) }
+    Extra { base, header, map: decode(rom, start).0, objs: objects::read(rom, base as usize).0, name: String::new(), tables: Tables::read(rom, base as usize), enemy_block: None }
 }
 
 fn dir() -> usize {
@@ -112,7 +114,8 @@ pub fn read(rom: &[u8]) -> Vec<Extra> {
             let name = if named { name_from(&rom[d + NAMES + 4 + k * NAME_MAX..][..NAME_MAX]) } else { String::new() };
             let at = d + TABLES + 4 + k * 4;
             let tables = if tabled { Tables::from_bytes([rom[at], rom[at + 1], rom[at + 2], rom[at + 3]]) } else { Tables::read(rom, rom[e] as usize) };
-            Extra { base: rom[e], header, map: decode(rom, map_at).0, objs, name, tables }
+            let enemy_block = crate::enemy_sets::block_of(rom, FIRST + k);
+            Extra { base: rom[e], header, map: decode(rom, map_at).0, objs, name, tables, enemy_block }
         })
         .collect()
 }
@@ -215,6 +218,9 @@ pub fn writes_for(rom: &[u8], e: &Extra) -> Vec<(usize, Vec<u8>)> {
     ];
     writes.extend(crate::checkpoint::writes(e.base as usize, &e.objs, &e.map));
     writes.extend(e.tables.writes(rom, e.base as usize));
+    if let Some(block) = e.enemy_block {
+        writes.extend(crate::enemy_sets::entry_writes(rom, e.base as usize, block));
+    }
     writes
 }
 

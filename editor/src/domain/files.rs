@@ -5,14 +5,17 @@
 //!
 //! A level: `base`, `name` (from version 2), `header` (20 bytes), `map` (48 rows of 256 blocks), `objects` (x y kind
 //! flag), `secret` (from version 3: `-`, `point` n or `newzone` k), `tables` (from version 4,
-//! in projects from version 6: gravity, scroll, camera, animation; `level_tables`). A new zone: `base`, `name`, `entry`, `door`, `picture` (18 rows of 20 tiles), `points`
+//! in projects from version 6: gravity, scroll, camera, animation; `level_tables`), `enemies`
+//! (from version 5, in projects from version 7: `-`, or the count, each enemy's level and type,
+//! and the sprite block in hex; `enemy_sets`). A new zone: `base`, `name`, `entry`, `door`, `picture` (18 rows of 20 tiles), `points`
 //! (number, place, level, flag, shut, pass point code, the four ways) and `exits`. A project:
 //! the cartridge's hash, every level as above, the world and zone pictures, the level each
 //! map point opens, the paths, where Mario stands on each point, the new points, the doors,
 //! (from version 2) the new zones and (from version 4) all 256 point numbers and the game
 //! zones' added points (`zonepoints`: per zone, its number and its points as a new zone's),
 //! and (from version 5) the pad directions the world map's added points shut (`shuts`).
-use super::document::StandIn;
+use super::document::{EnemySet, StandIn};
+use cart_model::enemy_sets::{Enemy, BLOCK};
 use cart_model::added_points::{self, ZoneAdded};
 use cart_model::doors::{Doors, Leads};
 use cart_model::level_tables::Tables;
@@ -27,11 +30,13 @@ use std::fmt::Write;
 const LEVEL_KIND: &str = "NMB level";
 const PROJECT_KIND: &str = "NMB project";
 const ZONE_KIND: &str = "NMB zone";
-/// Version 1 has no names, version 2 no secret exit target, version 3 no tables.
-const LEVEL_VERSION: u32 = 4;
+/// Version 1 has no names, version 2 no secret exit target, version 3 no tables, version 4
+/// no enemy set.
+const LEVEL_VERSION: u32 = 5;
 const ZONE_VERSION: u32 = 1;
-/// Version 1 has no new zones, version 2 no secret exit targets, version 5 no level tables.
-const PROJECT_VERSION: u32 = 6;
+/// Version 1 has no new zones, version 2 no secret exit targets, version 5 no level tables,
+/// version 6 no enemy sets.
+const PROJECT_VERSION: u32 = 7;
 /// Point levels a project file kept before version 4.
 const OLD_LEVELS: usize = 0x82;
 const MAP_ROW: usize = 256;
@@ -66,6 +71,8 @@ pub struct LevelFile {
     /// Its gravity, auto-scroll, camera margin and animated tiles (None: an older file, so
     /// its base level's).
     pub tables: Option<Tables>,
+    /// Its own enemy set (None: the game's).
+    pub enemies: Option<EnemySet>,
 }
 
 /// Everything a project file holds.
@@ -126,6 +133,10 @@ fn level_block(out: &mut String, l: &LevelFile) {
     if let Some(t) = l.tables {
         let _ = writeln!(out, "tables {}", hex(&t.bytes()));
     }
+    let _ = match &l.enemies {
+        None => writeln!(out, "enemies -"),
+        Some(set) => writeln!(out, "enemies {} {} {}", set.enemies.len(), set.enemies.iter().map(|e| format!("{:02x} {:02x}", e.level, e.kind)).collect::<Vec<_>>().join(" "), hex(&set.block)),
+    };
 }
 
 pub fn level_text(l: &LevelFile) -> String {
@@ -138,7 +149,7 @@ pub fn level_text(l: &LevelFile) -> String {
 pub fn read_level(text: &str) -> Result<LevelFile, FileError> {
     let mut r = Reader::new(text);
     let version = r.kind(LEVEL_KIND, LEVEL_VERSION, FileError::NotLevel)?;
-    let l = r.level(version, version >= 4)?;
+    let l = r.level(version, version >= 4, version >= 5)?;
     r.end()?;
     Ok(l)
 }
@@ -246,7 +257,7 @@ pub fn read_project(text: &str) -> Result<ProjectFile, FileError> {
     if !(LEVELS..=LEVELS + extra_levels::MAX).contains(&count) {
         return Err(r.damaged());
     }
-    let levels = (0..count).map(|_| r.level(version, version >= 6)).collect::<Result<Vec<_>, _>>()?;
+    let levels = (0..count).map(|_| r.level(version, version >= 6, version >= 7)).collect::<Result<Vec<_>, _>>()?;
     r.word("world")?;
     let world = r.rows(world::H, world::W)?;
     let zones = (0..r.count("zones", zone_maps::ZONES.len())?).map(|_| r.rows(zone_maps::H, zone_maps::W)).collect::<Result<Vec<_>, _>>()?;
@@ -387,7 +398,7 @@ impl<'a> Reader<'a> {
         Ok(cells)
     }
 
-    fn level(&mut self, version: u32, tabled: bool) -> Result<LevelFile, FileError> {
+    fn level(&mut self, version: u32, tabled: bool, enemied: bool) -> Result<LevelFile, FileError> {
         let named = version >= 2;
         let base = self.hex::<u8>("base")?;
         if base as usize >= LEVELS {
@@ -401,7 +412,24 @@ impl<'a> Reader<'a> {
         let objs = (0..n).map(|_| self.object()).collect::<Result<Vec<_>, _>>()?;
         let secret = if version >= 3 { self.secret()? } else { None };
         let tables = if tabled { Some(Tables::from_bytes(self.bytes_field("tables")?.try_into().map_err(|_| self.damaged())?)) } else { None };
-        Ok(LevelFile { stand_in: StandIn { base, header }, map, objs, name, secret, tables })
+        let enemies = if enemied { self.enemies()? } else { None };
+        Ok(LevelFile { stand_in: StandIn { base, header }, map, objs, name, secret, tables, enemies })
+    }
+
+    fn enemies(&mut self) -> Result<Option<EnemySet>, FileError> {
+        let v = self.field("enemies")?;
+        let f: Vec<&str> = v.split_whitespace().collect();
+        if f.first() == Some(&"-") {
+            return Ok(None);
+        }
+        let n: usize = f.first().and_then(|n| n.parse().ok()).ok_or_else(|| self.damaged())?;
+        let byte = |s: &str| u8::from_str_radix(s, 16).ok();
+        let enemies = (0..n).map(|i| Some(Enemy { level: byte(f.get(1 + i * 2)?)?, kind: byte(f.get(2 + i * 2)?)? })).collect::<Option<Vec<_>>>().ok_or_else(|| self.damaged())?;
+        let block = self.bytes(f.get(1 + n * 2).copied().unwrap_or(""))?;
+        if block.len() != BLOCK || enemies.iter().any(|e| e.level as usize >= LEVELS) {
+            return Err(self.damaged());
+        }
+        Ok(Some(EnemySet { enemies, block }))
     }
 
     fn secret(&mut self) -> Result<Option<SecretTo>, FileError> {
@@ -565,7 +593,8 @@ mod tests {
         let objs = vec![Obj { x: 0x40, y: 0x18, kind: 0x25, flag: true }, Obj { x: 0xFF8, y: 0x3F8, kind: 0x7F, flag: false }];
         let secret = [None, Some(SecretTo::Point(0x07)), Some(SecretTo::NewZone(1))][base as usize % 3];
         let tables = Some(Tables { gravity: base & 8, scroll: 1, camera: 0, animation: 0x4D });
-        LevelFile { stand_in: StandIn { base, header: core::array::from_fn(|i| i as u8 * 3) }, map, objs, name: format!("Cave {base}"), secret, tables }
+        let enemies = (base % 2 == 1).then(|| EnemySet { enemies: vec![Enemy { level: 3, kind: 0x21 }, Enemy { level: base, kind: 0x09 }], block: (0..BLOCK).map(|i| i as u8).collect() });
+        LevelFile { stand_in: StandIn { base, header: core::array::from_fn(|i| i as u8 * 3) }, map, objs, name: format!("Cave {base}"), secret, tables, enemies }
     }
 
     fn project() -> ProjectFile {
@@ -624,17 +653,20 @@ mod tests {
     fn a_level_comes_back_as_it_was_written() {
         let l = level(13);
         let text = level_text(&l);
-        assert!(text.starts_with("NMB level 4\nbase 0d\nname Cave 13\n") && text.ends_with("secret point 07\ntables 0801004d\nend\n"));
+        assert!(text.starts_with("NMB level 5\nbase 0d\nname Cave 13\n") && text.contains("secret point 07\ntables 0801004d\nenemies 2 03 21 0d 09 0001"));
+        let v4 = text.replacen("NMB level 5", "NMB level 4", 1);
+        let v4 = format!("{}end\n", &v4[..v4.find("enemies").unwrap()]);
+        assert_eq!(read_level(&v4), Ok(LevelFile { enemies: None, ..l.clone() }), "version 4 has no enemy set");
         assert_eq!(read_level(&text), Ok(l.clone()));
         for b in [12, 14] {
             assert_eq!(read_level(&level_text(&level(b))), Ok(level(b)));
         }
-        let v3 = text.replacen("NMB level 4", "NMB level 3", 1).replacen("tables 0801004d\n", "", 1);
-        assert_eq!(read_level(&v3), Ok(LevelFile { tables: None, ..l.clone() }), "version 3 has no tables");
+        let v3 = v4.replacen("NMB level 4", "NMB level 3", 1).replacen("tables 0801004d\n", "", 1);
+        assert_eq!(read_level(&v3), Ok(LevelFile { tables: None, enemies: None, ..l.clone() }), "version 3 has no tables");
         let v2 = v3.replacen("NMB level 3", "NMB level 2", 1).replacen("secret point 07\n", "", 1);
-        assert_eq!(read_level(&v2), Ok(LevelFile { secret: None, tables: None, ..l.clone() }), "version 2 has no secret exit target");
+        assert_eq!(read_level(&v2), Ok(LevelFile { secret: None, tables: None, enemies: None, ..l.clone() }), "version 2 has no secret exit target");
         let old = v2.replacen("NMB level 2", "NMB level 1", 1).replacen("name Cave 13\n", "", 1);
-        assert_eq!(read_level(&old), Ok(LevelFile { name: String::new(), secret: None, tables: None, ..l }), "version 1 has no names");
+        assert_eq!(read_level(&old), Ok(LevelFile { name: String::new(), secret: None, tables: None, enemies: None, ..l }), "version 1 has no names");
         assert!(matches!(read_level(&text.replace("secret point 07", "secret door 07")), Err(FileError::Damaged(_))));
     }
 
@@ -643,7 +675,7 @@ mod tests {
         let text = level_text(&level(3));
         assert!(matches!(read_level(&text[..text.len() / 2]), Err(FileError::Damaged(_))));
         assert_eq!(read_level(&text.replace("base 03", "base 20")), Err(FileError::BaseOutside(32)));
-        assert_eq!(read_level(&text.replace("NMB level 4", "NMB level 5")), Err(FileError::Newer));
+        assert_eq!(read_level(&text.replace("NMB level 5", "NMB level 6")), Err(FileError::Newer));
         assert_eq!(read_level("hello"), Err(FileError::NotLevel));
         assert_eq!(read_level(""), Err(FileError::NotLevel));
         let short_row = text.replacen("\n0001", "\n01", 1);
@@ -666,9 +698,9 @@ mod tests {
         p.routes.places.truncate(map_routes::POINTS);
         p.routes.added.retain(|&a| a < 0x80);
         let text = project_text(&p);
-        let old = format!("{}end\n", &text[..text.find("entries").unwrap()]).replacen("NMB project 6", "NMB project 1", 1);
-        let old: String = old.lines().filter(|l| !l.starts_with("name ") && !l.starts_with("secret ") && !l.starts_with("tables ")).map(|l| format!("{l}\n")).collect();
-        let levels = p.levels.iter().map(|l| LevelFile { name: String::new(), secret: None, tables: None, ..l.clone() }).collect();
+        let old = format!("{}end\n", &text[..text.find("entries").unwrap()]).replacen("NMB project 7", "NMB project 1", 1);
+        let old: String = old.lines().filter(|l| !l.starts_with("name ") && !l.starts_with("secret ") && !l.starts_with("tables ") && !l.starts_with("enemies ")).map(|l| format!("{l}\n")).collect();
+        let levels = p.levels.iter().map(|l| LevelFile { name: String::new(), secret: None, tables: None, enemies: None, ..l.clone() }).collect();
         p.points.resize(world::POINT_COUNT, world::NO_LEVEL);
         p.routes.ways.resize(map_routes::ALL, Default::default());
         p.routes.places.resize(map_routes::ALL, Place { cam_x: 0, cam_y: 0, x: 0, y: 0, rest: [0, 0] });

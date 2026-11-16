@@ -2,7 +2,8 @@
 
 ## Purpose
 The editor window's menu bar, like other programs have: the File menu gathers saving and the
-level and project files, each entry showing its shortcut.
+level and project files, each entry showing its shortcut; the Tools menu captures the object
+pictures again.
 
 ## Requirements
 
@@ -48,3 +49,12 @@ the side panels SHALL NOT have buttons for them.
 #### Scenario: Level panel
 - **WHEN** the level editor is shown
 - **THEN** its side panel has no export or import buttons and its palette starts where it did before this change
+
+### Requirement: Tools menu
+The window SHALL have a Tools menu beside File with "Capture the object pictures again": it
+SHALL forget every captured object picture and tile, the cache too, and capture them all again
+in the background, the progress box showing how far it is.
+
+#### Scenario: Pictures captured again
+- **WHEN** Tools, Capture the object pictures again is chosen
+- **THEN** the progress box appears and counts every picture and enemy tile again

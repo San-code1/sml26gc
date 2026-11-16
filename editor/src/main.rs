@@ -116,9 +116,22 @@ async fn main() {
     if flag("--secret-leads") {
         ed.choose_secret();
     }
+    // --kind HEX: that object type chosen in the palette
+    if let Some(k) = value("--kind").and_then(|v| u8::from_str_radix(v, 16).ok()) {
+        ed.pick_kind(k);
+    }
     // --all-objects: the object palette shows every type
     if flag("--all-objects") {
         ed.show_all_objects();
+    }
+    // --capture-all: capture every object picture and tile, keep them and stop
+    if flag("--capture-all") {
+        ed.capture_all();
+        return;
+    }
+    // --catalogue: the object catalogue open (--power-ups: only power-ups)
+    if flag("--catalogue") {
+        ed.show_catalogue(flag("--power-ups"));
     }
     // --blank N: the New blank level chooser on game level N
     if let Some(n) = value("--blank").and_then(|v| v.parse::<usize>().ok()) {

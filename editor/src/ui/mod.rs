@@ -3,6 +3,7 @@
 //! `EditorDocument`, and saving / graphics / starting the game go through the application
 //! layer and the ports.
 mod blank_view;
+mod catalogue_view;
 mod files_view;
 mod grid_edit;
 mod level_panel;
@@ -145,6 +146,16 @@ pub struct Editor {
     side_content: f32,
     /// The New blank level chooser is open on this game level.
     blank_choice: Option<usize>,
+    /// The object catalogue, while it is open.
+    catalogue: Option<catalogue_view::CatalogueView>,
+    /// The game's objects once each, and how many pictures they were grouped with.
+    catalogue_index: (usize, Vec<crate::domain::object_catalogue::CatalogueObject>),
+    /// What kind of message the status is, and the text that kind was given to (a new
+    /// message is information until marked).
+    status_kind: Severity,
+    status_for: String,
+    /// The object palette shows only this category.
+    palette_filter: Option<crate::domain::object_names::Category>,
     /// Per base level, the object types it draws right (`offered_types`).
     offered: HashMap<usize, Vec<(u8, Vec<usize>)>>,
     /// Each captured (level, type) picture that draws something.
@@ -165,6 +176,9 @@ pub struct Editor {
     look_store: Box<dyn LookStore>,
     /// Every object picture known, as the cache keeps them, and how many it has.
     look_data: Vec<look_cache::Entry>,
+    /// The tiles of the game's levels' own objects (`art::object_tiles`), as captured.
+    tile_data: Vec<look_cache::Tiles>,
+    object_tiles: HashMap<(usize, u8), Vec<u8>>,
     looks_saved: usize,
 }
 
@@ -209,9 +223,10 @@ fn left_button() -> Pointer {
 impl Editor {
     pub fn new(doc: EditorDocument, ports: Ports, had_copy: bool, es: bool) -> Editor {
         let Ports { store, launcher, prefs: prefs_store, dialogs, text_files, menu, sound, looks: look_store } = ports;
-        let cached = look_store.load().map(|t| look_cache::from_text(&t)).unwrap_or_default();
+        let (cached, cached_tiles) = look_store.load().map(|t| look_cache::from_text(&t)).unwrap_or_default();
         let known = cached.iter().map(|e| (e.0, e.1)).collect();
-        let look_loader = LookLoader::start(doc.rom.clone(), doc.original.clone(), &known);
+        let known_tiles = cached_tiles.iter().map(|e| (e.0, e.1)).collect();
+        let look_loader = LookLoader::start(doc.rom.clone(), doc.original.clone(), &known, &known_tiles);
         let status = if !had_copy {
             tr(es, "Original cartridge opened. Saving makes an edited copy; the original is never changed.", "Cartucho original abierto. Al guardar se crea una copia editada; el original no se toca.").to_string()
         } else {
@@ -283,6 +298,11 @@ impl Editor {
             side_scroll: 0.0,
             side_content: 0.0,
             blank_choice: None,
+            catalogue: None,
+            catalogue_index: (usize::MAX, Vec::new()),
+            palette_filter: None,
+            status_kind: Severity::Info,
+            status_for: String::new(),
             offered: HashMap::new(),
             captured: HashMap::new(),
             show_all_objects: false,
@@ -295,12 +315,17 @@ impl Editor {
             look_loader,
             look_store,
             look_data: Vec::new(),
+            tile_data: Vec::new(),
+            object_tiles: HashMap::new(),
             looks_saved: 0,
         };
         for (l, k, look) in cached {
             ed.add_look(l, k, look);
         }
-        ed.looks_saved = ed.look_data.len();
+        for (l, k, t) in cached_tiles {
+            ed.add_tiles(l, k, t);
+        }
+        ed.looks_saved = ed.look_data.len() + ed.tile_data.len();
         ed.build_menu();
         ed
     }
@@ -310,6 +335,10 @@ impl Editor {
         self.update_menu();
         if self.blank_choice.is_some() && !self.in_world {
             self.blank_frame();
+            return;
+        }
+        if self.catalogue.is_some() && !self.in_world {
+            self.catalogue_frame();
             return;
         }
         if !self.update_naming() {
@@ -332,6 +361,21 @@ impl Editor {
         self.music.pump(&*self.sound, self.prefs.music_volume as f32 / *crate::domain::prefs::MUSIC_VOLUMES.end() as f32);
     }
 
+    /// The status's kind: what `mark` gave this text, else information.
+    pub(super) fn severity(&self) -> Severity {
+        if self.status == self.status_for {
+            self.status_kind
+        } else {
+            Severity::Info
+        }
+    }
+
+    /// The status just written is `kind` (warning, error or done).
+    pub(super) fn mark(&mut self, kind: Severity) {
+        self.status_for = self.status.clone();
+        self.status_kind = kind;
+    }
+
     fn music_playing(&self) -> bool {
         self.music.playing()
     }
@@ -344,6 +388,7 @@ impl Editor {
         }
         if let Err(e) = self.music.play(&self.doc.rom, music, self.sound.sample_rate()) {
             self.status = format!("{} {e}", tr(self.es, "Could not play the music:", "No se pudo tocar la musica:"));
+            self.mark(Severity::Error);
         }
     }
 
@@ -393,6 +438,8 @@ impl Editor {
             Action::NextLevel => self.select_level((self.cur + 1) % self.level_count()),
             Action::NewLevel => self.new_level(),
             Action::NewBlankLevel if !self.in_world => self.open_blank_chooser(),
+            Action::ObjectCatalogue if !self.in_world => self.open_catalogue(),
+            Action::RecaptureObjects => self.recapture_objects(),
             Action::DeleteLevel => self.delete_level(),
             Action::WorldEditor => self.enter_world(!self.in_world),
             Action::PrevMap => self.step_map(-1),
@@ -412,7 +459,10 @@ impl Editor {
             Action::PlaceFinish if !self.doc.ends_with_boss(self.cur) => self.toggle_placing(start_view::Placing::Finish),
             Action::PlaceSecret => self.toggle_placing(start_view::Placing::Secret),
             Action::PlaceCheckpoint => match self.doc.checkpoint_refused(self.cur) {
-                Some(crate::domain::document::CheckpointRefused::NoRoom) => self.status = tr(self.es, "The game keeps no restart place for this level: it cannot have checkpoints.", "El juego no guarda punto de reaparicion para este nivel: no puede tener puntos de control.").into(),
+                Some(crate::domain::document::CheckpointRefused::NoRoom) => {
+                    self.status = tr(self.es, "The game keeps no restart place for this level: it cannot have checkpoints.", "El juego no guarda punto de reaparicion para este nivel: no puede tener puntos de control.").into();
+                    self.mark(Severity::Warning);
+                }
                 _ => self.toggle_placing(start_view::Placing::Checkpoint),
             },
             Action::PlayFromHere => self.toggle_placing(start_view::Placing::PlayHere),
@@ -515,6 +565,7 @@ impl Editor {
             }
             Capture::NotLoaded => {
                 self.status = tr(self.es, "The game didn't load this level; its graphics may be wrong.", "El juego no cargo este nivel; sus graficos pueden no ser correctos.").into();
+                self.mark(Severity::Warning);
             }
             Capture::Captured => {}
         }
@@ -626,7 +677,10 @@ impl Editor {
                     tr(self.es, "Give it to a map point to reach it in the game.", "Asignalo a un punto del mapa para llegar a el en el juego.")
                 );
             }
-            None => self.status = tr(self.es, "There can't be more levels.", "No caben mas niveles.").into(),
+            None => {
+                self.status = tr(self.es, "There can't be more levels.", "No caben mas niveles.").into();
+                self.mark(Severity::Warning);
+            }
         }
     }
 
@@ -639,6 +693,7 @@ impl Editor {
         if self.doc.remove_level(l) {
             self.select_level(l.min(self.doc.levels.len() - 1));
             self.status = format!("{} {l:02} {}", tr(self.es, "Level", "Nivel"), tr(self.es, "deleted (save to keep it); the ones after it moved down a number.", "borrado (guarda para conservarlo); los siguientes bajan un numero."));
+            self.mark(Severity::Done);
         }
     }
 
@@ -710,14 +765,17 @@ impl Editor {
                     self.store.path().display(),
                     if notes.is_empty() { String::new() } else { format!("({})", notes.join(", ")) }
                 );
+                self.mark(Severity::Done);
                 true
             }
             Err(SaveError::Layout(e)) => {
                 self.status = format!("{}: {e}", tr(es, "Not saved", "No guardado"));
+                self.mark(Severity::Error);
                 false
             }
             Err(SaveError::Write(e)) => {
                 self.status = format!("{}: {e}", tr(es, "Could not save", "No se pudo guardar"));
+                self.mark(Severity::Error);
                 false
             }
         }
@@ -734,6 +792,7 @@ impl Editor {
         let start = Self::start_at(w);
         if start.blocked(&self.doc.levels[self.cur].content.map) {
             self.status = tr(self.es, "Mario cannot stand there (solid blocks or outside the level).", "Mario no cabe ahi (bloques solidos o fuera del nivel).").into();
+            self.mark(Severity::Warning);
             return;
         }
         self.placing = None;
@@ -744,11 +803,15 @@ impl Editor {
         if !self.save() {
             return;
         }
-        self.status = match self.launcher.launch(self.store.path(), Some(self.cur), start) {
+        let started = self.launcher.launch(self.store.path(), Some(self.cur), start);
+        self.status = match &started {
             Ok(()) if self.cur >= LEVELS => format!("{} {:02} ({} {:02})", tr(self.es, "Playing level", "Jugando el nivel"), self.cur, tr(self.es, "as", "como"), self.doc.base_of(self.cur)),
             Ok(()) => format!("{} {:02}", tr(self.es, "Playing level", "Jugando el nivel"), self.cur),
             Err(e) => format!("{} {e}", tr(self.es, "Could not start", "No se pudo abrir")),
         };
+        if started.is_err() {
+            self.mark(Severity::Error);
+        }
     }
 
     /// Save, then start the game on the edited copy (its world map, to try the points).
@@ -756,10 +819,14 @@ impl Editor {
         if !self.save() {
             return;
         }
-        self.status = match self.launcher.launch(self.store.path(), None, None) {
+        let started = self.launcher.launch(self.store.path(), None, None);
+        self.status = match &started {
             Ok(()) => tr(self.es, "Game started with the edited copy.", "Juego abierto con la copia editada.").into(),
-            Err(e) => e,
+            Err(e) => e.clone(),
         };
+        if started.is_err() {
+            self.mark(Severity::Error);
+        }
     }
 
     /// For the check pictures: capture this level's object pictures first.

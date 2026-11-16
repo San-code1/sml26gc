@@ -116,6 +116,7 @@ impl Editor {
         let g = self.grid();
         let Some(a) = self.tool.selection() else {
             self.status = tr(self.es, "Nothing selected (Select tool, E).", "No hay nada seleccionado (herramienta Seleccionar, E).").into();
+            self.mark(Severity::Warning);
             return;
         };
         if let Some(s) = self.doc.copy_rect(g, a) {
@@ -137,9 +138,13 @@ impl Editor {
 
     pub(super) fn start_paste(&mut self) {
         match &self.clipboard {
-            None => self.status = tr(self.es, "The clipboard is empty.", "El portapapeles esta vacio.").into(),
+            None => {
+                self.status = tr(self.es, "The clipboard is empty.", "El portapapeles esta vacio.").into();
+                self.mark(Severity::Warning);
+            }
             Some((g, _)) if *g != self.grid() => {
                 self.status = format!("{} {}.", tr(self.es, "The clipboard belongs to", "Lo copiado es de"), self.grid_name(*g));
+                self.mark(Severity::Warning);
             }
             Some(_) => {
                 if self.tool.kind() != ToolKind::Paste {

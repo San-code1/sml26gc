@@ -2,6 +2,7 @@
 //! and what the status bar says about each.
 use super::shortcuts::Action;
 use super::widgets::tr;
+use super::widgets::Severity;
 use super::Editor;
 use crate::application::exchange::{self, ExchangeError};
 use crate::domain::document::ZoneRefusal;
@@ -16,14 +17,18 @@ impl Editor {
     pub(super) fn queue_file(&mut self, a: Action) {
         if a == Action::ReplaceLevel && self.cur < LEVELS {
             self.status = tr(self.es, "Only new levels (32 and up) can be replaced from a file; the game's 32 are only edited.", "Solo los niveles nuevos (32 en adelante) se pueden reemplazar con un fichero; los 32 del juego solo se editan.").into();
+            self.mark(Severity::Warning);
             return;
         }
         if a == Action::ReplaceZone && !matches!(self.world_map, OnMap::NewZone(_)) {
             self.status = tr(self.es, "Only new zones can be replaced from a file; the game's zones are only edited.", "Solo las zonas nuevas se pueden reemplazar con un fichero; las zonas del juego solo se editan.").into();
+            self.mark(Severity::Warning);
             return;
         }
         if a == Action::ExportZone && !self.zone_exportable() {
             self.status = tr(self.es, "Show a new zone, or the Tree, Pumpkin, Macro, Space or Mario zone, to export it.", "Muestra una zona nueva, o la Zona Arbol, Calabaza, Macro, Espacial o Mario, para exportarla.").into();
+            self.mark(Severity::Done);
+            self.mark(Severity::Warning);
             return;
         }
         self.pending_file = Some(a);
@@ -115,7 +120,10 @@ impl Editor {
         match status {
             Ok(Some(s)) => self.status = s,
             Ok(None) => {}
-            Err(e) => self.status = self.file_error(&e),
+            Err(e) => {
+                self.status = self.file_error(&e);
+                self.mark(Severity::Error);
+            }
         }
     }
 

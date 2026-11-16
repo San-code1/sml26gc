@@ -22,7 +22,9 @@ use cart_model::extra_levels::{self, Extra};
 use cart_model::level_goals::{self, Goal};
 use cart_model::level_settings::Settings;
 use cart_model::blank_level;
+use cart_model::enemy_sets::{self, Enemy};
 use cart_model::level_tables::Tables;
+use cart_model::rom::offset as rom_offset;
 use cart_model::level_start::Start;
 use cart_model::secret_exits::{self, SecretTo};
 use cart_model::levels::{self, COLS, LEVELS, ROWS};
@@ -64,6 +66,8 @@ pub struct LevelContent {
     pub settings: Settings,
     /// Gravity, auto-scroll, camera margin and animated tiles (the game's per-level tables).
     pub tables: Tables,
+    /// Its own enemy set (None: the game's enemies of the level it plays as).
+    pub enemies: Option<EnemySet>,
     /// What the cells under the finish and the secret exit had before they were placed
     /// there (while editing; not saved).
     pub under: [Vec<u8>; 2],
@@ -97,11 +101,25 @@ impl LevelDoc {
     }
 }
 
+/// A level's own enemies and the sprite block built for them (`enemy_sets`).
+#[derive(Clone, PartialEq, Debug)]
+pub struct EnemySet {
+    pub enemies: Vec<Enemy>,
+    pub block: Vec<u8>,
+}
+
+/// Level `l`'s enemy set as the copy `rom` keeps it.
+fn stored_set(rom: &[u8], l: usize) -> Option<EnemySet> {
+    let s = enemy_sets::read(rom).into_iter().find(|s| s.level == l)?;
+    let at = rom_offset(s.block.0 as usize, s.block.1);
+    Some(EnemySet { enemies: s.enemies, block: rom.get(at..at + enemy_sets::BLOCK)?.to_vec() })
+}
+
 /// A level from a file or a stored new level: its start is in its header; a file without
 /// tables gets its base level's in `original`.
 fn content_with(f: LevelFile, original: &[u8]) -> LevelContent {
     let tables = f.tables.unwrap_or_else(|| Tables::read(original, f.stand_in.base as usize));
-    LevelContent { map: f.map, objs: f.objs, start: Start::read(&f.stand_in.header), settings: Settings::read(&f.stand_in.header), tables, stand_in: Some(f.stand_in), name: f.name, under: Default::default(), secret: f.secret }
+    LevelContent { map: f.map, objs: f.objs, start: Start::read(&f.stand_in.header), settings: Settings::read(&f.stand_in.header), tables, enemies: f.enemies, stand_in: Some(f.stand_in), name: f.name, under: Default::default(), secret: f.secret }
 }
 
 /// `objs` with each checkpoint bell where the game finds it (x order within its page), as a
@@ -211,7 +229,7 @@ fn entries_of(rom: &[u8]) -> Vec<u8> {
 fn level_from(rom: &[u8], l: usize) -> LevelContent {
     let (_, start) = levels::map_location(rom, levels::header(rom, l));
     let h = levels::header(rom, l).at;
-    LevelContent { map: levels::decode(rom, start).0, objs: objects::read(rom, l).0, stand_in: None, name: String::new(), start: Start::read(&rom[h..h + 8]), settings: Settings::read(&rom[h..h + 20]), tables: Tables::read(rom, l), under: Default::default(), secret: None }
+    LevelContent { map: levels::decode(rom, start).0, objs: objects::read(rom, l).0, stand_in: None, name: String::new(), start: Start::read(&rom[h..h + 8]), settings: Settings::read(&rom[h..h + 20]), tables: Tables::read(rom, l), enemies: stored_set(rom, l), under: Default::default(), secret: None }
 }
 
 impl EditorDocument {
@@ -228,7 +246,10 @@ impl EditorDocument {
         let doc = |content| LevelDoc::new(content, false);
         let mut levels: Vec<LevelDoc> = (0..LEVELS).map(|l| doc(level_from(&rom, l))).collect();
         let stored = extra_levels::read(&rom);
-        levels.extend(stored.into_iter().map(|e| doc(content_with(LevelFile { stand_in: StandIn { base: e.base, header: e.header }, map: e.map, objs: e.objs, name: e.name, secret: None, tables: Some(e.tables) }, &original))));
+        levels.extend(stored.into_iter().map(|e| doc(content_with(LevelFile { stand_in: StandIn { base: e.base, header: e.header }, map: e.map, objs: e.objs, name: e.name, secret: None, tables: Some(e.tables), enemies: None }, &original))));
+        for (l, lv) in levels.iter_mut().enumerate().skip(LEVELS) {
+            lv.content.enemies = stored_set(&rom, l);
+        }
         for (l, to) in secret_exits::read(&rom) {
             if let Some(lv) = levels.get_mut(l) {
                 lv.content.secret = Some(to);
@@ -403,6 +424,33 @@ impl EditorDocument {
         }
     }
 
+    pub fn level_enemies(&self, l: usize) -> Option<&EnemySet> {
+        self.levels[l].content.enemies.as_ref()
+    }
+
+    /// Give level `l` its own enemy set, or the game's back (None), with an undo step.
+    pub fn set_level_enemies(&mut self, l: usize, set: Option<EnemySet>) {
+        if self.levels[l].content.enemies != set {
+            self.snapshot(l);
+            let lv = &mut self.levels[l];
+            lv.content.enemies = set;
+            lv.start_dirty = true;
+        }
+    }
+
+    /// Level `l`'s set becomes `set` and every object of type `kind` goes (an enemy taken out
+    /// of the set would look broken), with one undo step. Returns how many objects went.
+    pub fn drop_set_enemy(&mut self, l: usize, set: EnemySet, kind: u8) -> usize {
+        self.snapshot(l);
+        let lv = &mut self.levels[l];
+        let before = lv.content.objs.len();
+        lv.content.objs.retain(|o| o.kind != kind);
+        lv.content.enemies = Some(set);
+        lv.start_dirty = true;
+        lv.objects_dirty = true;
+        before - lv.content.objs.len()
+    }
+
     /// Change level `l`'s settings, with an undo step.
     pub fn set_level_settings(&mut self, l: usize, s: Settings) {
         if self.levels[l].content.settings != s {
@@ -483,7 +531,7 @@ impl EditorDocument {
         });
         c.start.write(&mut stand_in.header);
         c.settings.write(&mut stand_in.header);
-        LevelFile { stand_in, map: c.map.clone(), objs: c.objs.clone(), name: c.name.clone(), secret: c.secret, tables: Some(c.tables) }
+        LevelFile { stand_in, map: c.map.clone(), objs: c.objs.clone(), name: c.name.clone(), secret: c.secret, tables: Some(c.tables), enemies: c.enemies.clone() }
     }
 
     /// A new level after the others from a level file; None when there is no room.
@@ -614,7 +662,7 @@ impl EditorDocument {
                 let mut s = lv.content.stand_in?;
                 lv.content.start.write(&mut s.header);
                 lv.content.settings.write(&mut s.header);
-                Some(Extra { base: s.base, header: s.header, map: lv.content.map.clone(), objs: bells_in_order(&lv.content.objs), name: lv.content.name.clone(), tables: lv.content.tables })
+                Some(Extra { base: s.base, header: s.header, map: lv.content.map.clone(), objs: bells_in_order(&lv.content.objs), name: lv.content.name.clone(), tables: lv.content.tables, enemy_block: None })
             })
             .collect()
     }
@@ -1036,6 +1084,19 @@ impl EditorDocument {
         Ok(notes)
     }
 
+    /// Every level's own enemy set into the copy (`enemy_sets`); nothing when no level has one
+    /// and the copy never had.
+    fn commit_enemy_sets(&mut self) -> Result<(), CartError> {
+        let sets: Vec<(usize, Vec<Enemy>, Vec<u8>)> = self.levels.iter().enumerate().filter_map(|(l, lv)| lv.content.enemies.as_ref().map(|s| (l, s.enemies.clone(), s.block.clone()))).collect();
+        if sets.is_empty() && enemy_sets::read(&self.rom).is_empty() {
+            return Ok(());
+        }
+        let mut rom = self.rom.clone();
+        enemy_sets::store(&mut rom, &self.original, &sets)?;
+        self.rom = rom;
+        Ok(())
+    }
+
     /// The restart places of levels whose bells moved (as stored), the game's own for the
     /// others; the several-bells hook when a level has more than one bell. New levels carry
     /// theirs when played (`extra_levels::writes_for`).
@@ -1124,6 +1185,7 @@ impl EditorDocument {
             notes.push(Saved::NewLevels(self.new_levels(), used));
         }
         self.commit_checkpoints()?;
+        self.commit_enemy_sets()?;
         let targets: Vec<(usize, SecretTo)> = self.levels.iter().enumerate().filter_map(|(l, lv)| Some((l, lv.content.secret?))).collect();
         let before = self.rom.clone();
         secret_exits::write(&mut self.rom, &targets, &stored_zones.iter().map(|z| z.door).collect::<Vec<u8>>())?;
@@ -1330,6 +1392,33 @@ mod tests {
         assert_eq!(doc.level_tables(filed), space);
         doc.restore_level(1);
         assert_eq!(doc.level_tables(1), own);
+    }
+
+    /// An enemy set on a game level and on a new one: undone, saved (blocks, directory, the
+    /// game level's entry), kept when the copy is opened again, filed, restored.
+    #[test]
+    fn enemy_sets_are_saved_filed_and_restored() {
+        let Some(mut doc) = open() else {
+            eprintln!("no cartridge found: document test skipped");
+            return;
+        };
+        let set = EnemySet { enemies: vec![Enemy { level: 0, kind: 0x01 }, Enemy { level: 1, kind: 0x21 }], block: vec![0x5A; enemy_sets::BLOCK] };
+        doc.set_level_enemies(1, Some(set.clone()));
+        assert!(doc.undo(1) && doc.level_enemies(1).is_none());
+        assert!(doc.redo(1));
+        let n = doc.add_blank_level(3).unwrap();
+        doc.set_level_enemies(n, Some(set.clone()));
+        doc.commit().unwrap();
+        assert_ne!(enemy_sets::own_block(&doc.rom, 1), enemy_sets::own_block(&doc.original, 1), "level 01 loads its own block");
+        let again = EditorDocument::open(doc.original.clone(), Some(doc.rom.clone()));
+        assert_eq!((again.level_enemies(1), again.level_enemies(n)), (Some(&set), Some(&set)));
+        assert!(again.mods.level(1));
+        let filed = doc.import_level(files::read_level(&files::level_text(&doc.level_file(n))).unwrap()).unwrap();
+        assert_eq!(doc.level_enemies(filed), Some(&set));
+        doc.restore_level(1);
+        assert!(doc.level_enemies(1).is_none());
+        doc.commit().unwrap();
+        assert_eq!(enemy_sets::own_block(&doc.rom, 1), enemy_sets::own_block(&doc.original, 1), "the game's enemies again");
     }
 
     /// The original game's special points, and a zone entrance's twin that changes with it.

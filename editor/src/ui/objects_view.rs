@@ -2,7 +2,10 @@
 //! retyped and deleted with the mouse.
 use super::widgets::*;
 use super::{Editor, Mode};
+use crate::application::look_loader::LookLoader;
 use crate::domain::look_cache;
+use crate::domain::object_catalogue::{self, CatalogueObject, Seen};
+use crate::domain::object_names::{self, Category};
 use cart_model::art::Look;
 use cart_model::objects::Obj;
 use macroquad::prelude::*;
@@ -24,11 +27,56 @@ impl Editor {
         for (l, k, look) in self.look_loader.take() {
             self.add_look(l, k, look);
         }
-        let all = self.look_data.len();
+        for (l, k, t) in self.look_loader.take_tiles() {
+            self.add_tiles(l, k, t);
+        }
+        let all = self.look_data.len() + self.tile_data.len();
         if all >= self.looks_saved + LOOKS_SAVE_EVERY || (all > self.looks_saved && self.look_loader.done()) {
-            self.look_store.save(&look_cache::to_text(&self.look_data));
+            self.look_store.save(&look_cache::to_text(&self.look_data, &self.tile_data));
             self.looks_saved = all;
         }
+    }
+
+    /// Forget every captured picture and tile (the cache too) and capture them all again.
+    pub(super) fn recapture_objects(&mut self) {
+        self.looks.clear();
+        self.captured.clear();
+        self.look_data.clear();
+        self.tile_data.clear();
+        self.object_tiles.clear();
+        self.offered.clear();
+        self.catalogue_index = (usize::MAX, Vec::new());
+        self.looks_saved = 0;
+        self.look_store.save(&look_cache::to_text(&[], &[]));
+        // the old loader's threads stop when their next result has nowhere to go
+        self.look_loader = LookLoader::start(self.doc.rom.clone(), self.doc.original.clone(), &Default::default(), &Default::default());
+        self.status = tr(self.es, "Capturing every object picture again (see the box at the bottom right).", "Volviendo a capturar todos los dibujos de objetos (mira el recuadro de abajo a la derecha).").into();
+    }
+
+    /// Wait until every picture and tile is captured, and keep them (for the command line).
+    pub fn capture_all(&mut self) {
+        while !self.look_loader.done() {
+            for (l, k, look) in self.look_loader.take() {
+                self.add_look(l, k, look);
+            }
+            for (l, k, t) in self.look_loader.take_tiles() {
+                self.add_tiles(l, k, t);
+            }
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+        std::thread::sleep(std::time::Duration::from_millis(500));
+        for (l, k, look) in self.look_loader.take() {
+            self.add_look(l, k, look);
+        }
+        for (l, k, t) in self.look_loader.take_tiles() {
+            self.add_tiles(l, k, t);
+        }
+        self.look_store.save(&look_cache::to_text(&self.look_data, &self.tile_data));
+    }
+
+    pub(super) fn add_tiles(&mut self, l: usize, k: u8, tiles: Vec<u8>) {
+        self.object_tiles.insert((l, k), tiles.clone());
+        self.tile_data.push((l, k, tiles));
     }
 
     pub(super) fn add_look(&mut self, l: usize, k: u8, look: Option<Look>) {
@@ -40,8 +88,42 @@ impl Editor {
         self.look_data.push((l, k, look));
     }
 
+    /// Where type `k`'s picture in the shown level comes from: the level whose sprites draw it
+    /// (an enemy of the level's own set comes from its own level), and the type.
+    pub(super) fn look_key(&self, k: u8) -> (usize, u8) {
+        let from = self.doc.level_enemies(self.cur).and_then(|s| s.enemies.iter().find(|e| e.kind == k)).map(|e| e.level as usize);
+        (from.unwrap_or_else(|| self.doc.base_of(self.cur)), k)
+    }
+
     pub(super) fn look(&self, k: u8) -> Option<&(Texture2D, f32, f32)> {
-        self.looks.get(&(self.doc.base_of(self.cur), k)).and_then(|v| v.as_ref())
+        self.looks.get(&self.look_key(k)).and_then(|v| v.as_ref())
+    }
+
+    /// The game's objects once each (`object_catalogue`), grouped again when more pictures
+    /// have come in.
+    pub(super) fn catalogue_objects(&mut self) -> &[CatalogueObject] {
+        let known = self.looks.len();
+        if self.catalogue_index.0 != known {
+            let (looks, captured) = (&self.looks, &self.captured);
+            let objects = object_catalogue::objects(&self.doc.original, |key| match (looks.get(&key), captured.get(&key)) {
+                (None, _) => Seen::NotYet,
+                (Some(_), Some(l)) => Seen::Picture(l),
+                (Some(_), None) => Seen::Nothing,
+            });
+            self.catalogue_index = (known, objects);
+        }
+        &self.catalogue_index.1
+    }
+
+    /// The catalogue's name and category for the picture at `key` (level, type): the object
+    /// that level uses it as, or the one drawn with the same pixels, or the names table's.
+    pub(super) fn object_label(&mut self, key: (usize, u8)) -> Option<(&'static str, Category)> {
+        self.catalogue_objects();
+        let here = self.captured.get(&key);
+        let same = |o: &CatalogueObject| here.is_some_and(|h| self.captured.get(&o.first()).is_some_and(|l| (l.w, l.h, &l.px) == (h.w, h.h, &h.px)));
+        let first = self.catalogue_index.1.iter().find(|o| o.uses.contains(&key)).or_else(|| self.catalogue_index.1.iter().find(|o| same(o))).map(|o| o.first());
+        let (l, k) = first.unwrap_or(key);
+        object_names::name(l, k)
     }
 
     /// For the check pictures: wait for the shown level's object pictures.
@@ -121,6 +203,11 @@ impl Editor {
         if let Some(i) = self.sel_obj {
             self.doc.set_object_kind(self.cur, i, k);
         }
+    }
+
+    /// Choose type `k` in the palette (for the command line).
+    pub fn pick_kind(&mut self, k: u8) {
+        self.kind = Some(k);
     }
 
     /// No type chosen in the palette and no object selected: clicks only pick objects.

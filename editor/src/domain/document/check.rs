@@ -124,7 +124,7 @@ mod tests {
         }
         map[29 * COLS + 200] = 0x4A;
         let bell = Obj { x: 200 * 16 - 48, y: 29 * 16 - 120, kind: level_goals::BELL, flag: false };
-        LevelContent { map, objs: vec![bell], stand_in: None, name: String::new(), start: Start::standing(64, 30 * 16), settings: Default::default(), tables: Default::default(), under: Default::default(), secret: None }
+        LevelContent { map, objs: vec![bell], stand_in: None, name: String::new(), start: Start::standing(64, 30 * 16), settings: Default::default(), tables: Default::default(), enemies: None, under: Default::default(), secret: None }
     }
 
     #[test]
