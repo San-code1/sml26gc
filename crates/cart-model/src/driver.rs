@@ -2,7 +2,7 @@
 //! button sequences and memory writes that take it to the map, into a level or back.
 use crate::ram_map::{GameMode, GAME_MODE, LEAVE_LEVEL_WRITES, LEVEL_NUMBER, MAP_POINT, SPECIAL_MAP_POINTS};
 use crate::world::point_levels;
-use gb_core::{Buttons, Gb};
+use gb_core::{BusObserver, Buttons, GameBoy};
 
 /// The game-specific actions on a running Game Boy with this cartridge.
 pub trait GameDriver {
@@ -39,7 +39,7 @@ fn start_if(pressed: bool) -> Buttons {
     }
 }
 
-impl GameDriver for Gb {
+impl<O: BusObserver> GameDriver for GameBoy<O> {
     fn mode(&mut self) -> GameMode {
         GameMode::from_byte(self.read(GAME_MODE))
     }
@@ -55,7 +55,7 @@ impl GameDriver for Gb {
         let ram = self.cart_mut().take_ram();
         let rom = self.cart().rom().to_vec();
         let rate = self.sample_rate();
-        if let Ok(mut g) = Gb::new(rom, rate) {
+        if let Ok(mut g) = GameBoy::with_observer(rom, rate, self.observer().clone()) {
             g.cart_mut().set_ram(ram);
             for f in 0..1200u32 {
                 g.run_frame_with(start_if(f % 40 < 4 && f > 60));

@@ -19,11 +19,12 @@ pub fn menu_shots(rom: &Path, dir: &Path) {
     }
     let _ = std::fs::create_dir_all(dir);
     let mut st = Settings::default();
+    let icons = cart_model::cheats::Item::ALL.map(|i| cart_model::cheats::item_picture(&mut gb, i));
     for (lang, tag) in ["en", "es", "ja"].iter().enumerate() {
         st.lang = lang;
-        for name in ["main", "controls", "wait", "display", "sound", "language", "confirm"] {
+        for name in ["main", "controls", "wait", "display", "sound", "language", "confirm", "cheats", "summon"] {
             let mut screen = *gb.screen();
-            Menu::preview(name).draw(&mut screen, &st);
+            Menu::preview(name, Some(icons)).draw(&mut screen, &st);
             if let Err(e) = write_screen(&dir.join(format!("{tag}-{name}.png")), &screen, &PALETTES[0]) {
                 eprintln!("{e}");
             }

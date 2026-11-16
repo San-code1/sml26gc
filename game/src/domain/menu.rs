@@ -1,11 +1,15 @@
 //! Pause menu drawn at Game Boy resolution in the screen's four shades: key bindings,
-//! display, sound, language, the game's own pause, back to the map, file select, quit.
-//! It changes `Settings` in place; saving them and switching full screen is the caller's job.
+//! display, sound, language, the game's own pause, back to the map, file select, quit, and
+//! with the cheats mode on, the cheats list and the item picker.
+//! It changes `Settings` in place; saving them, switching full screen and carrying out the
+//! cheats is the caller's job.
+use super::cheats::{draw_icon, Cheat, Cheats, Icon};
 use super::i18n::{texts, Texts, LANG_NAMES};
 use super::keys::{self, Key, DEFAULT_KEYS};
 use super::overlay::{text_width, Canvas};
 use super::settings::Settings;
 use crate::ports::Keyboard;
+use cart_model::cheats::Item;
 use cart_model::GameMode;
 use gb_core::ppu::H;
 
@@ -19,6 +23,8 @@ enum Screen {
     Waiting(usize),
     /// Asking before leaving the level or the game: holds the main item.
     Confirm(usize),
+    Cheats,
+    Summon,
 }
 
 pub enum Action {
@@ -28,6 +34,9 @@ pub enum Action {
     Quit,
     BackToMap,
     FileSelect,
+    /// Turn a lasting cheat on or off, or do a one-time one.
+    Cheat(Cheat),
+    Summon(Item),
 }
 
 // Main menu items (indexes into Texts::main).
@@ -40,12 +49,26 @@ const IT_PAUSE: usize = 5;
 const IT_QUIT: usize = 6;
 const IT_MAP: usize = 7;
 const IT_FILES: usize = 8;
+const IT_CHEATS: usize = 9;
+
+/// The cheats as the menu shows them.
+pub struct CheatMenu {
+    pub state: Cheats,
+    /// The items' pictures (only known in a level).
+    pub icons: Option<[Icon; 5]>,
+    /// The level being played has a secret exit.
+    pub secret_exit: bool,
+}
 
 pub struct Menu {
     screen: Screen,
     sel: usize,
     blink: u32,
     items: Vec<usize>,
+    in_level: bool,
+    cheats: Option<CheatMenu>,
+    /// One-time cheats already done while the menu is open.
+    done: Vec<Cheat>,
 }
 
 impl Menu {
@@ -70,15 +93,33 @@ impl Menu {
             items.push(IT_FILES);
         }
         items.push(IT_QUIT);
-        Menu { screen: Screen::Main, sel: 0, blink: 0, items }
+        Menu { screen: Screen::Main, sel: 0, blink: 0, items, in_level, cheats: None, done: Vec::new() }
+    }
+
+    /// With the cheats mode on: the "Debug / cheats" entry, after the game's own pause.
+    pub fn with_cheats(mut self, cheats: CheatMenu) -> Menu {
+        let at = if self.in_level { 1 } else { 0 };
+        self.items.insert(at, IT_CHEATS);
+        self.cheats = Some(cheats);
+        self
+    }
+
+    fn usable(&self, c: Cheat) -> bool {
+        let secret = c != Cheat::SecretExit || self.cheats.as_ref().is_some_and(|m| m.secret_exit);
+        (self.in_level || !c.needs_level()) && secret
+    }
+
+    fn summon_row() -> usize {
+        Cheat::ALL.iter().position(|&c| c == Cheat::Summon).unwrap_or(0)
     }
 
     fn pos(&self, item: usize) -> usize {
         self.items.iter().position(|&i| i == item).unwrap_or(0)
     }
 
-    /// For previews: show one screen ("main", "controls", "wait", "display", "sound", "language").
-    pub fn preview(name: &str) -> Menu {
+    /// For previews: show one screen ("main", "controls", "wait", "display", "sound", "language",
+    /// "confirm", "cheats", "summon").
+    pub fn preview(name: &str, icons: Option<[Icon; 5]>) -> Menu {
         let screen = match name {
             "controls" => Screen::Controls,
             "wait" => Screen::Waiting(4),
@@ -86,9 +127,11 @@ impl Menu {
             "sound" => Screen::Sound,
             "language" => Screen::Language,
             "confirm" => Screen::Confirm(IT_MAP),
+            "cheats" => Screen::Cheats,
+            "summon" => Screen::Summon,
             _ => Screen::Main,
         };
-        let mut m = Menu::new(GameMode::Playing);
+        let mut m = Menu::new(GameMode::Playing).with_cheats(CheatMenu { state: Cheats { invincible: true, ..Cheats::default() }, icons, secret_exit: true });
         m.screen = screen;
         m
     }
@@ -102,6 +145,8 @@ impl Menu {
             Screen::Sound => 2,
             Screen::Language => 4,
             Screen::Waiting(_) => 0,
+            Screen::Cheats => Cheat::ALL.len() + 1,
+            Screen::Summon => Item::ALL.len(),
         }
     }
 
@@ -138,7 +183,7 @@ impl Menu {
         let back = any(&[Key::Escape, st.keys[keys::B]]);
         let n = self.count();
         // Yes/No sit side by side, so they are chosen with Left/Right; lists use Up/Down.
-        let (prev, next) = if matches!(self.screen, Screen::Confirm(_)) { (left, right) } else { (up, down) };
+        let (prev, next) = if matches!(self.screen, Screen::Confirm(_) | Screen::Summon) { (left, right) } else { (up, down) };
         if prev {
             self.sel = (self.sel + n - 1) % n;
         }
@@ -152,6 +197,11 @@ impl Menu {
                 Screen::Display => self.pos(IT_DISPLAY),
                 Screen::Sound => self.pos(IT_SOUND),
                 Screen::Confirm(item) => self.pos(item),
+                Screen::Cheats => self.pos(IT_CHEATS),
+                Screen::Summon => {
+                    self.go(Screen::Cheats, Self::summon_row());
+                    return Action::None;
+                }
                 _ => self.pos(IT_LANGUAGE),
             };
             self.go(Screen::Main, back_to);
@@ -168,6 +218,7 @@ impl Menu {
                         IT_SOUND => self.go(Screen::Sound, 0),
                         IT_LANGUAGE => self.go(Screen::Language, st.lang),
                         IT_PAUSE => return Action::PressStart,
+                        IT_CHEATS => self.go(Screen::Cheats, 0),
                         // "No" is selected first, so a stray key press never leaves the level.
                         item => self.go(Screen::Confirm(item), 1),
                     }
@@ -226,6 +277,33 @@ impl Menu {
                     } else {
                         self.go(Screen::Main, self.pos(IT_LANGUAGE));
                     }
+                }
+            }
+            Screen::Cheats => {
+                if ok {
+                    let Some(&c) = Cheat::ALL.get(self.sel) else {
+                        self.go(Screen::Main, self.pos(IT_CHEATS));
+                        return Action::None;
+                    };
+                    if !self.usable(c) {
+                        return Action::None;
+                    }
+                    if c == Cheat::Summon {
+                        self.go(Screen::Summon, 0);
+                        return Action::None;
+                    }
+                    if let Some(m) = self.cheats.as_mut() {
+                        m.state.toggle(c);
+                    }
+                    if !c.toggles() && !self.done.contains(&c) {
+                        self.done.push(c);
+                    }
+                    return Action::Cheat(c);
+                }
+            }
+            Screen::Summon => {
+                if ok {
+                    return Action::Summon(Item::ALL[self.sel]);
                 }
             }
             Screen::Waiting(_) => {}
@@ -379,6 +457,57 @@ impl Menu {
                 }
                 c.footer(x, y + h - 2, w, t.footer_language);
             }
+            Screen::Cheats => {
+                let (x, y, w, h) = (2, 10, 156, 128);
+                c.frame(x, y, w, h);
+                c.title(x, y, w, t.main[IT_CHEATS]);
+                let state = self.cheats.as_ref().map(|m| m.state).unwrap_or_default();
+                for i in 0..=Cheat::ALL.len() {
+                    let ty = y + 11 + i as i32 * 11;
+                    match Cheat::ALL.get(i) {
+                        Some(&cheat) => {
+                            let usable = self.usable(cheat);
+                            c.text(x + 16, ty, t.cheats[i], if usable { shade(i) } else { 1 });
+                            let value = if cheat.toggles() {
+                                if state.is_on(cheat) { t.on } else { t.off }
+                            } else if self.done.contains(&cheat) {
+                                t.done
+                            } else {
+                                ""
+                            };
+                            c.text(x + w - 8 - text_width(value), ty, value, 3);
+                        }
+                        None => c.text(x + 16, ty, t.back, shade(i)),
+                    }
+                    if i == self.sel {
+                        c.cursor(x + 8, ty, 3);
+                    }
+                }
+                let footer = match Cheat::ALL.get(self.sel) {
+                    Some(&ch) if !self.usable(ch) => if self.in_level { t.no_secret } else { t.only_level },
+                    _ => t.footer_language,
+                };
+                c.footer(x, y + h - 2, w, footer);
+            }
+            Screen::Summon => {
+                let (x, y, w, h) = (14, 36, 132, 68);
+                c.frame(x, y, w, h);
+                c.title(x, y, w, t.cheats[Self::summon_row()]);
+                let icons = self.cheats.as_ref().and_then(|m| m.icons.as_ref());
+                for i in 0..Item::ALL.len() {
+                    let ix = x + 10 + i as i32 * 23;
+                    if i == self.sel {
+                        c.rect(ix - 2, y + 10, 20, 20, 3);
+                        c.rect(ix - 1, y + 11, 18, 18, 0);
+                    }
+                    if let Some(icons) = icons {
+                        draw_icon(&mut c, ix, y + 12, &icons[i]);
+                    }
+                }
+                let name = t.items[self.sel.min(Item::ALL.len() - 1)];
+                c.text(x + (w - text_width(name)) / 2, y + 38, name, 3);
+                c.footer(x, y + h - 2, w, t.footer_summon);
+            }
         }
     }
 }
@@ -427,6 +556,54 @@ mod tests {
         assert_eq!(st.keys[keys::A], Key::Space);
         step(&mut m, &mut st, Key::Escape);
         assert!(matches!(step(&mut m, &mut st, Key::Escape), Action::Close));
+    }
+
+    fn cheats_menu(mode: GameMode) -> Menu {
+        Menu::new(mode).with_cheats(CheatMenu { state: Cheats::default(), icons: None, secret_exit: false })
+    }
+
+    #[test]
+    fn the_cheats_entry_is_there_only_with_the_mode_on() {
+        assert!(!Menu::new(GameMode::Playing).items.contains(&IT_CHEATS));
+        assert_eq!(cheats_menu(GameMode::Playing).items[1], IT_CHEATS);
+        assert_eq!(cheats_menu(GameMode::Map).items[0], IT_CHEATS);
+    }
+
+    #[test]
+    fn cheats_toggle_and_summon_in_a_level() {
+        let mut st = Settings::default();
+        let mut m = cheats_menu(GameMode::Playing);
+        step(&mut m, &mut st, Key::Down);
+        step(&mut m, &mut st, Key::Enter);
+        assert!(matches!(step(&mut m, &mut st, Key::Enter), Action::Cheat(Cheat::Invincible)));
+        assert!(m.cheats.as_ref().unwrap().state.invincible);
+        step(&mut m, &mut st, Key::Down);
+        step(&mut m, &mut st, Key::Down);
+        assert!(matches!(step(&mut m, &mut st, Key::Enter), Action::None), "no secret exit in this level");
+        step(&mut m, &mut st, Key::Down);
+        step(&mut m, &mut st, Key::Enter);
+        step(&mut m, &mut st, Key::Right);
+        step(&mut m, &mut st, Key::Right);
+        assert!(matches!(step(&mut m, &mut st, Key::Enter), Action::Summon(Item::Flower)));
+        step(&mut m, &mut st, Key::Escape);
+        step(&mut m, &mut st, Key::Down);
+        step(&mut m, &mut st, Key::Down);
+        assert!(matches!(step(&mut m, &mut st, Key::Enter), Action::Cheat(Cheat::MaxLives)));
+        assert_eq!(m.done, vec![Cheat::MaxLives]);
+    }
+
+    #[test]
+    fn level_cheats_are_refused_on_the_map() {
+        let mut st = Settings::default();
+        let mut m = cheats_menu(GameMode::Map);
+        step(&mut m, &mut st, Key::Enter);
+        step(&mut m, &mut st, Key::Down);
+        for _ in 0..3 {
+            assert!(matches!(step(&mut m, &mut st, Key::Enter), Action::None));
+            step(&mut m, &mut st, Key::Down);
+        }
+        assert!(m.screen == Screen::Cheats);
+        assert!(matches!(step(&mut m, &mut st, Key::Enter), Action::Cheat(Cheat::FreezeTimer)));
     }
 
     #[test]

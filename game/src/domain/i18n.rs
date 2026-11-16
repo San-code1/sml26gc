@@ -8,8 +8,8 @@ pub const LANG_IDS: [&str; 3] = ["en", "es", "ja"];
 
 pub struct Texts {
     pub pause: &'static str,
-    /// Continue, Controls, Display, Sound, Language, Original pause, Quit, Back to map, File select.
-    pub main: [&'static str; 9],
+    /// Continue, Controls, Display, Sound, Language, Original pause, Quit, Back to map, File select, Debug / cheats.
+    pub main: [&'static str; 10],
     pub sure: &'static str,
     pub hint2: &'static str,
     pub footer_main: &'static str,
@@ -36,11 +36,21 @@ pub struct Texts {
     pub language: &'static str,
     pub footer_language: &'static str,
     pub hint: &'static str,
+    /// In `Cheat::ALL`'s order.
+    pub cheats: [&'static str; 9],
+    /// In `Item::ALL`'s order.
+    pub items: [&'static str; 5],
+    pub on: &'static str,
+    pub off: &'static str,
+    pub done: &'static str,
+    pub only_level: &'static str,
+    pub no_secret: &'static str,
+    pub footer_summon: &'static str,
 }
 
 const EN: Texts = Texts {
     pause: "PAUSE",
-    main: ["CONTINUE", "CONTROLS", "DISPLAY", "SOUND", "LANGUAGE", "ORIGINAL PAUSE", "QUIT GAME", "BACK TO MAP", "FILE SELECT"],
+    main: ["CONTINUE", "CONTROLS", "DISPLAY", "SOUND", "LANGUAGE", "ORIGINAL PAUSE", "QUIT GAME", "BACK TO MAP", "FILE SELECT", "DEBUG / CHEATS"],
     sure: "ARE YOU SURE?",
     hint2: "ENTER: PAUSE",
     footer_main: "ENTER:OK  ESC:RESUME",
@@ -67,11 +77,19 @@ const EN: Texts = Texts {
     language: "LANGUAGE",
     footer_language: "ENTER:OK ESC:BACK",
     hint: "ESC: MENU",
+    cheats: ["INVINCIBLE", "FINISH LEVEL", "SECRET EXIT", "SUMMON ITEM", "FREEZE TIMER", "99 LIVES", "999 COINS", "6 GOLDEN COINS", "INFO PANEL"],
+    items: ["STAR", "MUSHROOM", "FIRE FLOWER", "CARROT", "HEART"],
+    on: "ON",
+    off: "OFF",
+    done: "OK",
+    only_level: "ONLY IN A LEVEL",
+    no_secret: "NO SECRET EXIT HERE",
+    footer_summon: "</>:CHOOSE ENTER:OK",
 };
 
 const ES: Texts = Texts {
     pause: "PAUSA",
-    main: ["CONTINUAR", "CONTROLES", "PANTALLA", "SONIDO", "IDIOMA", "PAUSA ORIGINAL", "SALIR DEL JUEGO", "VOLVER AL MAPA", "ELEGIR PARTIDA"],
+    main: ["CONTINUAR", "CONTROLES", "PANTALLA", "SONIDO", "IDIOMA", "PAUSA ORIGINAL", "SALIR DEL JUEGO", "VOLVER AL MAPA", "ELEGIR PARTIDA", "DEBUG / TRUCOS"],
     sure: "SEGURO?",
     hint2: "INTRO: PAUSA",
     footer_main: "INTRO:OK  ESC:SEGUIR",
@@ -98,11 +116,19 @@ const ES: Texts = Texts {
     language: "IDIOMA",
     footer_language: "INTRO:OK ESC:VOLVER",
     hint: "ESC: MENU",
+    cheats: ["INVENCIBLE", "TERMINAR NIVEL", "SALIDA SECRETA", "INVOCAR OBJETO", "PARAR TIEMPO", "99 VIDAS", "999 MONEDAS", "6 MONEDAS DORADAS", "PANEL DE INFO"],
+    items: ["ESTRELLA", "CHAMPIÑON", "FLOR DE FUEGO", "ZANAHORIA", "CORAZON"],
+    on: "ON",
+    off: "OFF",
+    done: "OK",
+    only_level: "SOLO EN UN NIVEL",
+    no_secret: "SIN SALIDA SECRETA",
+    footer_summon: "</>:ELEGIR INTRO:OK",
 };
 
 const JA: Texts = Texts {
     pause: "ポーズ",
-    main: ["ツヅケル", "キーセッテイ", "ガメン", "サウンド", "ゲンゴ", "モトノポーズ", "ゲームヲヤメル", "チズニモドル", "データセンタク"],
+    main: ["ツヅケル", "キーセッテイ", "ガメン", "サウンド", "ゲンゴ", "モトノポーズ", "ゲームヲヤメル", "チズニモドル", "データセンタク", "デバッグ/チート"],
     sure: "ホントニ?",
     hint2: "ENTER:ポーズ",
     footer_main: "ENTER:OK ESC:ツヅケル",
@@ -129,6 +155,14 @@ const JA: Texts = Texts {
     language: "ゲンゴ",
     footer_language: "ENTER:OK ESC:モドル",
     hint: "ESC:メニュー",
+    cheats: ["ムテキ", "コースクリア", "ヒミツノデグチ", "アイテム", "タイムストップ", "ライフ 99", "コイン 999", "ゴールドコイン 6", "ジョウホウ"],
+    items: ["スター", "キノコ", "フラワー", "ニンジン", "ハート"],
+    on: "ON",
+    off: "OFF",
+    done: "OK",
+    only_level: "コースノナカダケ",
+    no_secret: "ヒミツノデグチハナイ",
+    footer_summon: "</>:エラブ ENTER:OK",
 };
 
 pub fn texts(lang: usize) -> &'static Texts {

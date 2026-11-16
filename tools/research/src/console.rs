@@ -38,7 +38,7 @@ pub fn ram_snapshot(gb: &mut Gb) -> Vec<(u16, u8)> {
 }
 
 /// Write `pokes` ("a299=00,ff9b=14", hex) into memory.
-pub fn apply_pokes(gb: &mut Gb, pokes: &str) {
+pub fn apply_pokes<O: BusObserver>(gb: &mut GameBoy<O>, pokes: &str) {
     for p in pokes.split(',') {
         if let Some((a, v)) = p.split_once('=') {
             gb.write(u16::from_str_radix(a, 16).unwrap_or(0), u8::from_str_radix(v, 16).unwrap_or(0));

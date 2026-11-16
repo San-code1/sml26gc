@@ -21,11 +21,13 @@
 //! | `layout` | Each zone's space for its maps and packing edited maps back |
 //! | `ram_map` | Where the running game keeps things; `GameMode` |
 //! | `live` | Reading what the running game has loaded |
+//! | `cheats` | What each cheat writes in the running game (invincible patch, items, counters, finish) |
 //! | `art` | Pictures captured from the running game (blocks, map tiles, object looks) |
 //! | `driver` | `GameDriver`: boot to the map, enter a level, back to the map... |
 //! | `error` | `CartError` and what a save used |
 pub mod added_points;
 pub mod art;
+pub mod cheats;
 pub mod doors;
 pub mod driver;
 pub mod error;
