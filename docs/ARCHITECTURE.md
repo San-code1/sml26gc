@@ -60,6 +60,7 @@ Each module documents the ROM addresses and formats it relies on.
 | `map_routes` | Paths between map points (walk scripts), where Mario stands on each, new points; moved to bank $36 in the edited copy, room for 256 numbers |
 | `added_points` | Points numbered from $80 on every map: hooks in bank $0F (level, flag, map pick), their flag bytes at $A1A0, the game zones' kept in bank $24 |
 | `doors` | Which world points enter which zone and where each zone exit leads |
+| `cheats` | What each cheat does in the running game: the invincible patch (0:2E95, 0:1C58), a summoned item in a free object slot, finishing the level through the bell and goal or its secret exit, the timer, lives, coins and golden coins, the info panel's values |
 | `art` | Pictures captured from the running game (blocks, map tiles, object looks) |
 | `live` | What the running game has loaded |
 | `driver` | `GameDriver`: boot to the map, enter a level, back to the map, show a map point |

@@ -2,11 +2,11 @@
 use crate::levels::MAP_BYTES;
 use crate::objects::Obj;
 use crate::ram_map::{cart_ram_offset, LEVEL_MAP, OBJECT_RECORDS};
-use gb_core::Gb;
+use gb_core::{BusObserver, GameBoy, Gb};
 
 /// The level map as the game holds it after loading ($B000-$BFFF in cartridge RAM,
 /// $C000-$DFFF in work RAM).
-pub fn map_in_memory(gb: &Gb) -> Vec<u8> {
+pub fn map_in_memory<O: BusObserver>(gb: &GameBoy<O>) -> Vec<u8> {
     let from = cart_ram_offset(LEVEL_MAP);
     let mut m = gb.cart().ram()[from..from + 0x1000].to_vec();
     m.extend_from_slice(&gb.wram()[..]);

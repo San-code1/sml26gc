@@ -1,13 +1,15 @@
 //! One play session: the emulated console plus everything the port adds around it (pause
-//! menu, the editor's new levels and zones, battery saves, the start-up hint). Each call to `frame`
-//! is one frame of the window.
+//! menu, the editor's new levels and zones, battery saves, the start-up hint, the cheats).
+//! Each call to `frame` is one frame of the window.
 use super::preferences::Preferences;
 use super::zones::ZoneSwap;
+use crate::domain::cheats::{draw_info, Cheat, Cheats};
 use crate::domain::keys::{self, Key};
-use crate::domain::menu::{Action, Menu};
+use crate::domain::menu::{Action, CheatMenu, Menu};
 use crate::domain::overlay::draw_hint;
 use crate::domain::settings::Settings;
 use crate::ports::{AudioOut, Keyboard, SaveStore, ZoneProgressStore};
+use cart_model::cheats::{self as cheat_rules, Item};
 use cart_model::extra_levels;
 use cart_model::secret_exits;
 use cart_model::ram_map::{GAME_MODE, LEVEL_NUMBER};
@@ -53,6 +55,19 @@ fn take_new_level(g: &mut Gb, extra: &mut Option<(u8, Undo)>) {
     }
 }
 
+/// While the timer is frozen and Mario is in a level, write back the time he had when it
+/// was frozen (or when the level began).
+fn hold_timer(g: &mut Gb, frozen: &mut Option<[u8; 2]>, on: bool) {
+    if !on || !matches!(GameMode::from_byte(g.read(GAME_MODE)), GameMode::Playing | GameMode::Paused) {
+        *frozen = None;
+        return;
+    }
+    match frozen {
+        Some(t) => cheat_rules::set_timer(g, *t),
+        None => *frozen = Some(cheat_rules::timer(g)),
+    }
+}
+
 /// What a session is started with, besides the console itself.
 pub struct SessionParts {
     pub prefs: Preferences,
@@ -62,6 +77,8 @@ pub struct SessionParts {
     pub start_level: Option<u8>,
     /// Unattended run for a check: no menu, faster, no hint.
     pub checking: bool,
+    /// The debug / cheats mode is on.
+    pub cheats: bool,
 }
 
 pub struct GameSession {
@@ -83,6 +100,10 @@ pub struct GameSession {
     /// Mario is on the map again).
     extra: Option<(u8, Undo)>,
     zones: ZoneSwap,
+    /// The cheats that stay on (None: the cheats mode is off).
+    cheats: Option<Cheats>,
+    /// The time held while the timer is frozen.
+    frozen: Option<[u8; 2]>,
 }
 
 impl GameSession {
@@ -113,6 +134,8 @@ impl GameSession {
             screen,
             extra,
             zones,
+            cheats: parts.cheats.then(Cheats::default),
+            frozen: None,
         }
     }
 
@@ -160,7 +183,13 @@ impl GameSession {
             if !self.checking {
                 let start_key = input.pressed(self.prefs.settings.keys[keys::START]) && in_level && !self.input_lock;
                 if input.pressed(Key::Escape) || start_key {
-                    self.menu = Some(Menu::new(mode));
+                    let mut menu = Menu::new(mode);
+                    if let Some(state) = self.cheats {
+                        let icons = in_level.then(|| Item::ALL.map(|i| cheat_rules::item_picture(g, i)));
+                        let secret_exit = cheat_rules::has_secret_exit(g);
+                        menu = menu.with_cheats(CheatMenu { state, icons, secret_exit });
+                    }
+                    self.menu = Some(menu);
                 }
             }
         } else if let Some(m) = self.menu.as_mut() {
@@ -184,6 +213,11 @@ impl GameSession {
                     self.gb.back_to_file_select();
                     self.acc = 0.0;
                 }
+                Action::Cheat(c) => self.cheat(c),
+                Action::Summon(item) => {
+                    self.close_menu();
+                    cheat_rules::summon(&mut self.gb, item);
+                }
             }
         }
 
@@ -203,6 +237,9 @@ impl GameSession {
 
         let st = &self.prefs.settings;
         self.screen.copy_from_slice(self.gb.screen());
+        if self.cheats.is_some_and(|c| c.info) {
+            draw_info(&mut self.screen, &cheat_rules::info(&mut self.gb));
+        }
         if let Some(m) = &self.menu {
             m.draw(&mut self.screen, st);
         } else if self.hint_time > 0.0 {
@@ -215,6 +252,29 @@ impl GameSession {
     fn close_menu(&mut self) {
         self.menu = None;
         self.input_lock = true;
+    }
+
+    fn cheat(&mut self, c: Cheat) {
+        let Some(state) = self.cheats.as_mut() else { return };
+        state.toggle(c);
+        let g = &mut self.gb;
+        match c {
+            Cheat::Invincible => {
+                cheat_rules::set_invincible(g.cart_mut().rom_mut(), state.invincible);
+            }
+            Cheat::FinishLevel => {
+                self.close_menu();
+                cheat_rules::finish_level(&mut self.gb);
+            }
+            Cheat::SecretExit => {
+                self.close_menu();
+                cheat_rules::take_secret_exit(&mut self.gb);
+            }
+            Cheat::MaxLives => cheat_rules::max_lives(g),
+            Cheat::MaxCoins => cheat_rules::max_coins(g),
+            Cheat::GoldenCoins => cheat_rules::golden_coins(g),
+            Cheat::Summon | Cheat::FreezeTimer | Cheat::Info => {}
+        }
     }
 
     /// The game runs: buttons in, frames at the console's pace, sound out, periodic saves.
@@ -245,16 +305,19 @@ impl GameSession {
         let q = audio.queued_seconds();
         let target = FRAME_SECONDS * if q < 0.03 { 0.9 } else if q > 0.09 { 1.1 } else { 1.0 };
         let mut ran = 0;
+        let freeze = self.cheats.is_some_and(|c| c.freeze_timer);
         while self.acc >= target && ran < 4 {
             self.acc -= target;
             g.run_frame();
             take_new_level(g, &mut self.extra);
+            hold_timer(g, &mut self.frozen, freeze);
             ran += 1;
         }
         if fast {
             for _ in 0..3 {
                 g.run_frame();
                 take_new_level(g, &mut self.extra);
+                hold_timer(g, &mut self.frozen, freeze);
             }
             g.clear_audio();
         }
@@ -360,6 +423,7 @@ mod tests {
             zones: Box::new(rec.clone()),
             start_level: None,
             checking: false,
+            cheats: false,
         };
         let mut s = GameSession::new(gb, parts);
         let mut keys = FakeKeys::default();
@@ -413,6 +477,64 @@ mod tests {
         assert_eq!(rec.battery_saves.get(), before + 1);
     }
 
+    /// Started as the editor starts it (a level, cheats on): Invincible from the pause menu
+    /// lets Mario walk through the level's first enemies, Finish the level ends it for the
+    /// map, and with Invincible off again the program and the file are as they were.
+    #[test]
+    fn cheats_from_the_pause_menu() {
+        let Some(rom) = host::find_rom(None) else {
+            eprintln!("no cartridge found: session test skipped");
+            return;
+        };
+        let file = std::fs::read(&rom).unwrap();
+        let gb = host::load_gb(&rom, 44100, false).unwrap();
+        let original = gb.cart().rom().to_vec();
+        let rec = Record::default();
+        let parts = SessionParts {
+            prefs: Preferences::new(Box::new(rec.clone()), Box::new(rec.clone())),
+            saves: Box::new(rec.clone()),
+            zones: Box::new(rec.clone()),
+            start_level: Some(0),
+            checking: false,
+            cheats: true,
+        };
+        let mut s = GameSession::new(gb, parts);
+        let mut keys = FakeKeys::default();
+        let press = |s: &mut GameSession, keys: &mut FakeKeys, ks: &[Key]| {
+            for &k in ks {
+                for held in [&[][..], &[k][..]] {
+                    keys.set(held);
+                    s.frame(FRAME_SECONDS as f32, keys, &Silence);
+                }
+            }
+            keys.set(&[]);
+            s.frame(FRAME_SECONDS as f32, keys, &Silence);
+        };
+        assert_eq!(s.gb.mode(), GameMode::Playing);
+        // menu: original pause, debug / cheats > invincible
+        press(&mut s, &mut keys, &[Key::Escape, Key::Down, Key::Enter, Key::Enter, Key::Escape, Key::Escape]);
+        assert!(s.cheats.unwrap().invincible);
+        let lives = s.gb.read(cart_model::ram_map::LIVES);
+        let mut hurt = false;
+        for _ in 0..900 {
+            keys.set(&[Key::Right]);
+            s.frame(FRAME_SECONDS as f32, &keys, &Silence);
+            hurt |= s.gb.read(0xA224) != 0;
+        }
+        assert!(!hurt && s.gb.mode() == GameMode::Playing && s.gb.read(cart_model::ram_map::LIVES) == lives, "Mario walked through the enemies");
+        // invincible off again, then finish the level
+        press(&mut s, &mut keys, &[Key::Escape, Key::Down, Key::Enter, Key::Enter, Key::Down, Key::Enter]);
+        assert_eq!(s.gb.cart().rom(), &original[..], "the program is the game's again");
+        let mut ended = false;
+        for _ in 0..600 {
+            keys.set(&[]);
+            s.frame(FRAME_SECONDS as f32, &keys, &Silence);
+            ended |= s.gb.read(GAME_MODE) == 0x18;
+        }
+        assert!(ended && s.gb.mode() == GameMode::Map, "the level ended for the map");
+        assert_eq!(std::fs::read(&rom).unwrap(), file, "the cartridge file is unchanged");
+    }
+
     /// A new level (32) opened by a point of the game's own map (point $00, where a new game
     /// starts): the game's Start enters it, it is played in place of its base level, and the
     /// base level is back once on the map.
@@ -439,6 +561,7 @@ mod tests {
             zones: Box::new(rec.clone()),
             start_level: None,
             checking: false,
+            cheats: false,
         };
         let mut s = GameSession::new(gb, parts);
         let mut keys = FakeKeys::default();
@@ -488,6 +611,7 @@ mod tests {
                 zones: Box::new(rec.clone()),
                 start_level,
                 checking: false,
+                cheats: false,
             };
             GameSession::new(Gb::new(copy.clone(), 44100).unwrap(), parts)
         };
@@ -579,6 +703,7 @@ mod tests {
                 zones: Box::new(rec.clone()),
                 start_level: None,
                 checking: false,
+                cheats: false,
             };
             GameSession::new(gb, parts)
         };
@@ -695,6 +820,7 @@ mod tests {
                 zones: Box::new(rec.clone()),
                 start_level: None,
                 checking: false,
+                cheats: false,
             };
             GameSession::new(gb, parts)
         };

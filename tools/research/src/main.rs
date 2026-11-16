@@ -6,6 +6,7 @@
 //! only read the cartridge (and write pictures where asked); nothing here is used by the
 //! game or the editor.
 mod added;
+mod cheats;
 mod checks;
 mod console;
 mod disasm;
@@ -105,11 +106,27 @@ const COMMANDS: &[(&str, Run)] = &[
     ("finishcheck", |r, _| levels::finish_check(r)),
     ("secretcheck", |r, _| levels::secret_check(r)),
     ("walkprobe", |r, a| levels::walk_probe(r, a.s(1) == "own")),
+    ("damageprobe", |r, a| cheats::damage_probe(r, a.num(1) as u8, a.num(2), a.num(3), &a.list(4))),
+    ("pokeprobe", |r, a| cheats::poke_probe(r, a.num(1) as u8, a.hex(2), a.hex(3) as u8)),
+    ("growprobe", |r, a| cheats::grow_probe(r, a.num(1) as u8, a.num(2), a.num(3))),
+    ("slotsprobe", |r, a| cheats::slots_probe(r, a.num(1) as u8, a.num(2), &a.0[3..].iter().filter_map(|s| s.parse().ok()).collect::<Vec<u16>>())),
+    ("itemprobe", |r, a| cheats::item_probe(r, a.num(1), a.num(2))),
+    ("summonprobe", |r, a| cheats::summon_probe(r, a.num(1) as u8, &a.list(2))),
+    ("lookprobe", |r, a| cheats::look_probe(r, a.num(1) as u8, a.hex(2) as u8, &a.list(3), &a.path(4))),
+    ("timerprobe", |r, a| cheats::timer_probe(r, a.num(1) as u8)),
+    ("finishprobe", |r, a| cheats::finish_probe(r, a.num(1) as u8, &a.s(2))),
+    ("bellprobe", |r, a| cheats::bell_probe(r, a.num(1) as u8)),
+    ("tilesprobe", |r, _a| cheats::tiles_probe(r)),
+    ("patchprobe", |r, a| cheats::patch_probe(r, a.num(1) as u8, a.num(2), a.num(3), &a.s(4))),
+    ("recordsprobe", |r, a| cheats::records_probe(r, a.num(1) as u8)),
+    ("facingprobe", |r, a| cheats::facing_probe(r, a.num(1) as u8)),
+    ("cheatcheck", |r, _a| cheats::cheat_check(r)),
+    ("doorprobe", |r, a| cheats::door_probe(r, a.hex(1) as u8, a.num(2) == 1)),
     ("goalprobe", |r, a| levels::goal_probe(r, a.num(1) as u8, a.hex(2), a.hex(3), &a.s(4))),
 ];
 
 const USAGE: &str = "research [--with-save]: disasm BANK ADDR N | table OFF LEN ROW | find SCRIPT | watch SCRIPT ADDRS FROM TO | trace SCRIPT ADDRS FROM TO\n\
-                     \x20         poke | leave | cmpmap | diff | worldshot | looks | worldcheck | objcheck | objects | reads | free | storecheck | extracheck | routecheck | dragcheck | finishcheck | secretcheck | pointcheck | walkprobe | ramfree | levels | modes ...\n\
+                     \x20         poke | leave | cmpmap | diff | worldshot | looks | worldcheck | objcheck | objects | reads | free | storecheck | extracheck | routecheck | dragcheck | finishcheck | secretcheck | pointcheck | cheatcheck | walkprobe | ramfree | levels | modes ...\n\
                      RESEARCH_ROM=<file> uses that cartridge file\n\
                      (menushots belongs to the game: game --research menushots DIR)";
 
@@ -139,6 +156,6 @@ mod tests {
         let a = Args(["watch", "x", "ffc2,a200-a202", "0x10", "12"].map(String::from).to_vec());
         assert_eq!(a.list(2), vec![0xFFC2, 0xA200, 0xA201, 0xA202]);
         assert_eq!((a.hex(3), a.big(3), a.num(4), a.num(9)), (0x10, 0x10, 12, 0));
-        assert_eq!(COMMANDS.len(), 48);
+        assert_eq!(COMMANDS.len(), 64);
     }
 }

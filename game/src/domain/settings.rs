@@ -12,11 +12,13 @@ pub struct Settings {
     pub fullscreen: bool,
     pub integer_scale: bool,
     pub lang: usize,
+    /// The debug / cheats mode for games started from the start screen.
+    pub cheats: bool,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Settings { keys: DEFAULT_KEYS, palette: 0, volume: 8, fullscreen: false, integer_scale: true, lang: LANG_EN }
+        Settings { keys: DEFAULT_KEYS, palette: 0, volume: 8, fullscreen: false, integer_scale: true, lang: LANG_EN, cheats: false }
     }
 }
 
@@ -40,6 +42,7 @@ impl Settings {
                 "fullscreen" => s.fullscreen = v == "1",
                 "integer_scale" => s.integer_scale = v != "0",
                 "language" => s.lang = LANG_IDS.iter().position(|&id| id == v).unwrap_or(LANG_EN),
+                "cheats" => s.cheats = v == "1",
                 _ => {}
             }
         }
@@ -52,12 +55,13 @@ impl Settings {
             out += &format!("key{i}={}\n", k.id().unwrap_or("Unknown"));
         }
         out += &format!(
-            "palette={}\nvolume={}\nfullscreen={}\ninteger_scale={}\nlanguage={}\n",
+            "palette={}\nvolume={}\nfullscreen={}\ninteger_scale={}\nlanguage={}\ncheats={}\n",
             self.palette,
             self.volume,
             self.fullscreen as u8,
             self.integer_scale as u8,
-            LANG_IDS[self.lang.min(2)]
+            LANG_IDS[self.lang.min(2)],
+            self.cheats as u8
         );
         out
     }
@@ -75,5 +79,13 @@ mod tests {
         assert_eq!((s.palette, s.fullscreen, s.lang, s.volume), (1, true, 1, 10));
         assert_eq!(Settings::from_text(&s.to_text()), s);
         assert_eq!(Settings::from_text(""), Settings::default());
+    }
+
+    #[test]
+    fn cheats_are_off_unless_saved_on() {
+        assert!(!Settings::from_text("palette=1\n").cheats);
+        let on = Settings { cheats: true, ..Settings::default() };
+        assert!(on.to_text().contains("cheats=1\n"));
+        assert_eq!(Settings::from_text(&on.to_text()), on);
     }
 }

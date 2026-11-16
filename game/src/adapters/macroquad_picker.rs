@@ -3,6 +3,7 @@
 //! file with the system's "Open" dialog. The caller remembers the choice once the game
 //! starts with it.
 use crate::domain::i18n::LANG_ES;
+use crate::domain::settings::Settings;
 use macroquad::prelude::*;
 use std::path::{Path, PathBuf};
 
@@ -12,6 +13,8 @@ pub enum Choice {
     Play(PathBuf),
     /// Open the system's dialog to choose a file.
     Browse,
+    /// Turn the debug / cheats box on or off.
+    Cheats,
     Quit,
 }
 
@@ -24,6 +27,8 @@ pub struct Picker {
     pub missing: Option<PathBuf>,
     /// Why the last choice didn't start.
     pub error: Option<String>,
+    /// The "Debug / cheats" box.
+    pub cheats: bool,
     es: bool,
 }
 
@@ -33,12 +38,12 @@ const DIM: Color = Color::new(0.62, 0.68, 0.6, 1.0);
 const ACCENT: Color = Color::new(0.55, 0.75, 0.35, 1.0);
 
 impl Picker {
-    pub fn new(lang: usize) -> Picker {
+    pub fn new(settings: &Settings) -> Picker {
         let last = host::last_rom();
         let remembered = last.is_some();
         let missing = if remembered { None } else { host::last_rom_named() };
         let offer = last.or_else(|| host::find_rom(None).filter(|p| p.is_file()));
-        Picker { offer, remembered, missing, error: None, es: lang == LANG_ES }
+        Picker { offer, remembered, missing, error: None, cheats: settings.cheats, es: settings.lang == LANG_ES }
     }
 
     fn tr<'a>(&self, en: &'a str, es: &'a str) -> &'a str {
@@ -117,6 +122,11 @@ impl Picker {
         }
         if button(self.tr("O: choose another file...", "O: elegir otro archivo..."), y, true) || is_key_pressed(KeyCode::O) {
             choice = Choice::Browse;
+        }
+        y += 50.0;
+        let mark = if self.cheats { "[x]" } else { "[ ]" };
+        if button(&format!("{mark} {}", self.tr("C: Debug / cheats", "C: Debug / trucos")), y, true) || is_key_pressed(KeyCode::C) {
+            choice = Choice::Cheats;
         }
         y += 50.0;
         if button(self.tr("Esc: quit", "Esc: salir"), y, true) || is_key_pressed(KeyCode::Escape) {

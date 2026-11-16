@@ -36,6 +36,8 @@ struct Args {
     /// Start straight in this level (32 and up: the editor's new levels), as the level
     /// editor's Play button asks.
     level: Option<u8>,
+    /// The debug / cheats mode for this run, whatever the setting says (the editor's Play).
+    cheats: bool,
 }
 
 fn parse_args(v: &[String]) -> Args {
@@ -52,6 +54,11 @@ fn parse_args(v: &[String]) -> Args {
             "--every" => a.every = next.parse().unwrap_or(60),
             "--rom" => a.rom = Some(next.into()),
             "--level" => a.level = next.parse().ok(),
+            "--cheats" => {
+                a.cheats = true;
+                i += 1;
+                continue;
+            }
             s => {
                 if !s.starts_with("--") {
                     a.rom = Some(s.into());
@@ -63,6 +70,20 @@ fn parse_args(v: &[String]) -> Args {
         i += 2; // option and its value
     }
     a
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cheats_flag_takes_no_value() {
+        let a = parse_args(&["copy.gb".into(), "--cheats".into(), "--level".into(), "3".into()]);
+        assert!(a.cheats);
+        assert_eq!(a.rom, Some(PathBuf::from("copy.gb")));
+        assert_eq!(a.level, Some(3));
+        assert!(!parse_args(&["copy.gb".into()]).cheats);
+    }
 }
 
 const TITLE: &str = "Game Boy Native (Rust)";
@@ -122,6 +143,7 @@ fn start(args: &Args, found: Result<PathBuf, String>, checking: bool, audio: &dy
         Ok(g) => g,
         Err(e) => return Err((prefs, e)),
     };
+    let cheats = !checking && (args.cheats || prefs.settings.cheats);
     let zones: Box<dyn ZoneProgressStore> = if checking { Box::new(NoZoneProgress) } else { Box::new(ZoneFile { rom: rom.clone() }) };
     let parts = SessionParts {
         prefs,
@@ -129,6 +151,7 @@ fn start(args: &Args, found: Result<PathBuf, String>, checking: bool, audio: &dy
         saves: Box::new(BatteryFile { rom }),
         start_level: args.level,
         checking,
+        cheats,
     };
     Ok(GameSession::new(gb, parts))
 }
@@ -147,7 +170,7 @@ async fn run(args: Args, found: Result<PathBuf, String>, checking: bool, title: 
     let mut display = MacroquadDisplay::new();
     // no cartridge on the command line: choose one first (checks keep finding it themselves)
     let mut app = if args.rom.is_none() && !checking {
-        App::Pick(Picker::new(SettingsFile.load().lang))
+        App::Pick(Picker::new(&SettingsFile.load()))
     } else {
         match start(&args, found, checking, &audio) {
             Ok(s) => App::Run(s),
@@ -168,6 +191,13 @@ async fn run(args: Args, found: Result<PathBuf, String>, checking: bool, title: 
                     Choice::Wait => None,
                     Choice::Quit => break,
                     Choice::Play(p) => Some(p),
+                    Choice::Cheats => {
+                        picker.cheats = !picker.cheats;
+                        let mut s = SettingsFile.load();
+                        s.cheats = picker.cheats;
+                        SettingsFile.save(&s);
+                        None
+                    }
                     Choice::Browse => {
                         let (t, kind) = picker.dialog_texts();
                         win32::pick_cartridge(&title, picker.start_dir().as_deref(), t, kind)
