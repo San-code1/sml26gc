@@ -191,3 +191,11 @@ does. Ctrl+N SHALL keep making a copy of the level shown.
 #### Scenario: Blank level from the keyboard
 - **WHEN** the level editor is shown and the user presses Ctrl+B
 - **THEN** the New blank level chooser opens
+
+### Requirement: Object catalogue shortcut
+In the level editor, F3 SHALL open the object catalogue, as its button in the Objects palette
+does, and Esc SHALL close it.
+
+#### Scenario: Catalogue from the keyboard
+- **WHEN** the level editor is shown and the user presses F3
+- **THEN** the object catalogue opens

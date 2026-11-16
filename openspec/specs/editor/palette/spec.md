@@ -4,7 +4,8 @@
 
 The editor's palettes (level blocks, object types, world and zone map tiles) let the user choose
 what to paint, at a size that suits their screen, one cell or a rectangle of cells at a time;
-the object palette offers the types the level draws right.
+the object palette offers the types the level draws right, named as the object catalogue
+names them and filtered by category.
 
 ## Requirements
 
@@ -121,3 +122,21 @@ place then places nothing. A right click on an object SHALL still delete it.
 #### Scenario: Right click on the sky
 - **WHEN** a type is chosen and the user right-clicks where there is no object
 - **THEN** no type is chosen and no object is deleted
+
+### Requirement: Object names in the palette
+The object palette SHALL show the chosen type's name and category, and the type under the
+mouse's, as the object catalogue names the object drawn there (its number alone when the
+catalogue has none), so the palette and the catalogue never disagree.
+
+#### Scenario: Pointing at the mushroom
+- **WHEN** the mouse is over the mushroom in level 01's object palette
+- **THEN** the palette shows its name and that it is a power-up, as the catalogue does
+
+### Requirement: Palette category filter
+The object palette SHALL have a category filter (all objects, or one of the catalogue's
+categories), stepped with its < and > buttons, that shows only the types of that category,
+together with Show all.
+
+#### Scenario: Only enemies
+- **WHEN** the filter is stepped to Enemies in level 01
+- **THEN** the palette shows level 01's enemies only
