@@ -183,3 +183,11 @@ level's warnings count.
 #### Scenario: A level with warnings
 - **WHEN** the shown level has two warnings
 - **THEN** the Level tab reads "Level ! 2" and its Warnings section lists both
+
+### Requirement: New blank level shortcut
+In the level editor, Ctrl+B SHALL open the New blank level chooser, as the File menu entry
+does. Ctrl+N SHALL keep making a copy of the level shown.
+
+#### Scenario: Blank level from the keyboard
+- **WHEN** the level editor is shown and the user presses Ctrl+B
+- **THEN** the New blank level chooser opens
