@@ -128,3 +128,37 @@ them).
 #### Scenario: Copy unchanged
 - **WHEN** Invincible and Freeze the timer were used and the game is closed
 - **THEN** the cartridge copy that was played is byte for byte as before
+
+### Requirement: Go to a level
+The cheats list SHALL have "Go to level", which lets the person choose any level the copy
+has (the game's 32 and the editor's new ones, by number and name where it has one) and SHALL
+start that level from the map as entering it from its own point does. It SHALL be usable on
+the map and in a level (leaving the level being played without losing a life).
+
+#### Scenario: From the map
+- **WHEN** "Go to level" is opened on the world map and level 12 is chosen
+- **THEN** level 12 begins, and finishing it brings Mario back to the map
+
+#### Scenario: A new level
+- **WHEN** a new level of the editor is chosen
+- **THEN** that new level is played, not its base level
+
+### Requirement: Open the whole map
+The cheats list SHALL have "Open the whole map", which marks every level of the copy cleared
+as the game marks them, so every path and point of the maps can be used. It SHALL take
+effect at once and be saved as the game saves cleared levels. Like the six golden coins, it
+marks the bosses beaten too.
+
+#### Scenario: Open map
+- **WHEN** "Open the whole map" is chosen on the world map
+- **THEN** Mario can walk to every point of the world map and of the zones
+
+### Requirement: Active objects view
+The cheats list SHALL have "Objects view", turned on and off. While on, the game SHALL draw
+over each active object (enemy, item, platform...) its type number in hexadecimal, kept up
+to date every frame, and the info panel SHALL also show how many of the game's active object
+places are in use.
+
+#### Scenario: Enemies labelled
+- **WHEN** Objects view is on and a Goomba walks on the screen
+- **THEN** its type number is drawn over it and moves with it

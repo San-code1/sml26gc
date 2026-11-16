@@ -77,3 +77,50 @@ game's own goals. A level without a bell keeps none.
 #### Scenario: Ring the bell of a moved finish
 - **WHEN** level 01's finish was moved, the copy is saved and Mario rings the bell that moved with it
 - **THEN** the bonus game is played and then Mario is back on the map with level 01 cleared
+
+### Requirement: Placing checkpoints
+The level editor SHALL show a level's midway bells (checkpoints), each with the place Mario
+starts again after ringing it, and SHALL let the user add one with "Place checkpoint" (K,
+and a button beside "Place finish"): a click puts a bell at that cell and its restart place
+just left of it on the ground below. Dragging a bell moves it with its restart place, deleting
+it removes the checkpoint; undo and redo work and the level is marked changed.
+
+#### Scenario: Move a checkpoint
+- **WHEN** level 01's checkpoint is dragged further on, the copy is saved, Mario rings it and loses a life
+- **THEN** he starts again next to the moved bell
+
+### Requirement: Several checkpoints per level
+A level SHALL have up to 4 checkpoints. "Place checkpoint" in a level that has 4 SHALL say so
+and add nothing. Level 31 SHALL say it cannot have checkpoints (the game has no restart
+place for it) instead of offering the action.
+
+#### Scenario: Two checkpoints
+- **WHEN** level 01 gets a second checkpoint further on
+- **THEN** both bells and both restart places are shown and the level has two checkpoints
+
+#### Scenario: The limit
+- **WHEN** a level with 4 checkpoints gets "Place checkpoint"
+- **THEN** nothing is added and the status bar says the level has the most checkpoints it can have
+
+### Requirement: Playing the checkpoints
+After a save, losing a life after ringing bells SHALL start Mario again at the restart place
+of the last bell he rang, in the game's levels and in new levels. Mario SHALL keep that
+checkpoint until he rings another one or the level is finished, as the game keeps its own.
+A level with one checkpoint SHALL play exactly as the game's own checkpoints do.
+
+#### Scenario: The last bell rung
+- **WHEN** Mario rings level 01's first and then its second bell and loses a life
+- **THEN** he starts again next to the second bell
+
+#### Scenario: Add a checkpoint to a new level
+- **WHEN** a new level is given a checkpoint, the copy is saved, Mario rings it and loses a life
+- **THEN** he starts again next to it, and the base level's checkpoints are unchanged
+
+### Requirement: The checkpoint in files and restore
+The checkpoints (their bells and restart places) SHALL be kept in level files and project
+files and come back with them; restore SHALL put back the game's own checkpoint (for a new
+level, its base level's).
+
+#### Scenario: Export and import
+- **WHEN** a level whose checkpoint was moved is exported and imported as a new level
+- **THEN** the new level's checkpoints are at the same places
