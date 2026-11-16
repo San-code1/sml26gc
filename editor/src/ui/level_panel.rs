@@ -51,7 +51,7 @@ impl Rows {
 }
 
 /// `t` cut to fit `w` pixels at `size`.
-fn fit(t: &str, w: f32, size: f32) -> String {
+pub(super) fn fit(t: &str, w: f32, size: f32) -> String {
     let width = |s: &str| measure_text(s, None, size as u16, 1.0).width;
     if width(t) <= w {
         return t.to_string();
@@ -147,11 +147,14 @@ impl Editor {
                 }
             }
             y += count.div_ceil(per_row) as f32 * (LEVEL_BUTTON.1 + 2.0) + 2.0;
-            let half = (w - GAP) / 2.0;
-            if self.tool_button(Rect::new(PAD, y, half, ROW), tr(es, "New level", "Nivel nuevo"), Action::NewLevel, false) {
+            let third = (w - 2.0 * GAP) / 3.0;
+            if self.tool_button(Rect::new(PAD, y, third, ROW), tr(es, "Copy level", "Copiar nivel"), Action::NewLevel, false) {
                 act = Some(Action::NewLevel);
             }
-            if self.cur >= LEVELS && self.tool_button(Rect::new(PAD + half + GAP, y, half, ROW), tr(es, "Delete level", "Borrar nivel"), Action::DeleteLevel, false) {
+            if self.tool_button(Rect::new(PAD + third + GAP, y, third, ROW), tr(es, "Blank level", "Nivel en blanco"), Action::NewBlankLevel, false) {
+                act = Some(Action::NewBlankLevel);
+            }
+            if self.cur >= LEVELS && self.tool_button(Rect::new(PAD + 2.0 * (third + GAP), y, third, ROW), tr(es, "Delete level", "Borrar nivel"), Action::DeleteLevel, false) {
                 act = Some(Action::DeleteLevel);
             }
             y += ROW + GAP;
@@ -235,6 +238,16 @@ impl Editor {
 
     fn label(y: f32, text: &str) {
         draw_text(text, PAD, y + 18.0, 15.0, col(3));
+    }
+
+    /// A note over as many rows as it needs.
+    fn explain(rows: &mut Rows, w: f32, text: &str) {
+        let per_line = ((w / 7.5) as usize).max(10);
+        for line in wrap(text, per_line) {
+            if let Some(y) = rows.next(16.0) {
+                draw_text(&line, PAD, y + 12.0, 14.0, col(2));
+            }
+        }
     }
 
     fn note(x: f32, y: f32, w: f32, text: &str) {
@@ -375,6 +388,52 @@ impl Editor {
                 self.toggle_music(s.music);
                 self.toggle_music(s.music);
             }
+        }
+        // the game's per-level tables: two choices each
+        let game = self.doc.game_tables(l);
+        let mut t = self.doc.level_tables(l);
+        let choice = |y: f32, names: [&str; 2], on: bool| -> Option<bool> {
+            let hw = (cw - GAP) / 2.0;
+            let mut pick = None;
+            for (i, name) in names.iter().enumerate() {
+                if button(Rect::new(cx + i as f32 * (hw + GAP), y, hw, ROW), name, on == (i == 1), 15.0) {
+                    pick = Some(i == 1);
+                }
+            }
+            pick
+        };
+        if let Some(y) = rows.next(ROW) {
+            Self::label(y, tr(es, "Gravity", "Gravedad"));
+            if let Some(on) = choice(y, [tr(es, "normal", "normal"), tr(es, "space", "espacio")], t.space_gravity()) {
+                t.set_space_gravity(on, &game);
+            }
+        }
+        if let Some(y) = rows.next(ROW) {
+            Self::label(y, tr(es, "Auto-scroll", "Auto-scroll"));
+            if let Some(on) = choice(y, [tr(es, "off", "no"), tr(es, "on", "si")], t.scrolls()) {
+                t.set_scrolls(on);
+            }
+        }
+        if let Some(y) = rows.next(ROW) {
+            Self::label(y, tr(es, "Camera", "Camara"));
+            if let Some(on) = choice(y, [tr(es, "normal", "normal"), tr(es, "wide", "amplia")], t.wide_camera()) {
+                t.set_wide_camera(on);
+            }
+        }
+        Self::explain(&mut rows, w, tr(es, "Wide: when Mario climbs or jumps high the camera goes up sooner, so more of what is above shows.", "Amplia: si Mario trepa o salta alto, la camara sube antes y se ve mas de lo que hay arriba."));
+        if game.animated() {
+            if let Some(y) = rows.next(ROW) {
+                Self::label(y, tr(es, "Animation", "Animacion"));
+                if let Some(on) = choice(y, [tr(es, "none", "ninguna"), tr(es, "its own", "la suya")], t.animated()) {
+                    t.set_animated(on, &game);
+                }
+            }
+        }
+        if t.scrolls() {
+            Self::explain(&mut rows, w, tr(es, "Auto-scroll: the screen moves right by itself; caught against a wall Mario loses a life.", "Auto-scroll: la pantalla avanza sola; atrapado contra una pared Mario pierde una vida."));
+        }
+        if t != self.doc.level_tables(l) {
+            self.doc.set_level_tables(l, t);
         }
 
         let warnings = self.doc.warnings(l);

@@ -138,6 +138,17 @@ const COMMANDS: &[(&str, Run)] = &[
     ("checkpointcheck", |r, _a| testing::checkpoint_check(r)),
     ("ways", |r, a| testing::ways(r, &a.list(1))),
     ("spotcheck", |r, _a| testing::spot_check(r)),
+    ("comboprobe", |r, a| testing::combo_probe(r, a.num(1) as usize, a.num(2) as usize, a.num(3) == 1)),
+    ("physicsprobe", |r, a| testing::physics_probe(r, a.num(1) as u8)),
+    ("tableprobe", |r, a| testing::table_probe(r, a.hex(1) as u16, a.num(2) as u8, a.num(3) as u8)),
+    ("cameraprobe", |r, a| testing::camera_probe(r, a.num(1) as u8)),
+    ("scrollprobe", |r, a| testing::scroll_probe(r, a.num(1) as u8, a.num(2) as u8, a.num(3) as u16, a.num(4) == 1)),
+    ("animationprobe", |r, a| testing::animation_probe(r, a.num(1) as u8)),
+    ("bossprobe", |r, a| testing::boss_probe(r, a.num(1) as u8, a.num(2) as usize, a.num(3))),
+    ("tablescheck", |r, _a| testing::tables_check(r)),
+    ("typegroups", |r, _a| testing::type_groups(r)),
+    ("startobjects", |r, a| testing::start_objects_probe(r, a.num(1) as u8, a.hex(2) as u8, a.num(3) as u16)),
+    ("firstscreen", |r, _a| testing::first_screen_objects(r)),
     ("mapprobe", |r, a| testing::door_probe(r, a.hex(1) as u8, (a.num(2) > 0).then(|| a.num(2) as u8 - 1))),
     ("goalprobe", |r, a| levels::goal_probe(r, a.num(1) as u8, a.hex(2), a.hex(3), &a.s(4))),
 ];
@@ -173,6 +184,6 @@ mod tests {
         let a = Args(["watch", "x", "ffc2,a200-a202", "0x10", "12"].map(String::from).to_vec());
         assert_eq!(a.list(2), vec![0xFFC2, 0xA200, 0xA201, 0xA202]);
         assert_eq!((a.hex(3), a.big(3), a.num(4), a.num(9)), (0x10, 0x10, 12, 0));
-        assert_eq!(COMMANDS.len(), 80);
+        assert_eq!(COMMANDS.len(), 91);
     }
 }

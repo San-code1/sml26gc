@@ -3,7 +3,8 @@
 ## Purpose
 
 The editor's palettes (level blocks, object types, world and zone map tiles) let the user choose
-what to paint, at a size that suits their screen, one cell or a rectangle of cells at a time.
+what to paint, at a size that suits their screen, one cell or a rectangle of cells at a time;
+the object palette offers the types the level draws right.
 
 ## Requirements
 
@@ -93,3 +94,30 @@ When part of a palette is hidden, a thin bar along its bottom (columns hidden) o
 - **THEN** no scroll bar is drawn
 
 THEN** the zoom becomes the largest at which 16 tiles fit across the panel
+
+### Requirement: Objects the level draws right
+The object palette SHALL offer only the types the shown level draws right: the bells, and the
+types a game level of the same object catalogue uses that loads the same graphics for them or
+draws them with the same pixels as the shown level. A Show all switch SHALL add the other
+types, marked as possibly broken. Objects already in the level SHALL stay as they are.
+
+#### Scenario: Level 01's objects
+- **WHEN** the object palette of level 01 is shown
+- **THEN** it offers level 01's enemies and the items that look right there, and not the Space Zone's enemies
+
+#### Scenario: Show all
+- **WHEN** Show all is turned on
+- **THEN** every type is offered and those level 01 may draw broken are marked
+
+### Requirement: No object type chosen
+Choosing in the object palette the type already chosen, or a right click on the level where
+there is no object, SHALL leave no type chosen and no object selected; a click on an empty
+place then places nothing. A right click on an object SHALL still delete it.
+
+#### Scenario: Put the type down
+- **WHEN** the mushroom is chosen in the object palette and is clicked again
+- **THEN** no type is chosen and a click on an empty place of the level adds no object
+
+#### Scenario: Right click on the sky
+- **WHEN** a type is chosen and the user right-clicks where there is no object
+- **THEN** no type is chosen and no object is deleted

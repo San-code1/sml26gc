@@ -5,7 +5,9 @@
 use super::grid_edit::Brush;
 use super::shortcuts::{self, Action};
 use super::widgets::*;
+use super::testing_view::warn_col;
 use super::Editor;
+use cart_model::{checkpoint, level_graphics};
 use crate::domain::stamp::{Area, Stamp};
 use crate::domain::tools::ToolKind;
 use macroquad::prelude::*;
@@ -111,7 +113,7 @@ fn cell_grid(area: Rect, l: Layout, cell: f32, view: &mut PaletteView, outline: 
 }
 
 /// Cell `i` of a 16-per-row source picture of `px`-pixel cells.
-fn source(i: usize, px: f32) -> Rect {
+pub(super) fn source(i: usize, px: f32) -> Rect {
     Rect::new((i % 16) as f32 * px, (i / 16) as f32 * px, px, px)
 }
 
@@ -176,17 +178,30 @@ impl Editor {
 
     /// Object types 00-7F; the ones this level uses are dark.
     pub(super) fn object_palette(&mut self, y: f32) {
-        let title = format!("{} #{:02X}", tr(self.es, "OBJECTS", "OBJETOS"), self.kind);
+        let title = match self.kind {
+            Some(k) => format!("{} #{k:02X}", tr(self.es, "OBJECTS", "OBJETOS")),
+            None => tr(self.es, "OBJECTS", "OBJETOS").to_string(),
+        };
         let y = self.palette_title(y, &title);
+        let all_label = tr(self.es, "Show all", "Mostrar todos");
+        if button(Rect::new(self.panel - 10.0 - 130.0, y - 46.0, 130.0, 18.0), all_label, self.show_all_objects, 14.0) {
+            self.show_all_objects = !self.show_all_objects;
+        }
         let area = self.palette_area(y);
         let zoom = self.prefs.level_palette_zoom;
         let cell = Layout::BLOCKS.cell(zoom);
         let used: Vec<u8> = self.doc.levels[self.cur].content.objs.iter().map(|o| o.kind).collect();
+        let offered = self.offered_types(self.doc.base_of(self.cur));
+        let shown: Vec<u8> = if self.show_all_objects { (0..128).collect() } else { offered.clone() };
+        let layout = Layout { count: shown.len(), ..Layout::BLOCKS };
         let mut view = self.level_palette;
-        let hover = cell_grid(area, Layout::BLOCKS, cell, &mut view, None, |i, r| {
-            let k = i as u8;
-            let (bg, fg) = if k == self.kind { (col(3), col(0)) } else if used.contains(&k) { (col(2), col(0)) } else { (col(1), col(3)) };
+        let hover = cell_grid(area, layout, cell, &mut view, None, |i, r| {
+            let k = shown[i];
+            let (bg, fg) = if Some(k) == self.kind { (col(3), col(0)) } else if used.contains(&k) { (col(2), col(0)) } else { (col(1), col(3)) };
             draw_rectangle(r.x, r.y, r.w, r.h, bg);
+            if !offered.contains(&k) {
+                draw_rectangle_lines(r.x + 1.0, r.y + 1.0, r.w - 2.0, r.h - 2.0, 2.0, warn_col());
+            }
             let fs = (6.0 + 5.0 * zoom as f32).min(18.0);
             if let Some((tex, _, _)) = self.look(k) {
                 let f = ((r.w - 4.0) / tex.width()).min((r.h - 4.0) / tex.height()).min(zoom as f32);
@@ -201,11 +216,39 @@ impl Editor {
             }
         });
         self.level_palette = view;
-        if let (true, Some((c, r))) = (is_mouse_button_pressed(MouseButton::Left), hover) {
-            self.choose_kind((r * 8 + c) as u8);
+        if let (true, Some(&k)) = (is_mouse_button_pressed(MouseButton::Left), hover.and_then(|(c, r)| shown.get((r * 8 + c) as usize))) {
+            self.choose_kind(k);
         }
-        let tip = format!("{} {}", tr(self.es, "Dark: used here. Delete chosen:", "Oscuros: usados aqui. Borrar elegido:"), shortcuts::keys(Action::DeleteObject));
+        let tip = if self.show_all_objects {
+            tr(self.es, "Framed: may look broken in this level.", "Con marco: pueden verse rotos en este nivel.").to_string()
+        } else {
+            format!("{} {}", tr(self.es, "Dark: used here. Delete chosen:", "Oscuros: usados aqui. Borrar elegido:"), shortcuts::keys(Action::DeleteObject))
+        };
         Self::tip(&tip, area);
+    }
+
+    /// The object types game level `base` draws right (`level_graphics`): the bells, those the
+    /// game's levels with its sprites and catalogue use, and, once its picture there is
+    /// captured, a type a game level of its catalogue uses that loads the same graphics into
+    /// the sprite sets the picture uses or draws it with the same pixels.
+    pub(super) fn offered_types(&mut self, base: usize) -> Vec<u8> {
+        if !self.offered.contains_key(&base) {
+            let users = (0..128u8).map(|k| (k, level_graphics::levels_using(&self.doc.original, base, k))).filter(|(_, l)| !l.is_empty()).collect();
+            self.offered.insert(base, users);
+        }
+        let group = level_graphics::same_objects(&self.doc.original, base);
+        let users = &self.offered[&base];
+        let original = &self.doc.original;
+        (0..128u8)
+            .filter(|&k| {
+                if k == cart_model::level_goals::BELL || k == checkpoint::BELL {
+                    return true;
+                }
+                let Some((_, levels)) = users.iter().find(|(u, _)| *u == k) else { return false };
+                let Some(here) = self.captured.get(&(base, k)) else { return levels.iter().any(|l| group.contains(l)) };
+                levels.iter().any(|&l| group.contains(&l) || level_graphics::same_sets(original, base, l, here.sets) || self.captured.get(&(l, k)).is_some_and(|there| (there.w, there.h, &there.px) == (here.w, here.h, &here.px)))
+            })
+            .collect()
     }
 
     /// The level's blocks as the game draws them, 8 per row.

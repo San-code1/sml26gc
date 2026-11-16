@@ -2,6 +2,7 @@
 //! level shown, camera, zoom, tool, selection, textures); what is being edited lives in
 //! `EditorDocument`, and saving / graphics / starting the game go through the application
 //! layer and the ports.
+mod blank_view;
 mod files_view;
 mod grid_edit;
 mod level_panel;
@@ -79,7 +80,8 @@ pub struct Editor {
     overview_stale: bool,
     show_overview: bool,
     pub(crate) mode: Mode,
-    kind: u8,
+    /// The object type chosen in the palette to place (None: clicks only pick objects).
+    kind: Option<u8>,
     sel_obj: Option<usize>,
     drag_obj: Option<(usize, Vec2)>,
     in_world: bool,
@@ -141,6 +143,14 @@ pub struct Editor {
     /// The level inspector scrolled by, and how tall it was last drawn.
     side_scroll: f32,
     side_content: f32,
+    /// The New blank level chooser is open on this game level.
+    blank_choice: Option<usize>,
+    /// Per base level, the object types it draws right (`offered_types`).
+    offered: HashMap<usize, Vec<(u8, Vec<usize>)>>,
+    /// Each captured (level, type) picture that draws something.
+    captured: HashMap<(usize, u8), cart_model::art::Look>,
+    /// The object palette shows every type, not only those the level draws right.
+    show_all_objects: bool,
     /// The world map editor's Points panel: how far it is scrolled, and its height.
     points_scroll: f32,
     points_content: f32,
@@ -232,7 +242,7 @@ impl Editor {
             overview_stale: true,
             show_overview: true,
             mode: Mode::Blocks,
-            kind: 0,
+            kind: None,
             sel_obj: None,
             drag_obj: None,
             in_world: false,
@@ -272,6 +282,10 @@ impl Editor {
             side_tab: level_panel::SideTab::Palette,
             side_scroll: 0.0,
             side_content: 0.0,
+            blank_choice: None,
+            offered: HashMap::new(),
+            captured: HashMap::new(),
+            show_all_objects: false,
             points_scroll: 0.0,
             points_content: 0.0,
             tip: None,
@@ -294,6 +308,10 @@ impl Editor {
     /// One frame: the menu, shortcuts, input, then drawing.
     pub fn frame(&mut self) {
         self.update_menu();
+        if self.blank_choice.is_some() && !self.in_world {
+            self.blank_frame();
+            return;
+        }
         if !self.update_naming() {
             for a in shortcuts::pressed(self.ctx()) {
                 self.run(a);
@@ -374,6 +392,7 @@ impl Editor {
             Action::PrevLevel => self.select_level((self.cur + self.level_count() - 1) % self.level_count()),
             Action::NextLevel => self.select_level((self.cur + 1) % self.level_count()),
             Action::NewLevel => self.new_level(),
+            Action::NewBlankLevel if !self.in_world => self.open_blank_chooser(),
             Action::DeleteLevel => self.delete_level(),
             Action::WorldEditor => self.enter_world(!self.in_world),
             Action::PrevMap => self.step_map(-1),
@@ -681,7 +700,7 @@ impl Editor {
                         Saved::Routes(n) => format!("{} ({n} bytes)", tr(es, "map paths", "caminos del mapa")),
                         Saved::NewLevels(n, used) => format!("{n} {} {used} bytes", tr(es, "new levels", "niveles nuevos")),
                         Saved::NewZones(n, used) => format!("{n} {} {used} bytes", tr(es, "new zones", "zonas nuevas")),
-                        Saved::Starts(n) => format!("{n} {}", tr(es, "level starts", "inicios de nivel")),
+                        Saved::Starts(n) => format!("{n} {}", tr(es, "level starts and settings", "inicios y ajustes de nivel")),
                         Saved::SecretExits(n) => format!("{n} {}", tr(es, "secret exits", "salidas secretas")),
                     })
                     .collect();
@@ -747,6 +766,11 @@ impl Editor {
     pub fn capture_level_looks(&mut self) {
         self.wait_for_level_looks();
         self.pump_mario();
+    }
+
+    /// The object palette with every type (for the command line).
+    pub fn show_all_objects(&mut self) {
+        self.show_all_objects = true;
     }
 
     /// Show the level inspector tab, and unfold the level grid (for the command line).

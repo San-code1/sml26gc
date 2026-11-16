@@ -1,5 +1,6 @@
 //! Where Mario begins the level: drawn with the game's own picture of him in both modes,
 //! placed with "Place start" (a click puts his feet on the clicked block) and dragged.
+use super::testing_view::warn_col;
 use super::widgets::*;
 use super::{Editor, Mode};
 use cart_model::level_start::{Start, SPRITE_H, SPRITE_TOP, SPRITE_W};
@@ -92,10 +93,21 @@ impl Editor {
         self.placing.is_some()
     }
 
-    /// Mario at the start, over the blocks and objects.
+    /// Mario at the start, over the blocks and objects, and (with objects or in Objects mode)
+    /// the screen the level begins on, where objects never appear.
     pub(super) fn draw_start(&self) {
         let r = self.mario_rect();
         let k = self.scale();
+        let c = &self.doc.levels[self.cur].content;
+        let crowded = c.objs.iter().any(|o| c.start.on_first_screen(o.x, o.y));
+        if self.mode == Mode::Objects || crowded {
+            let (fx, fy, fw, fh) = c.start.first_screen();
+            let at = vec2(self.panel + (fx as f32 - self.cam.x) * k, (fy as f32 - self.cam.y) * k);
+            let col = if crowded { warn_col() } else { MARK };
+            marker(Rect::new(at.x, at.y, fw as f32 * k, fh as f32 * k), 2.0, col);
+            let t = tr(self.es, "first screen: objects here never appear", "primera pantalla: aqui los objetos no aparecen");
+            marked_text(t, at.x + 4.0, at.y + 14.0, 14.0, col);
+        }
         let (x, y) = (self.panel + (r.x - self.cam.x) * k, (r.y - self.cam.y) * k);
         match self.mario.as_ref().and_then(|m| m.as_ref()) {
             Some((t, _, _)) => draw_texture_ex(t, x, y, WHITE, DrawTextureParams { dest_size: Some(vec2(r.w, r.h) * k), ..Default::default() }),

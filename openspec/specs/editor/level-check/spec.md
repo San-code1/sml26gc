@@ -33,3 +33,17 @@ moment; warnings that are not about one place (the object count) SHALL only be l
 #### Scenario: Show the crowded screen
 - **WHEN** the crowded screen warning is clicked
 - **THEN** the view shows that screen with it marked
+
+### Requirement: Objects on the first screen
+The game brings an object to life only when it comes in at the screen's edge, so objects on
+the screen the level begins on never appear. The level check SHALL warn about them (how many,
+showing the first), and the level view SHALL frame that screen in Objects mode, or in any mode
+while objects are on it.
+
+#### Scenario: A mushroom in front of Mario
+- **WHEN** an object is placed 48 pixels right of Mario's start
+- **THEN** the warnings list says one object on the first screen never appears, and the first screen is framed in the warning colour
+
+#### Scenario: Further on
+- **WHEN** the object is moved 240 pixels right of Mario's start
+- **THEN** the warning is gone and the object appears when the screen reaches it

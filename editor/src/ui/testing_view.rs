@@ -108,6 +108,7 @@ impl Editor {
             Warning::StartBlocked(_) => tr(es, "Start inside blocks", "Inicio dentro de bloques").into(),
             Warning::RestartBlocked(_) => tr(es, "Checkpoint restart inside blocks", "Reaparicion dentro de bloques").into(),
             Warning::MissingLevel(p, l) => format!("{} {p:02X} {} {l:02}", tr(es, "Point", "Punto"), tr(es, "opens missing level", "abre el nivel inexistente")),
+            Warning::OnFirstScreen(_, n) => format!("{n} {}", tr(es, "objects on the first screen never appear", "objetos en la primera pantalla nunca aparecen")),
         }
     }
 }

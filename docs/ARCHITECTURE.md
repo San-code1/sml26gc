@@ -51,6 +51,9 @@ Each module documents the ROM addresses and formats it relies on.
 | `level_start` | Where Mario begins a level: header bytes $00-$07 (his y and x, the camera's), the camera worked out from his place |
 | `checkpoint` | Midway bells (object $17) and their restart places (0:377B); up to 4 per level through a hook (touch, bell, map flag bits 4-5, restart table in bank $21) |
 | `level_settings` | Header bytes of a level's start time ($13), music ($0E) and background shades ($0F) |
+| `level_tables` | A level's entries in the bank-0 tables of gravity, auto-scroll, camera margin and animated tiles |
+| `level_graphics` | Which levels draw the same objects (enemy sprites 0:362A and the object catalogue split at level 10) |
+| `blank_level` | An empty map and start made from a game level's (its sky, a floor under Mario's start) |
 | `objects` | Object lists: 3-byte format, reading, re-packing |
 | `patch` | The 1 MB edited copy (twin banks $20-$3F) that gives levels and objects more room |
 | `layout` | Each zone's space for its maps and packing edited maps back |
