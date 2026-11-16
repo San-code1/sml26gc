@@ -25,16 +25,20 @@ arrows SHALL go through them, and their names SHALL say their base zone.
 
 ### Requirement: Points of a new zone
 In a new zone the Points tab SHALL add a point where the user clicks, move a point by dragging
-it, and delete the chosen point with its paths, up to its base zone's numbers plus 11 spare
-numbers no zone of the game uses (20 points for a zone made from the Tree Zone, 21 for the
-others); each point opens a level, has paths and can be an exit, as on the game's zones.
+it, and delete the chosen point with its paths, up to at least 40 points per new zone (its
+base zone's numbers plus numbers the game does not use); each point opens a level, has paths
+and can be an exit, as on the game's zones.
 
 #### Scenario: Add a point
 - **WHEN** a new zone made from the Tree Zone has its 9 points and the user chooses New point and clicks on the picture
-- **THEN** a tenth point is there (number $4C), opening no level, with no paths yet
+- **THEN** a tenth point is there, opening no level, with no paths yet
+
+#### Scenario: More points than before
+- **WHEN** a new zone made from the Tree Zone already has 20 points and the user adds another
+- **THEN** the point is added and works like the others
 
 #### Scenario: No more points
-- **WHEN** a new zone already has as many points as its base allows and the user chooses New point
+- **WHEN** a new zone already has as many points as it can have and the user chooses New point
 - **THEN** no point is added and the status bar says at once how many a zone can have
 
 ### Requirement: Naming a new zone
