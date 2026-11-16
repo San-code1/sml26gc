@@ -250,6 +250,7 @@ name = "editor"
 version = "0.1.0"
 dependencies = [
  "cart-model",
+ "cpal",
  "gb-core",
  "host",
  "macroquad",

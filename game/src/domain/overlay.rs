@@ -1,6 +1,5 @@
 //! Drawing over the Game Boy picture in its four shades: a pixel font (Latin and katakana),
 //! boxes, Game Boy style windows, and the start-up hint tag.
-use super::i18n::texts;
 use gb_core::ppu::{H, W};
 
 fn latin(c: char) -> Option<[u8; 7]> {
@@ -239,14 +238,15 @@ impl Canvas<'_> {
     }
 }
 
-/// Small tag shown for a few seconds at start-up and when a level begins:
-/// "ESC: MENU" and "ENTER: PAUSE".
-pub fn draw_hint(px: &mut [u8], lang: usize) {
+/// Small tag shown for a few seconds at start-up and when a level begins, one line each:
+/// the key that opens the menu, and in the cheats mode the save state, load state and rewind
+/// keys.
+pub fn draw_hint(px: &mut [u8], lines: &[String]) {
     let mut c = Canvas { px };
-    let t = texts(lang);
-    let w = text_width(t.hint).max(text_width(t.hint2)) + 7;
+    let w = lines.iter().map(|l| text_width(l)).max().unwrap_or(0) + 7;
     let x = W as i32 - w - 2;
-    c.rect(x, 2, w, 21, 3);
-    c.text(x + 4, 4, t.hint, 0);
-    c.text(x + 4, 14, t.hint2, 0);
+    c.rect(x, 2, w, 1 + 10 * lines.len() as i32, 3);
+    for (i, l) in lines.iter().enumerate() {
+        c.text(x + 4, 4 + 10 * i as i32, l, 0);
+    }
 }

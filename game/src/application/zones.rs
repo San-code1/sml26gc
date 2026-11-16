@@ -19,6 +19,7 @@ use cart_model::new_zones::{self, NewZone, CURRENT_FILE};
 use cart_model::secret_exits::{self, SecretTo};
 use cart_model::ram_map::{GAME_MODE, MAP_POINT};
 use gb_core::{Buttons, Gb};
+use std::rc::Rc;
 
 /// The map shown ($00: the world map).
 const CURRENT_MAP: u16 = 0xA68B;
@@ -40,10 +41,11 @@ fn set_sram(g: &mut Gb, a: u16, v: u8) {
     }
 }
 
+#[derive(Clone)]
 pub struct ZoneSwap {
     zones: Vec<NewZone>,
     progress: ZoneProgress,
-    store: Box<dyn ZoneProgressStore>,
+    store: Rc<dyn ZoneProgressStore>,
     undo: Vec<(usize, Vec<u8>)>,
     /// The map shown when last on a map.
     last_map: u8,
@@ -62,6 +64,8 @@ pub struct ZoneSwap {
     /// The `added_zones` entry written in, and the bytes to undo it.
     added_rom: Option<usize>,
     added_undo: Vec<(usize, Vec<u8>)>,
+    /// How many times the program in memory has been changed.
+    swaps: u32,
 }
 
 impl ZoneSwap {
@@ -77,7 +81,8 @@ impl ZoneSwap {
         let secret_doors = secret_doors.collect();
         let added = added_points::installed(g.cart().rom());
         let added_zones = added_points::read_zones(g.cart().rom());
-        let mut s = ZoneSwap { zones, progress, store, undo: Vec::new(), last_map: 0, enter_in: 0, secret_doors, played_from: None, last_point: 0, added, added_zones, added_in: None, added_rom: None, added_undo: Vec::new() };
+        let store: Rc<dyn ZoneProgressStore> = Rc::from(store);
+        let mut s = ZoneSwap { swaps: 0, zones, progress, store, undo: Vec::new(), last_map: 0, enter_in: 0, secret_doors, played_from: None, last_point: 0, added, added_zones, added_in: None, added_rom: None, added_undo: Vec::new() };
         if let Some(i) = s.progress.inside.clone() {
             match new_zones::writes_for(g.cart().rom(), &s.zones, i.zone).ok() {
                 Some(w) => s.undo = new_zones::apply(g.cart_mut().rom_mut(), &w),
@@ -93,6 +98,12 @@ impl ZoneSwap {
         // the added points of the map the file was on
         s.update_added(g);
         s
+    }
+
+    /// Changes so far to the program in memory (a state taken before one belongs to another
+    /// program).
+    pub fn swaps(&self) -> u32 {
+        self.swaps
     }
 
     /// The new zone in place, if any.
@@ -209,6 +220,7 @@ impl ZoneSwap {
             _ => None,
         };
         if zone != self.added_rom {
+            self.swaps += 1;
             new_zones::apply(g.cart_mut().rom_mut(), &std::mem::take(&mut self.added_undo));
             if let Some(w) = zone.and_then(|i| added_points::writes_for_zone(g.cart().rom(), self.added_zones[i].zone, &self.added_zones[i].points).ok()) {
                 self.added_undo = new_zones::apply(g.cart_mut().rom_mut(), &w);
@@ -230,6 +242,7 @@ impl ZoneSwap {
         let Some(b) = new_zones::base_of(self.zones[k].base) else { return };
         let Ok(w) = new_zones::writes_for(g.cart().rom(), &self.zones, k) else { return };
         let flags = new_zones::flags(g.cart().rom(), b);
+        self.swaps += 1;
         self.undo = new_zones::apply(g.cart_mut().rom_mut(), &w);
         let file = g.read(CURRENT_FILE);
         let base = new_zones::progress(g, file, &flags);
@@ -240,6 +253,7 @@ impl ZoneSwap {
 
     fn leave(&mut self, g: &mut Gb) {
         let Some(i) = self.progress.inside.take() else { return };
+        self.swaps += 1;
         new_zones::apply(g.cart_mut().rom_mut(), &std::mem::take(&mut self.undo));
         let (flags, values): (Vec<u8>, Vec<u8>) = i.base.into_iter().unzip();
         let own = new_zones::progress(g, i.file, &flags);

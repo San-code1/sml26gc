@@ -95,6 +95,15 @@ impl Cart {
         &mut self.rom
     }
 
+    /// Take the ROM image out (leaving it empty) and put it back, to copy the rest cheaply.
+    pub(crate) fn take_rom(&mut self) -> Vec<u8> {
+        std::mem::take(&mut self.rom)
+    }
+
+    pub(crate) fn put_rom(&mut self, rom: Vec<u8>) {
+        self.rom = rom;
+    }
+
     /// Battery-backed (or plain) cartridge RAM.
     pub fn ram(&self) -> &[u8] {
         &self.ram

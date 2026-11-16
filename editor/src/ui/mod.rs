@@ -4,6 +4,7 @@
 //! layer and the ports.
 mod files_view;
 mod grid_edit;
+mod level_panel;
 mod level_view;
 mod menu;
 mod names_view;
@@ -14,18 +15,22 @@ mod goal_view;
 mod start_view;
 mod status_bar;
 mod target_picker;
+mod testing_view;
 mod widgets;
 mod world_view;
 
 pub use widgets::col;
 
 use crate::application::art_service::{ArtService, Capture};
+use crate::application::look_loader::LookLoader;
+use crate::application::music::MusicPlayer;
+use crate::domain::look_cache;
 use crate::application::save::{self, SaveError};
 use crate::domain::document::{EditorDocument, Grid, Saved};
 use crate::domain::prefs::{Prefs, PALETTE_ZOOMS};
 use crate::domain::stamp::Stamp;
 use crate::domain::tools::{self, GridCanvas, Pointer, Tool, ToolKind};
-use crate::ports::{EditedCopyStore, FileDialogs, GameLauncher, MenuBar, PrefsStore, TextFiles};
+use crate::ports::{EditedCopyStore, FileDialogs, GameLauncher, LookStore, MenuBar, PrefsStore, SoundOut, TextFiles};
 use grid_edit::Brush;
 use palette::PaletteView;
 use shortcuts::{Action, Ctx};
@@ -128,6 +133,29 @@ pub struct Editor {
     menu: Box<dyn MenuBar>,
     /// Each File menu entry's state as last set (None: not set yet).
     menu_enabled: [Option<bool>; menu::FILE_MENU_LEN],
+    /// A warning's place marked on the level until a time.
+    mark: Option<(Vec2, f64)>,
+    /// The level picker's grid is unfolded.
+    levels_open: bool,
+    side_tab: level_panel::SideTab,
+    /// The level inspector scrolled by, and how tall it was last drawn.
+    side_scroll: f32,
+    side_content: f32,
+    /// The world map editor's Points panel: how far it is scrolled, and its height.
+    points_scroll: f32,
+    points_content: f32,
+    /// The tooltip of the button under the mouse this frame.
+    tip: Option<String>,
+    /// The left button went down for a click that is done (play here, a checkpoint): the
+    /// level takes nothing more from it until it is let go.
+    hold_click: bool,
+    music: MusicPlayer,
+    sound: Box<dyn SoundOut>,
+    look_loader: LookLoader,
+    look_store: Box<dyn LookStore>,
+    /// Every object picture known, as the cache keeps them, and how many it has.
+    look_data: Vec<look_cache::Entry>,
+    looks_saved: usize,
 }
 
 /// What the editor works through, besides the document.
@@ -138,6 +166,8 @@ pub struct Ports {
     pub dialogs: Box<dyn FileDialogs>,
     pub text_files: Box<dyn TextFiles>,
     pub menu: Box<dyn MenuBar>,
+    pub sound: Box<dyn SoundOut>,
+    pub looks: Box<dyn LookStore>,
 }
 
 /// Painting into the level or map picture shown.
@@ -168,7 +198,10 @@ fn left_button() -> Pointer {
 
 impl Editor {
     pub fn new(doc: EditorDocument, ports: Ports, had_copy: bool, es: bool) -> Editor {
-        let Ports { store, launcher, prefs: prefs_store, dialogs, text_files, menu } = ports;
+        let Ports { store, launcher, prefs: prefs_store, dialogs, text_files, menu, sound, looks: look_store } = ports;
+        let cached = look_store.load().map(|t| look_cache::from_text(&t)).unwrap_or_default();
+        let known = cached.iter().map(|e| (e.0, e.1)).collect();
+        let look_loader = LookLoader::start(doc.rom.clone(), doc.original.clone(), &known);
         let status = if !had_copy {
             tr(es, "Original cartridge opened. Saving makes an edited copy; the original is never changed.", "Cartucho original abierto. Al guardar se crea una copia editada; el original no se toca.").to_string()
         } else {
@@ -234,7 +267,26 @@ impl Editor {
             picker: None,
             menu,
             menu_enabled: [None; menu::FILE_MENU_LEN],
+            mark: None,
+            levels_open: false,
+            side_tab: level_panel::SideTab::Palette,
+            side_scroll: 0.0,
+            side_content: 0.0,
+            points_scroll: 0.0,
+            points_content: 0.0,
+            tip: None,
+            hold_click: false,
+            music: MusicPlayer::default(),
+            sound,
+            look_loader,
+            look_store,
+            look_data: Vec::new(),
+            looks_saved: 0,
         };
+        for (l, k, look) in cached {
+            ed.add_look(l, k, look);
+        }
+        ed.looks_saved = ed.look_data.len();
         ed.build_menu();
         ed
     }
@@ -255,6 +307,25 @@ impl Editor {
         } else {
             self.update_level();
             self.draw_level();
+        }
+        if self.in_world {
+            self.music.stop();
+        }
+        self.music.pump(&*self.sound, self.prefs.music_volume as f32 / *crate::domain::prefs::MUSIC_VOLUMES.end() as f32);
+    }
+
+    fn music_playing(&self) -> bool {
+        self.music.playing()
+    }
+
+    /// Listen to `music` with the game's own sound, or stop.
+    fn toggle_music(&mut self, music: u8) {
+        if self.music.playing() {
+            self.music.stop();
+            return;
+        }
+        if let Err(e) = self.music.play(&self.doc.rom, music, self.sound.sample_rate()) {
+            self.status = format!("{} {e}", tr(self.es, "Could not play the music:", "No se pudo tocar la musica:"));
         }
     }
 
@@ -321,6 +392,11 @@ impl Editor {
             Action::PlaceStart => self.toggle_placing(start_view::Placing::Start),
             Action::PlaceFinish if !self.doc.ends_with_boss(self.cur) => self.toggle_placing(start_view::Placing::Finish),
             Action::PlaceSecret => self.toggle_placing(start_view::Placing::Secret),
+            Action::PlaceCheckpoint => match self.doc.checkpoint_refused(self.cur) {
+                Some(crate::domain::document::CheckpointRefused::NoRoom) => self.status = tr(self.es, "The game keeps no restart place for this level: it cannot have checkpoints.", "El juego no guarda punto de reaparicion para este nivel: no puede tener puntos de control.").into(),
+                _ => self.toggle_placing(start_view::Placing::Checkpoint),
+            },
+            Action::PlayFromHere => self.toggle_placing(start_view::Placing::PlayHere),
             Action::SecretLeads => self.start_secret_picking(),
             Action::DeleteObject => self.delete_selected_object(),
             a if a.uses_files() => self.queue_file(a),
@@ -362,22 +438,24 @@ impl Editor {
     fn navigate(&mut self, m: Vec2, ctrl: bool, size: Vec2) -> (bool, Vec2, Vec2) {
         let speed = 600.0 * get_frame_time() / self.scale();
         let mut d = Vec2::ZERO;
+        // keys typed into a name do not move the view
+        let down = |k: KeyCode| self.naming.is_none() && is_key_down(k);
         // Shift + arrows and Ctrl + arrows are shortcuts
         let arrows = !(ctrl || is_key_down(KeyCode::LeftShift) || is_key_down(KeyCode::RightShift));
-        if (arrows && is_key_down(KeyCode::Left)) || (!ctrl && is_key_down(KeyCode::A)) {
+        if (arrows && down(KeyCode::Left)) || (!ctrl && down(KeyCode::A)) {
             d.x -= speed;
         }
-        if (arrows && is_key_down(KeyCode::Right)) || (!ctrl && is_key_down(KeyCode::D)) {
+        if (arrows && down(KeyCode::Right)) || (!ctrl && down(KeyCode::D)) {
             d.x += speed;
         }
-        if (arrows && is_key_down(KeyCode::Up)) || (!ctrl && is_key_down(KeyCode::W)) {
+        if (arrows && down(KeyCode::Up)) || (!ctrl && down(KeyCode::W)) {
             d.y -= speed;
         }
-        if (arrows && is_key_down(KeyCode::Down)) || (!ctrl && is_key_down(KeyCode::S)) {
+        if (arrows && down(KeyCode::Down)) || (!ctrl && down(KeyCode::S)) {
             d.y += speed;
         }
+        let space = down(KeyCode::Space);
         self.cam += d;
-        let space = is_key_down(KeyCode::Space);
         if m.x >= self.panel && (is_mouse_button_pressed(MouseButton::Middle) || (space && is_mouse_button_pressed(MouseButton::Left))) {
             self.pan = Some((m, self.cam));
         }
@@ -476,6 +554,9 @@ impl Editor {
     }
 
     pub fn select_level(&mut self, l: usize) {
+        if l != self.cur {
+            self.music.stop();
+        }
         self.cur = l;
         self.leave_grid();
         self.ensure_art(l);
@@ -582,6 +663,7 @@ impl Editor {
 
     /// Save the edited copy; the status bar says what happened.
     fn save(&mut self) -> bool {
+        self.music.stop();
         let es = self.es;
         match save::save(&mut self.doc, &*self.store) {
             Ok(parts) => {
@@ -624,10 +706,26 @@ impl Editor {
 
     /// Save, then try the level shown in the game.
     fn play(&mut self) {
+        self.play_level(None);
+    }
+
+    /// Play from here: Mario standing on the block at level pixel `w`, this time only.
+    /// Refused where his body would be in solid blocks.
+    fn play_from_here(&mut self, w: Vec2) {
+        let start = Self::start_at(w);
+        if start.blocked(&self.doc.levels[self.cur].content.map) {
+            self.status = tr(self.es, "Mario cannot stand there (solid blocks or outside the level).", "Mario no cabe ahi (bloques solidos o fuera del nivel).").into();
+            return;
+        }
+        self.placing = None;
+        self.play_level(Some((start.mario_x, start.mario_y + cart_model::level_start::FEET)));
+    }
+
+    fn play_level(&mut self, start: Option<(u16, u16)>) {
         if !self.save() {
             return;
         }
-        self.status = match self.launcher.launch(self.store.path(), Some(self.cur)) {
+        self.status = match self.launcher.launch(self.store.path(), Some(self.cur), start) {
             Ok(()) if self.cur >= LEVELS => format!("{} {:02} ({} {:02})", tr(self.es, "Playing level", "Jugando el nivel"), self.cur, tr(self.es, "as", "como"), self.doc.base_of(self.cur)),
             Ok(()) => format!("{} {:02}", tr(self.es, "Playing level", "Jugando el nivel"), self.cur),
             Err(e) => format!("{} {e}", tr(self.es, "Could not start", "No se pudo abrir")),
@@ -639,7 +737,7 @@ impl Editor {
         if !self.save() {
             return;
         }
-        self.status = match self.launcher.launch(self.store.path(), None) {
+        self.status = match self.launcher.launch(self.store.path(), None, None) {
             Ok(()) => tr(self.es, "Game started with the edited copy.", "Juego abierto con la copia editada.").into(),
             Err(e) => e,
         };
@@ -647,10 +745,14 @@ impl Editor {
 
     /// For the check pictures: capture this level's object pictures first.
     pub fn capture_level_looks(&mut self) {
-        for _ in 0..self.doc.levels[self.cur].content.objs.len() + 1 {
-            self.pump_looks();
-        }
+        self.wait_for_level_looks();
         self.pump_mario();
+    }
+
+    /// Show the level inspector tab, and unfold the level grid (for the command line).
+    pub fn show_inspector(&mut self, levels_open: bool) {
+        self.side_tab = level_panel::SideTab::Level;
+        self.levels_open = levels_open;
     }
 
     /// Choose "Place start" (for the command line).

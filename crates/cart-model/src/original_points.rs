@@ -12,7 +12,11 @@
 //! A point the game uses on two maps (a zone's point seen at the zone's entrance on the
 //! world map) is two spots; the link between them is a door. Leaving a zone, Mario walks
 //! off its picture: that exit is a spot at the edge, linked by a door to where he comes out.
-//! Spots drawn on the same place of one map were merged (the map's own point kept).
+//! Spots drawn on the same place of one map were merged (the map's own point kept), and only
+//! the number Mario stands on is drawn: at the junction below the start the game also draws
+//! $12 (its door into the Space Zone, which no path stops on) and $14 (where clearing level 00
+//! puts him on the way to $13), but he stands on $13. The Space Zone is entered by a flight
+//! (`original_notes`), not walked into, so its exit's world point ($1A) has no spot there.
 //!
 //! Positions are pixels on the map's picture (512 x 512 for the world map, 160 x 144 for a
 //! zone map): the middle of Mario's feet.
@@ -70,7 +74,7 @@ pub const SPOTS: &[Spot] = &[
     w(0x0F, 356, 370),
     w(0x10, 252, 298),
     w(0x11, 280, 226),
-    w(0x12, 204, 354),
+    w(0x13, 204, 354),
     w(0x15, 280, 348),
     w(0x16, 244, 354),
     w(0x18, 212, 154),
@@ -96,7 +100,6 @@ pub const SPOTS: &[Spot] = &[
     z(MACRO, 0x34, 86, 100),
     z(MACRO, 0x35, 94, 60),
     z(MACRO, 0x6A, 18, 60),
-    z(SPACE, 0x1A, 59, 116),
     z(SPACE, 0x3C, 75, 76),
     z(SPACE, 0x3D, 59, 28),
     z(SPACE, 0x3E, 75, 68),
@@ -132,7 +135,6 @@ pub const LINKS: &[(usize, usize, &[(i32, i32)])] = &[
     (3, 4, &[]),
     (3, 5, &[(76, 258), (76, 170), (60, 170), (60, 122)]),
     (3, 21, &[(140, 154), (156, 154), (153, 148), (176, 148), (181, 156)]),
-    (5, 44, &[]),
     (6, 21, &[]),
     (6, 38, &[]),
     (6, 39, &[]),
@@ -144,18 +146,18 @@ pub const LINKS: &[(usize, usize, &[(i32, i32)])] = &[
     (9, 34, &[]),
     (10, 11, &[(404, 282)]),
     (10, 15, &[]),
+    (11, 53, &[]),
     (11, 54, &[]),
-    (11, 55, &[]),
     (12, 13, &[(372, 386), (368, 380)]),
     (12, 15, &[]),
-    (12, 50, &[]),
-    (13, 51, &[]),
+    (12, 49, &[]),
+    (13, 50, &[]),
     (15, 20, &[(244, 370)]),
     (17, 18, &[(276, 224), (276, 256), (248, 256), (252, 338), (204, 338)]),
     (18, 20, &[]),
-    (18, 60, &[]),
+    (18, 59, &[]),
     (19, 20, &[]),
-    (20, 61, &[]),
+    (20, 60, &[]),
     (25, 30, &[]),
     (26, 28, &[(84, 62)]),
     (26, 29, &[(72, 53), (72, 100)]),
@@ -173,21 +175,20 @@ pub const LINKS: &[(usize, usize, &[(i32, i32)])] = &[
     (40, 41, &[(50, 100), (47, 92), (70, 92), (75, 100)]),
     (41, 42, &[(118, 100), (115, 92), (122, 92), (122, 52), (114, 52), (117, 60)]),
     (42, 43, &[(78, 60), (73, 52), (50, 52), (53, 60)]),
-    (44, 48, &[]),
-    (45, 46, &[(75, 44)]),
-    (45, 48, &[(75, 92)]),
-    (50, 51, &[]),
-    (51, 52, &[(70, 80)]),
-    (52, 53, &[]),
-    (54, 55, &[]),
-    (55, 56, &[(56, 90), (76, 90), (76, 83)]),
+    (44, 45, &[(75, 44)]),
+    (44, 47, &[(75, 92)]),
+    (49, 50, &[]),
+    (50, 51, &[(70, 80)]),
+    (51, 52, &[]),
+    (53, 54, &[]),
+    (54, 55, &[(56, 90), (76, 90), (76, 83)]),
+    (55, 56, &[]),
     (56, 57, &[]),
-    (57, 58, &[]),
-    (59, 60, &[]),
-    (61, 62, &[(11, 127), (8, 121), (23, 121)]),
+    (58, 59, &[]),
+    (60, 61, &[(11, 127), (8, 121), (23, 121)]),
+    (61, 62, &[]),
     (62, 63, &[]),
     (63, 64, &[]),
-    (64, 65, &[]),
 ];
 
 /// The links drawn on `map` (both ends on it), each as the road from one spot to the other.
@@ -241,8 +242,9 @@ mod tests {
         }
         for z in 0..ZONES.len() {
             let doors = LINKS.iter().filter(|&&(a, b, _)| (SPOTS[a].map == OnMap::Zone(z)) != (SPOTS[b].map == OnMap::Zone(z))).count();
-            // the bonus game and Wario's castle have one way in and out; the others two
-            assert!(doors >= 1, "{}", ZONES[z].name);
+            // the bonus game and Wario's castle have one way in and out; the others two; the
+            // Space Zone none, as Mario flies in and is put on the world map on the way out
+            assert!(doors >= 1 || ZONES[z].name == "Space Zone", "{}", ZONES[z].name);
         }
     }
 

@@ -244,7 +244,7 @@ fn find_rows(rom: &[u8], bg: &[u8], id: usize) {
 
 /// Where the middle of the screen is on the 512x512 world picture (pixels), when the
 /// screen shows the world picture (the background matches it around the middle).
-fn on_world_picture(gb: &mut gb_core::Gb) -> Option<(i32, i32)> {
+pub(crate) fn on_world_picture(gb: &mut gb_core::Gb) -> Option<(i32, i32)> {
     use cart_model::world;
     let pic = world::read(gb.cart().rom());
     let bg = gb.video().vram()[0x1800..0x2000].to_vec();

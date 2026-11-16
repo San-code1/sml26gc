@@ -61,6 +61,7 @@ async fn main() {
         Err(e) => show_forever(&e, 26.0, 0.0).await,
     };
     let es = fs_repository::spanish();
+    let looks = fs_repository::LookFile::for_cartridge(&opened.doc.original);
     let ports = Ports {
         store: Box::new(opened.store),
         launcher: Box::new(GameProcess),
@@ -68,6 +69,8 @@ async fn main() {
         dialogs: Box::new(SystemDialogs { es, owner: TITLE }),
         text_files: Box::new(fs_repository::TextFile),
         menu: Box::new(WindowMenu::new(TITLE)),
+        sound: Box::new(adapters::cpal_sound::Speakers::new()),
+        looks: Box::new(looks),
     };
     let mut ed = Editor::new(opened.doc, ports, opened.had_copy, es);
 
@@ -96,6 +99,10 @@ async fn main() {
         if flag("--choose") {
             ed.choose_target();
         }
+    }
+    // --inspector: the Level tab shown (with --levels-open, the level grid unfolded)
+    if flag("--inspector") {
+        ed.show_inspector(flag("--levels-open"));
     }
     // --place-start: "Place start" chosen
     if flag("--place-start") {

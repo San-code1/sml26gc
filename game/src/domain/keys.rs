@@ -85,9 +85,20 @@ keys! {
     Period "Period" "PUNTO" "PERIOD";
     Minus "Minus" "MENOS" "MINUS";
     Slash "Slash" "BARRA" "SLASH";
+    F1 "F1" "F1" "F1";
+    F2 "F2" "F2" "F2";
+    F3 "F3" "F3" "F3";
+    F4 "F4" "F4" "F4";
+    F5 "F5" "F5" "F5";
+    F6 "F6" "F6" "F6";
+    F7 "F7" "F7" "F7";
+    F8 "F8" "F8" "F8";
+    F9 "F9" "F9" "F9";
+    F10 "F10" "F10" "F10";
 }
 
-/// The Game Boy buttons in binding order: Up, Down, Left, Right, A, B, Start, Select.
+/// The bindings in order: the Game Boy buttons (Up, Down, Left, Right, A, B, Start, Select),
+/// then the port's own save state, load state and rewind (cheats mode).
 pub const UP: usize = 0;
 pub const DOWN: usize = 1;
 pub const LEFT: usize = 2;
@@ -97,8 +108,14 @@ pub const B: usize = 5;
 pub const START: usize = 6;
 #[allow(dead_code)] // named for completeness: Select is never read on its own
 pub const SELECT: usize = 7;
+pub const SAVE_STATE: usize = 8;
+pub const LOAD_STATE: usize = 9;
+pub const REWIND: usize = 10;
+/// Game Boy buttons, then all bindings.
+pub const PAD_KEYS: usize = 8;
+pub const KEYS: usize = 11;
 
-pub const DEFAULT_KEYS: [Key; 8] = [Key::Up, Key::Down, Key::Left, Key::Right, Key::X, Key::Z, Key::Enter, Key::Backspace];
+pub const DEFAULT_KEYS: [Key; KEYS] = [Key::Up, Key::Down, Key::Left, Key::Right, Key::X, Key::Z, Key::Enter, Key::Backspace, Key::F6, Key::F7, Key::R];
 
 impl Key {
     pub fn bindable(self) -> bool {
@@ -125,8 +142,8 @@ impl Key {
 }
 
 /// The Game Boy buttons held now, through the player's bindings.
-pub fn buttons(keys: &dyn Keyboard, bindings: &[Key; 8]) -> Buttons {
-    const BITS: [Buttons; 8] = [Buttons::UP, Buttons::DOWN, Buttons::LEFT, Buttons::RIGHT, Buttons::A, Buttons::B, Buttons::START, Buttons::SELECT];
+pub fn buttons(keys: &dyn Keyboard, bindings: &[Key; KEYS]) -> Buttons {
+    const BITS: [Buttons; PAD_KEYS] = [Buttons::UP, Buttons::DOWN, Buttons::LEFT, Buttons::RIGHT, Buttons::A, Buttons::B, Buttons::START, Buttons::SELECT];
     let mut b = Buttons::NONE;
     for (&k, bit) in bindings.iter().zip(BITS) {
         if keys.held(k) {

@@ -1,12 +1,12 @@
 //! What the player chose: key bindings, colours, volume, screen and language, and their
 //! `key=value` text form. Where the text is kept is a port (`SettingsStore`).
 use super::i18n::{LANG_EN, LANG_IDS};
-use super::keys::{Key, DEFAULT_KEYS};
+use super::keys::{Key, DEFAULT_KEYS, KEYS};
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct Settings {
-    /// Up, Down, Left, Right, A, B, Start, Select.
-    pub keys: [Key; 8],
+    /// Up, Down, Left, Right, A, B, Start, Select, save state, load state, rewind.
+    pub keys: [Key; KEYS],
     pub palette: usize,
     pub volume: u8,
     pub fullscreen: bool,
@@ -30,7 +30,7 @@ impl Settings {
             let Some((k, v)) = line.split_once('=') else { continue };
             let (k, v) = (k.trim(), v.trim());
             if let Some(i) = k.strip_prefix("key").and_then(|n| n.parse::<usize>().ok()) {
-                if i < 8 {
+                if i < KEYS {
                     if let Some(code) = Key::from_id(v) {
                         s.keys[i] = code;
                     }

@@ -11,7 +11,7 @@ use crate::domain::tools::ToolKind;
 use macroquad::prelude::*;
 
 /// Draw only inside `r` (or everywhere with None).
-fn clip(r: Option<Rect>) {
+pub(super) fn clip(r: Option<Rect>) {
     let d = screen_dpi_scale();
     let gl = unsafe { get_internal_gl() };
     gl.quad_gl.scissor(r.map(|r| ((r.x * d) as i32, (r.y * d) as i32, (r.w * d) as i32, (r.h * d) as i32)));
@@ -196,7 +196,7 @@ impl Editor {
             } else {
                 let t = format!("{k:02X}");
                 let dim = measure_text(&t, None, fs as u16, 1.0);
-                let known = self.looks.contains_key(&(self.cur, k));
+                let known = self.looks.contains_key(&(self.doc.base_of(self.cur), k));
                 draw_text(&t, r.x + (r.w - dim.width) / 2.0, r.y + (r.h + dim.offset_y) / 2.0, fs, if known { fg } else { Color::new(fg.r, fg.g, fg.b, 0.5) });
             }
         });

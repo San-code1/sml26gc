@@ -22,9 +22,15 @@
 //!   (hundreds); lives $A22C (BCD).
 //! - The golden coins are the cleared bit (7) of the six boss levels' flags at $A848 + flag
 //!   number: Wario's castle door (0C:45D7) checks those six.
+//! - A point's flag number is 0F:650E[point] (below $30; $FE, $FF: none). Finishing its level
+//!   sets bit 7, its secret exit bit 0 (`flagsprobe`); the paths open from them. The added
+//!   points of the map shown keep theirs at `added_points::FLAG_RAM`.
+//! - Active objects: type +$05, x +$00/+$01, y +$03/+$04 (big-endian); the camera ($FFC8 y,
+//!   $FFCA x, little-endian) is the middle of the screen (SCX = x - $50, SCY = y - $48).
 use crate::level_goals::{self, Goal};
 use crate::live::map_in_memory;
 use crate::ram_map::{GameMode, GAME_MODE, LEVEL_NUMBER, LIVES, MAP_POINT, PLAYER_X, PLAYER_Y, SPECIAL_MAP_POINTS};
+use crate::{added_points, levels, rom, world, GameDriver};
 use gb_core::{BusObserver, GameBoy};
 
 /// Program bytes in bank 0 swapped while Mario is invincible: (address, game's, cheat's).
@@ -41,6 +47,10 @@ const FACING: u16 = 0xA22B;
 const CLEARED_FLAGS: u16 = 0xA848;
 const CLEARED: u8 = 0x80;
 const SLOTS: u16 = 0xAD00;
+const CAMERA_Y: u16 = 0xFFC8;
+const CAMERA_X: u16 = 0xFFCA;
+const POINT_FLAG_TABLE: u16 = 0x650E;
+const POINT_FLAGS_USED: usize = 0x80;
 const SLOT_LEN: u16 = 0x20;
 const SLOT_COUNT: u16 = 16;
 const SLOT_USED: u16 = 0x08;
@@ -96,6 +106,16 @@ pub struct Info {
     pub y: u16,
     pub point: u8,
     pub mode: u8,
+    /// Active object slots in use.
+    pub objects: u8,
+}
+
+/// An active object: its type and where it is on the screen (pixels, may be off it).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Active {
+    pub kind: u8,
+    pub x: i32,
+    pub y: i32,
 }
 
 fn word<O: BusObserver>(g: &mut GameBoy<O>, a: u16) -> u16 {
@@ -229,7 +249,87 @@ pub const fn bcd(b: u8) -> u8 {
 }
 
 pub fn info<O: BusObserver>(g: &mut GameBoy<O>) -> Info {
-    Info { level: g.read(LEVEL_NUMBER), x: word(g, PLAYER_X), y: word(g, PLAYER_Y), point: g.read(MAP_POINT), mode: g.read(GAME_MODE) }
+    let objects = slots_in_use(g).len() as u8;
+    Info { level: g.read(LEVEL_NUMBER), x: word(g, PLAYER_X), y: word(g, PLAYER_Y), point: g.read(MAP_POINT), mode: g.read(GAME_MODE), objects }
+}
+
+fn slots_in_use<O: BusObserver>(g: &GameBoy<O>) -> Vec<u16> {
+    (0..SLOT_COUNT).map(|s| SLOTS + s * SLOT_LEN).filter(|&s| ram(g, s + SLOT_USED) != 0).collect()
+}
+
+/// The active objects of the level being played, on the screen's coordinates.
+pub fn active_objects<O: BusObserver>(g: &mut GameBoy<O>) -> Vec<Active> {
+    if !in_level(g) {
+        return Vec::new();
+    }
+    let (cam_x, cam_y) = (word(g, CAMERA_X) as i32 - 0x50, word(g, CAMERA_Y) as i32 - 0x48);
+    slots_in_use(g)
+        .into_iter()
+        .map(|s| {
+            let x = (ram(g, s) as i32) << 8 | ram(g, s + 1) as i32;
+            let y = (ram(g, s + 3) as i32) << 8 | ram(g, s + 4) as i32;
+            Active { kind: ram(g, s + 5), x: x - cam_x, y: y - cam_y }
+        })
+        .collect()
+}
+
+/// Every level of the copy's points marked as the game marks a finished level (and its
+/// secret exit taken where it has one), and the added points of the map shown: all paths
+/// open.
+pub fn open_map<O: BusObserver>(g: &mut GameBoy<O>) {
+    let image = g.cart().rom();
+    let point_levels = world::point_levels(image);
+    let flags = rom::offset(0x0F, POINT_FLAG_TABLE);
+    let secret: Vec<bool> = (0..levels::LEVELS)
+        .map(|l| {
+            let map = levels::decode(image, levels::map_location(image, levels::header(image, l)).1).0;
+            !level_goals::cells(&map, Goal::Secret).is_empty()
+        })
+        .collect();
+    let marks: Vec<(u16, u8)> = (0..POINT_FLAGS_USED)
+        .filter_map(|p| {
+            let f = image[flags + p];
+            (f < 0x30).then(|| {
+                let has_secret = point_levels.get(p).is_some_and(|&l| secret.get(l as usize).copied().unwrap_or(false));
+                (CLEARED_FLAGS + f as u16, if has_secret { CLEARED | 1 } else { CLEARED })
+            })
+        })
+        .collect();
+    for (a, bits) in marks {
+        let v = ram(g, a) | bits;
+        set_ram(g, a, v);
+    }
+    for i in 0..added_points::MAX as u16 {
+        let v = ram(g, added_points::FLAG_RAM + i) | CLEARED;
+        set_ram(g, added_points::FLAG_RAM + i, v);
+    }
+}
+
+/// Leave the level being played as the game's pause menu does (no life lost) and wait for
+/// the map. False when the map did not come up.
+pub fn to_map<O: BusObserver>(g: &mut GameBoy<O>) -> bool {
+    if in_level(g) {
+        g.back_to_map();
+        for _ in 0..900 {
+            g.run_frame_with(gb_core::Buttons::NONE);
+            if g.mode() == GameMode::Map {
+                break;
+            }
+        }
+    }
+    g.mode() == GameMode::Map
+}
+
+/// Leave the level being played (as the game's pause menu does) and enter `level` (0-31)
+/// from its own map point when the maps have one. False when it could not be entered.
+pub fn go_to_level<O: BusObserver>(g: &mut GameBoy<O>, level: u8) -> bool {
+    if !to_map(g) {
+        return false;
+    }
+    if let Some(p) = world::point_levels(g.cart().rom()).iter().position(|&l| l == level) {
+        g.show_map_at(p as u8);
+    }
+    g.enter_level(level)
 }
 
 /// `item`'s 16x16 picture from video memory in the sprite palette's shades (0-3), `None`

@@ -2,28 +2,54 @@
 //! retyped and deleted with the mouse.
 use super::widgets::*;
 use super::{Editor, Mode};
+use crate::domain::look_cache;
+use cart_model::art::Look;
 use cart_model::objects::Obj;
 use macroquad::prelude::*;
 
+/// New pictures between two writes of the cache.
+const LOOKS_SAVE_EVERY: usize = 16;
+
 impl Editor {
-    /// Capture one more object picture (types used in this level first, then the chosen
-    /// type, then the rest), one per frame so the window stays responsive.
+    /// Take the object pictures the background capture has made (asking for the shown
+    /// level's first) and keep them in the cache now and then.
     pub(super) fn pump_looks(&mut self) {
-        if self.mode != Mode::Objects || self.in_world || !self.art.booted() {
-            return;
+        let base = self.doc.base_of(self.cur);
+        if self.mode == Mode::Objects && !self.in_world {
+            let mut want: Vec<(usize, u8)> = self.doc.levels[self.cur].content.objs.iter().map(|o| (base, o.kind)).collect();
+            want.push((base, self.kind));
+            want.retain(|key| !self.looks.contains_key(key));
+            self.look_loader.prefer(&want);
         }
-        let l = self.cur;
-        let mut want: Vec<u8> = self.doc.levels[l].content.objs.iter().map(|o| o.kind).collect();
-        want.push(self.kind);
-        want.extend(0..128u8);
-        let Some(k) = want.into_iter().find(|k| !self.looks.contains_key(&(l, *k))) else { return };
-        let look = self.art.look(&self.doc.rom, &self.doc.original, self.doc.base_of(l), k).flatten();
-        let v = look.map(|lk| (look_texture(&lk), lk.dx as f32, lk.dy as f32));
+        for (l, k, look) in self.look_loader.take() {
+            self.add_look(l, k, look);
+        }
+        let all = self.look_data.len();
+        if all >= self.looks_saved + LOOKS_SAVE_EVERY || (all > self.looks_saved && self.look_loader.done()) {
+            self.look_store.save(&look_cache::to_text(&self.look_data));
+            self.looks_saved = all;
+        }
+    }
+
+    pub(super) fn add_look(&mut self, l: usize, k: u8, look: Option<Look>) {
+        let v = look.as_ref().map(|lk| (look_texture(lk), lk.dx as f32, lk.dy as f32));
         self.looks.insert((l, k), v);
+        self.look_data.push((l, k, look));
     }
 
     pub(super) fn look(&self, k: u8) -> Option<&(Texture2D, f32, f32)> {
-        self.looks.get(&(self.cur, k)).and_then(|v| v.as_ref())
+        self.looks.get(&(self.doc.base_of(self.cur), k)).and_then(|v| v.as_ref())
+    }
+
+    /// For the check pictures: wait for the shown level's object pictures.
+    pub(super) fn wait_for_level_looks(&mut self) {
+        let base = self.doc.base_of(self.cur);
+        let want: Vec<(usize, u8)> = self.doc.levels[self.cur].content.objs.iter().map(|o| (base, o.kind)).collect();
+        self.look_loader.prefer(&want);
+        while want.iter().any(|key| !self.looks.contains_key(key)) {
+            let Some((l, k, look)) = self.look_loader.wait() else { break };
+            self.add_look(l, k, look);
+        }
     }
 
     /// The object under a point of the level (level pixels), topmost first.
@@ -102,18 +128,19 @@ impl Editor {
                     dest_size: Some(vec2(tex.width() * self.scale(), tex.height() * self.scale())),
                     ..Default::default()
                 });
-                draw_rectangle_lines(x, y, s, s, if sel { 3.0 } else { 1.0 }, if sel { WHITE } else { Color::new(1.0, 1.0, 1.0, if objs_mode { 0.35 } else { 0.0 }) });
                 if objs_mode {
-                    draw_text(&format!("{:02X}", o.kind), x + 2.0, y + s - 2.0, 14.0, Color::new(1.0, 1.0, 1.0, 0.8));
+                    marker(Rect::new(x, y, s, s), if sel { 3.0 } else { 1.5 }, if sel { MARK_SELECTED } else { MARK });
+                    marked_text(&format!("{:02X}", o.kind), x + 2.0, y + s - 2.0, 14.0, if sel { MARK_SELECTED } else { MARK });
                 }
                 continue;
             }
             draw_rectangle(x, y, s, s, Color::new(0.12, 0.12, 0.12, a));
-            draw_rectangle_lines(x, y, s, s, if sel { 3.0 } else { 1.5 }, if sel { WHITE } else { Color::new(0.77, 0.81, 0.63, a + 0.2) });
+            let c = if sel { MARK_SELECTED } else { Color { a: a + 0.25, ..MARK } };
+            marker(Rect::new(x, y, s, s), if sel { 3.0 } else { 1.5 }, c);
             let t = format!("{:02X}", o.kind);
             let fs = (s * 0.55).clamp(10.0, 26.0);
             let dim = measure_text(&t, None, fs as u16, 1.0);
-            draw_text(&t, x + (s - dim.width) / 2.0, y + (s + dim.offset_y) / 2.0, fs, Color::new(0.9, 0.95, 0.8, a + 0.25));
+            marked_text(&t, x + (s - dim.width) / 2.0, y + (s + dim.offset_y) / 2.0, fs, c);
         }
     }
 

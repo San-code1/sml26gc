@@ -14,6 +14,7 @@ mod levels;
 mod memory;
 mod probe;
 mod rom_views;
+mod testing;
 mod zones;
 
 use std::path::{Path, PathBuf};
@@ -122,6 +123,22 @@ const COMMANDS: &[(&str, Run)] = &[
     ("facingprobe", |r, a| cheats::facing_probe(r, a.num(1) as u8)),
     ("cheatcheck", |r, _a| cheats::cheat_check(r)),
     ("doorprobe", |r, a| cheats::door_probe(r, a.hex(1) as u8, a.num(2) == 1)),
+    ("checkpointlist", |r, _a| testing::checkpoint_list(r)),
+    ("classesprobe", |r, a| testing::classes_probe(r, a.0.get(1).and_then(|s| s.parse().ok()))),
+    ("checkpointprobe", |r, a| testing::checkpoint_probe(r, a.num(1) as u8, a.num(2) as u16, a.num(3) as u16)),
+    ("loadwatch", |r, a| testing::load_watch(r, a.num(1) as u8, &a.list(2))),
+    ("headerreads", |r, a| testing::header_reads(r, a.num(1) as u8)),
+    ("crowdprobe", |r, a| testing::crowd_probe(r, a.num(1) as u16)),
+    ("crowdlist", |r, _a| testing::crowd_list(r)),
+    ("flagsprobe", |r, a| testing::flags_probe(r, a.num(1) as u8)),
+    ("openprobe", |r, a| testing::open_probe(r, a.num(1) == 1, a.num(2))),
+    ("flagreaders", |r, _a| testing::flag_readers(r)),
+    ("roomprobe", |r, a| testing::room_probe(r, a.hex(1) as u16, a.hex(2) as u16)),
+    ("bellsprobe", |r, a| testing::bells_probe(r, a.num(1) as u16, a.num(2))),
+    ("checkpointcheck", |r, _a| testing::checkpoint_check(r)),
+    ("ways", |r, a| testing::ways(r, &a.list(1))),
+    ("spotcheck", |r, _a| testing::spot_check(r)),
+    ("mapprobe", |r, a| testing::door_probe(r, a.hex(1) as u8, (a.num(2) > 0).then(|| a.num(2) as u8 - 1))),
     ("goalprobe", |r, a| levels::goal_probe(r, a.num(1) as u8, a.hex(2), a.hex(3), &a.s(4))),
 ];
 
@@ -156,6 +173,6 @@ mod tests {
         let a = Args(["watch", "x", "ffc2,a200-a202", "0x10", "12"].map(String::from).to_vec());
         assert_eq!(a.list(2), vec![0xFFC2, 0xA200, 0xA201, 0xA202]);
         assert_eq!((a.hex(3), a.big(3), a.num(4), a.num(9)), (0x10, 0x10, 12, 0));
-        assert_eq!(COMMANDS.len(), 64);
+        assert_eq!(COMMANDS.len(), 80);
     }
 }

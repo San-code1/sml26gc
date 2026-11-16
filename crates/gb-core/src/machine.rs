@@ -19,6 +19,11 @@ pub struct GameBoy<O: BusObserver = NoObserver> {
 /// The usual Game Boy, with nothing watching it.
 pub type Gb = GameBoy<NoObserver>;
 
+/// Everything a Game Boy is at one moment except its cartridge's ROM (processor, memory,
+/// video, sound, cartridge RAM and bank registers), to go back to it later.
+#[derive(Clone)]
+pub struct State<O: BusObserver = NoObserver>(GameBoy<O>);
+
 impl GameBoy<NoObserver> {
     /// Power on with this ROM image; `sample_rate` is the sound output rate in Hz.
     pub fn new(rom: Vec<u8>, sample_rate: u32) -> Result<Gb, String> {
@@ -107,6 +112,21 @@ impl<O: BusObserver> GameBoy<O> {
         &mut self.bus.cart
     }
 
+    /// The console as it is now, without the ROM (a few tens of KB).
+    pub fn state(&mut self) -> State<O> {
+        let rom = self.bus.cart.take_rom();
+        let s = State(self.clone());
+        self.bus.cart.put_rom(rom);
+        s
+    }
+
+    /// Go back to `state`, keeping the ROM as it is now.
+    pub fn set_state(&mut self, state: &State<O>) {
+        let rom = self.bus.cart.take_rom();
+        *self = state.0.clone();
+        self.bus.cart.put_rom(rom);
+    }
+
     /// Address of the next instruction.
     pub fn pc(&self) -> u16 {
         self.cpu.pc
@@ -118,5 +138,35 @@ impl<O: BusObserver> GameBoy<O> {
 
     pub fn observer_mut(&mut self) -> &mut O {
         &mut self.bus.observer
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A ROM whose program counts up the byte at $C000 forever.
+    fn counter() -> Gb {
+        let mut rom = vec![0u8; 0x8000];
+        rom[0x100..0x104].copy_from_slice(&[0x00, 0xC3, 0x50, 0x01]);
+        rom[0x150..0x156].copy_from_slice(&[0x21, 0x00, 0xC0, 0x34, 0x18, 0xFD]);
+        Gb::new(rom, 44100).unwrap()
+    }
+
+    #[test]
+    fn a_state_brings_the_console_back_and_keeps_the_rom() {
+        let mut g = counter();
+        g.run_frame();
+        let s = g.state();
+        assert_eq!(g.cart().rom().len(), 0x8000, "the ROM is put back");
+        let at = g.read(0xC000);
+        for _ in 0..3 {
+            g.run_frame();
+        }
+        assert_ne!(g.read(0xC000), at);
+        g.cart_mut().rom_mut()[0x7000] = 0xAA;
+        g.set_state(&s);
+        assert_eq!(g.read(0xC000), at);
+        assert_eq!(g.cart().rom()[0x7000], 0xAA, "the ROM as it is now");
     }
 }

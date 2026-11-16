@@ -38,6 +38,9 @@ struct Args {
     level: Option<u8>,
     /// The debug / cheats mode for this run, whatever the setting says (the editor's Play).
     cheats: bool,
+    /// With `level`: Mario's left x and feet y in the level, for this start only (the level
+    /// editor's Play from here).
+    start: Option<(u16, u16)>,
 }
 
 fn parse_args(v: &[String]) -> Args {
@@ -54,6 +57,7 @@ fn parse_args(v: &[String]) -> Args {
             "--every" => a.every = next.parse().unwrap_or(60),
             "--rom" => a.rom = Some(next.into()),
             "--level" => a.level = next.parse().ok(),
+            "--start" => a.start = next.split_once(',').and_then(|(x, y)| Some((x.trim().parse().ok()?, y.trim().parse().ok()?))),
             "--cheats" => {
                 a.cheats = true;
                 i += 1;
@@ -83,6 +87,13 @@ mod tests {
         assert_eq!(a.rom, Some(PathBuf::from("copy.gb")));
         assert_eq!(a.level, Some(3));
         assert!(!parse_args(&["copy.gb".into()]).cheats);
+    }
+
+    #[test]
+    fn a_start_place_is_two_numbers() {
+        let a = parse_args(&["copy.gb".into(), "--level".into(), "3".into(), "--start".into(), "1200,496".into()]);
+        assert_eq!(a.start, Some((1200, 496)));
+        assert_eq!(parse_args(&["--start".into(), "12".into()]).start, None);
     }
 }
 
@@ -150,6 +161,7 @@ fn start(args: &Args, found: Result<PathBuf, String>, checking: bool, audio: &dy
         zones,
         saves: Box::new(BatteryFile { rom }),
         start_level: args.level,
+        start_at: args.start,
         checking,
         cheats,
     };

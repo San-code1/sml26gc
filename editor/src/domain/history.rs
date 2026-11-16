@@ -36,6 +36,16 @@ impl<T> History<T> {
         }
     }
 
+    /// The state the last undo left (what a redo brings back).
+    pub fn next_redo(&self) -> Option<&T> {
+        self.redo.last()
+    }
+
+    /// The state the last redo left (what an undo brings back).
+    pub fn next_undo(&self) -> Option<&T> {
+        self.undo.last()
+    }
+
     /// Forget every step.
     pub fn clear(&mut self) {
         self.undo.clear();

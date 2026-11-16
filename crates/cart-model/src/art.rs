@@ -64,7 +64,7 @@ impl WorldArt {
 }
 
 /// What an object type looks like in a level: shades 0-3, None = transparent.
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Look {
     pub w: usize,
     pub h: usize,

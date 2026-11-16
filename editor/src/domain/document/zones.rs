@@ -103,7 +103,7 @@ impl EditorDocument {
     pub fn set_game_entry(&mut self, z: usize, p: u8) {
         let Some(i) = doors::INTO.iter().position(|d| d.zone == z) else { return };
         if self.entries[i] != p && new_zones::base_of(z).is_some_and(|b| b.has(p)) {
-            self.points_record();
+            self.map_snapshot();
             self.entries[i] = p;
             self.doors_dirty = true;
         }
@@ -123,8 +123,7 @@ impl EditorDocument {
     fn zones_changed(&mut self) {
         self.new_zones_dirty = true;
         self.doors_dirty = true;
-        self.world_history.clear();
-        self.points_history.clear();
+        self.map_history.clear();
     }
 
     /// Add a new zone after the others; empties the map undo histories.
@@ -213,7 +212,7 @@ impl EditorDocument {
         if self.zone_door_of(p) == k || k.is_some_and(|k| k >= self.new_zones.len()) {
             return;
         }
-        self.points_record();
+        self.map_snapshot();
         for z in &mut self.new_zones {
             if z.door == p {
                 z.door = NONE;
@@ -238,7 +237,7 @@ impl EditorDocument {
     }
 
     pub(super) fn zone_edit(&mut self, k: usize) -> &mut ZonePoints {
-        self.points_record();
+        self.map_snapshot();
         self.new_zones_dirty = true;
         &mut self.new_zones[k]
     }
@@ -412,11 +411,11 @@ mod tests {
         doc.set_zone_door(0x07, Some(k));
         doc.zone_step_level(k, 0x23, 1);
         doc.zone_add_point(k, 40, 40).unwrap();
-        doc.world_snapshot();
+        doc.map_snapshot();
         doc.set_tile(OnMap::NewZone(k), 2, 2, doc.tile(OnMap::NewZone(k), 2, 2) ^ 1);
         assert!(doc.restore_map(OnMap::NewZone(k)));
         assert_eq!(doc.new_zone(k), NewZone { name: "Forest".into(), door: 0x07, ..first.clone() });
-        assert!(doc.points_undo());
+        assert!(doc.map_undo());
         assert_eq!(doc.new_zones[k].points.len(), first.points.len() + 1, "undo brings the points back");
     }
 
@@ -454,7 +453,7 @@ mod tests {
         assert_eq!(made.picture, doc.zones[0]);
         assert_eq!(made.points.iter().map(|p| p.number).collect::<Vec<_>>(), (0x1F..=0x27).collect::<Vec<u8>>());
         let new = OnMap::NewZone(0);
-        doc.world_snapshot();
+        doc.map_snapshot();
         doc.set_tile(new, 3, 4, doc.tile(new, 3, 4) ^ 1);
         let picture = doc.zones[zone_maps::ZONES.len()].clone();
         assert_ne!(picture, doc.zones[0], "painting a new zone leaves its base alone");
@@ -519,11 +518,11 @@ mod tests {
 
         doc.zone_step_level(k, p, 1);
         assert_eq!(doc.new_zones[k].point(p).unwrap().level, 0);
-        assert!(doc.points_undo());
+        assert!(doc.map_undo());
         assert_eq!(doc.new_zones[k].point(p).unwrap().level, world::NO_LEVEL);
         let mut steps = 0;
         while doc.new_zones[k] != before && steps < 6 {
-            doc.points_undo();
+            doc.map_undo();
             steps += 1;
         }
         assert_eq!(doc.new_zones[k], before, "undo goes back step by step to before the point was added");
