@@ -89,13 +89,15 @@ Within one view and tab, each key combination SHALL trigger at most one action.
 - **THEN** the selection is filled with the background and no object is deleted
 
 ### Requirement: Shortcuts shown on the buttons
-Every button with a shortcut SHALL show it in its label (for example "Undo (Ctrl+Z)"); for the
-small - and + buttons the keys SHALL be shown beside the row's label. A label too long for its
-button SHALL be drawn smaller so it fits inside it.
+Every button with a shortcut SHALL show it: in the world map editor in its label (for
+example "Undo (Ctrl+Z)"), and in the level editor's side panel in a tooltip while the mouse
+is on the button, so its buttons keep short names. For the small - and + buttons of the world
+map editor the keys SHALL be shown beside the row's label. A label too long for its button
+SHALL be drawn smaller so it fits inside it.
 
 #### Scenario: Undo label
-- **WHEN** the level editor panel is shown
-- **THEN** the Undo button reads "Undo (Ctrl+Z)" (Spanish: "Deshacer (Ctrl+Z)") and the text stays inside the button
+- **WHEN** the world map editor is shown, or the mouse rests on the level editor's Undo button
+- **THEN** the world map editor's Undo button reads "Undo (Ctrl+Z)" (Spanish: "Deshacer (Ctrl+Z)"), and the level editor shows that text in a tooltip over a button that reads "Undo"
 
 #### Scenario: Point row
 - **WHEN** the Points tab is shown
@@ -161,3 +163,23 @@ SHALL leave it and go back to the tool chosen before:
 #### Scenario: Leave placing
 - **WHEN** "Place finish" was chosen with F and the user presses Esc
 - **THEN** the tool chosen before is back and nothing was placed
+
+### Requirement: An ordered level panel
+The level editor's side panel SHALL keep a fixed head (the level picker, whose grid of all
+levels folds away; a toolbar with undo, redo, save, play and play here; Blocks / Objects with
+the mode's tools; two tabs) and give the rest of its height to the chosen tab: the palette or
+the level's inspector.
+
+#### Scenario: Room for the palette
+- **WHEN** the Palette tab is chosen in a window 820 pixels tall
+- **THEN** the palette fills the panel below its head
+
+### Requirement: The level inspector
+The inspector tab SHALL group the level's controls in titled sections (level, goals,
+settings, warnings) whose rows put their label in one column and their controls in the next,
+SHALL scroll with the mouse wheel when it does not fit, and its tab SHALL show the shown
+level's warnings count.
+
+#### Scenario: A level with warnings
+- **WHEN** the shown level has two warnings
+- **THEN** the Level tab reads "Level ! 2" and its Warnings section lists both

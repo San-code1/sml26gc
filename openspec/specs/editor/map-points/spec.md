@@ -2,7 +2,8 @@
 
 ## Purpose
 How many points the world map and the game's zones can have, how the editor shows that
-count, and moving their points by dragging, as in new zones.
+count, moving their points by dragging, as in new zones, and showing the game's own points
+as Mario meets them, with what the original game does with each.
 
 ## Requirements
 
@@ -82,3 +83,53 @@ drag.
 #### Scenario: Undo a drag
 - **WHEN** the user presses Undo right after dragging a point of the Macro Zone
 - **THEN** the point and its paths are back as they were
+
+### Requirement: Points as Mario meets them
+Where the game keeps several numbers at one place of a map, the editor SHALL draw the one
+Mario stands on: the junction below the start is $13 (its paths editable), not $12. A point
+Mario is never put on in a map SHALL NOT be drawn on it: the Space Zone has no spot for $1A,
+which is on the world map.
+
+#### Scenario: The junction below the start
+- **WHEN** the world map's Points tab is shown and the junction between $01, $11, $16 and the start is clicked
+- **THEN** point $13 is chosen, with its paths right to $16, left to $01 and up to $11
+
+#### Scenario: The Space Zone
+- **WHEN** the Space Zone's Points tab is shown
+- **THEN** its points are $3C, $3D, $3E, $40 and $44, and $40's label says it leads to $1A on the world map
+
+### Requirement: What the original game does with a point
+For a game point, the Points tab SHALL say what the original game does with it when it is
+more than its level, paths and doors: where a new game starts; the flight to the Space Zone
+after clearing the level of $05 or $1A, landing on $3C; a zone's entrance and its twin; the
+Space Zone door on $12, which never runs; the walk into the Turtle Zone; a point no path
+reaches or leaves that opens no level. The world map SHALL label $05 as leading to the Space
+Zone when cleared.
+
+#### Scenario: The Space Zone's door
+- **WHEN** point $13 is chosen
+- **THEN** the panel says the game keeps a door into the Space Zone on $12 there that never runs, and that the Space Zone is reached by clearing point $05's level
+
+### Requirement: Changed from the original
+For a game point, the Points tab SHALL say when its level, paths or place differ from the
+original game's.
+
+#### Scenario: A changed point
+- **WHEN** point $05's level is changed
+- **THEN** the panel says the point differs from the original game
+
+### Requirement: A zone entrance and its twin
+Changing the level a zone's entrance opens on the world map SHALL change its twin's (the
+number Mario stands on there after leaving the zone) when both opened the same level.
+
+#### Scenario: The Space Zone's way back
+- **WHEN** point $05 opens level 17 and is set to open level 18
+- **THEN** point $1A opens level 18 too
+
+### Requirement: The Points panel scrolls
+When the Points panel is taller than the window, it SHALL scroll with the wheel below the
+map choice and tools, with a bar showing where it is.
+
+#### Scenario: A long note in a low window
+- **WHEN** a point with notes is chosen in a window too low for the list of points
+- **THEN** the wheel over the panel brings the rest of the list into view
