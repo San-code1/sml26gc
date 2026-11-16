@@ -142,3 +142,22 @@ menu entries SHALL show the keys.
 #### Scenario: On the world map
 - **WHEN** the world map is shown and the user presses Ctrl+E
 - **THEN** nothing is exported and the status bar says zones are exported from a zone map
+
+### Requirement: Level start and goal shortcuts
+The level editor SHALL provide these shortcuts in both its modes (Blocks and Objects), shown
+on their buttons like the others; pressing the key of the mode already chosen, or Esc,
+SHALL leave it and go back to the tool chosen before:
+
+| Action | Shortcut |
+|---|---|
+| Place start | I |
+| Place finish | F |
+| Place secret exit | Shift+F |
+
+#### Scenario: Place the start from the keyboard
+- **WHEN** level 05 is shown in Objects mode and the user presses I, then clicks on the level
+- **THEN** Mario's start is placed where the user clicked
+
+#### Scenario: Leave placing
+- **WHEN** "Place finish" was chosen with F and the user presses Esc
+- **THEN** the tool chosen before is back and nothing was placed
