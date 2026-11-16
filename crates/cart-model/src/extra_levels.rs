@@ -20,9 +20,11 @@
 //! Storage: twins of banks nothing reads from ($38-$3F, `STORE`). The first holds a
 //! directory: "XLV1", the count, then per level the base, the header, where its map is
 //! (bank, address, length) and where its objects are (bank, address); then "XLN1" and each
-//! level's name (`NAME_MAX` bytes, zero-padded; a copy without them has no names); the data
-//! follows.
+//! level's name (`NAME_MAX` bytes, zero-padded; a copy without them has no names); then "XLT1"
+//! and each level's four per-level table entries (`level_tables`; a copy without them gives a
+//! level its base's); the data follows.
 use crate::error::CartError;
+use crate::level_tables::Tables;
 use crate::levels::{self, decode, encode, MAP_TABLE};
 use crate::objects::{self, Obj};
 use crate::patch::{is_expanded, objects_patched, TWIN};
@@ -39,7 +41,9 @@ const MAGIC: &[u8; 4] = b"XLV1";
 const ENTRY: usize = 29;
 const NAMES_MAGIC: &[u8; 4] = b"XLN1";
 const NAMES: usize = 5 + MAX * ENTRY;
-const DIRECTORY: usize = NAMES + 4 + MAX * NAME_MAX;
+const TABLES_MAGIC: &[u8; 4] = b"XLT1";
+const TABLES: usize = NAMES + 4 + MAX * NAME_MAX;
+const DIRECTORY: usize = TABLES + 4 + MAX * 4;
 /// The longest name a new level or zone can have (printable ASCII).
 pub const NAME_MAX: usize = 24;
 /// Where a new level's map goes while it is played, and the room it has there.
@@ -57,6 +61,8 @@ pub struct Extra {
     pub objs: Vec<Obj>,
     /// Given in the editor; empty: none.
     pub name: String,
+    /// Its gravity, auto-scroll, camera margin and animated tiles.
+    pub tables: Tables,
 }
 
 /// `name` as the copy can keep it: printable ASCII, at most `NAME_MAX` characters.
@@ -74,7 +80,7 @@ pub fn based_on(rom: &[u8], base: u8) -> Extra {
     let (_, start) = levels::map_location(rom, h);
     let mut header = [0u8; 20];
     header.copy_from_slice(&rom[h.at..h.at + 20]);
-    Extra { base, header, map: decode(rom, start).0, objs: objects::read(rom, base as usize).0, name: String::new() }
+    Extra { base, header, map: decode(rom, start).0, objs: objects::read(rom, base as usize).0, name: String::new(), tables: Tables::read(rom, base as usize) }
 }
 
 fn dir() -> usize {
@@ -89,6 +95,7 @@ pub fn read(rom: &[u8]) -> Vec<Extra> {
     let d = dir();
     let n = (rom[d + 4] as usize).min(MAX);
     let named = &rom[d + NAMES..d + NAMES + 4] == NAMES_MAGIC;
+    let tabled = &rom[d + TABLES..d + TABLES + 4] == TABLES_MAGIC;
     (0..n)
         .map(|k| {
             let e = d + 5 + k * ENTRY;
@@ -103,7 +110,9 @@ pub fn read(rom: &[u8]) -> Vec<Extra> {
                 i += 3;
             }
             let name = if named { name_from(&rom[d + NAMES + 4 + k * NAME_MAX..][..NAME_MAX]) } else { String::new() };
-            Extra { base: rom[e], header, map: decode(rom, map_at).0, objs, name }
+            let at = d + TABLES + 4 + k * 4;
+            let tables = if tabled { Tables::from_bytes([rom[at], rom[at + 1], rom[at + 2], rom[at + 3]]) } else { Tables::read(rom, rom[e] as usize) };
+            Extra { base: rom[e], header, map: decode(rom, map_at).0, objs, name, tables }
         })
         .collect()
 }
@@ -164,9 +173,11 @@ pub fn store(rom: &mut [u8], extras: &[Extra]) -> Result<usize, CartError> {
     rom[d + 4] = extras.len() as u8;
     rom[d + NAMES..d + NAMES + 4].copy_from_slice(NAMES_MAGIC);
     rom[d + NAMES + 4..d + DIRECTORY].fill(0);
+    rom[d + TABLES..d + TABLES + 4].copy_from_slice(TABLES_MAGIC);
     for (k, e) in extras.iter().enumerate() {
         let name = clean_name(&e.name);
         rom[d + NAMES + 4 + k * NAME_MAX..][..name.len()].copy_from_slice(name.as_bytes());
+        rom[d + TABLES + 4 + k * 4..][..4].copy_from_slice(&e.tables.bytes());
     }
     for (k, (e, ((m, o), (map, objs)))) in extras.iter().zip(writes.iter().zip(&datas)).enumerate() {
         let en = d + 5 + k * ENTRY;
@@ -203,6 +214,7 @@ pub fn writes_for(rom: &[u8], e: &Extra) -> Vec<(usize, Vec<u8>)> {
         (offset(obj_bank, 0x6037) + e.base as usize * 2, vec![0x00, 0x40]),
     ];
     writes.extend(crate::checkpoint::writes(e.base as usize, &e.objs, &e.map));
+    writes.extend(e.tables.writes(rom, e.base as usize));
     writes
 }
 
@@ -249,6 +261,7 @@ mod tests {
         assert!(e.objs.is_empty() && e.map.iter().all(|&b| b == 0));
         e.map[300] = 7;
         e.objs.push(Obj { x: 64, y: 40, kind: 5, flag: false });
+        e.tables.set_space_gravity(true, &Tables::default());
         let other = based_on(&rom, 2);
         let used = store(&mut rom, &[e.clone(), other.clone()]).unwrap();
         assert!(used > DIRECTORY);
@@ -262,6 +275,7 @@ mod tests {
         let (_, start) = levels::map_location(&rom, h);
         assert_eq!(decode(&rom, start).0, e.map);
         assert_eq!(objects::read(&rom, 2).0, e.objs);
+        assert!(Tables::read(&rom, 2).space_gravity(), "played with its own gravity");
         apply(&mut rom, &undo);
         assert!(rom == before, "the base level is back");
     }

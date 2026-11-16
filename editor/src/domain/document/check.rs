@@ -23,12 +23,15 @@ pub enum Warning {
     RestartBlocked((u16, u16)),
     /// A map point (its number) opens a level the copy does not have.
     MissingLevel(u8, u8),
+    /// Objects on the screen the level begins on, which the game never brings to life: the
+    /// first one's place, how many.
+    OnFirstScreen((u16, u16), usize),
 }
 
 impl Warning {
     pub fn place(&self) -> Option<(u16, u16)> {
         match *self {
-            Warning::FinishWithoutBell(p) | Warning::BellWithoutFinish(p) | Warning::CrowdedScreen(p, _) | Warning::StartBlocked(p) | Warning::RestartBlocked(p) => Some(p),
+            Warning::FinishWithoutBell(p) | Warning::BellWithoutFinish(p) | Warning::CrowdedScreen(p, _) | Warning::StartBlocked(p) | Warning::RestartBlocked(p) | Warning::OnFirstScreen(p, _) => Some(p),
             Warning::NoFinish | Warning::TooManyObjects(_) | Warning::MissingLevel(..) => None,
         }
     }
@@ -78,6 +81,10 @@ pub fn check(c: &LevelContent, ends_with_boss: bool, bell_expected: bool) -> Vec
     if c.start.blocked(&c.map) {
         w.push(Warning::StartBlocked(c.start.sprite_at()));
     }
+    let first: Vec<(u16, u16)> = c.objs.iter().filter(|o| c.start.on_first_screen(o.x, o.y)).map(|o| (o.x, o.y)).collect();
+    if let Some(&p) = first.first() {
+        w.push(Warning::OnFirstScreen(p, first.len()));
+    }
     for i in checkpoint::bells(&c.objs) {
         let r = checkpoint::restart_for(&c.map, &c.objs[i]);
         if r.blocked(&c.map) {
@@ -117,7 +124,7 @@ mod tests {
         }
         map[29 * COLS + 200] = 0x4A;
         let bell = Obj { x: 200 * 16 - 48, y: 29 * 16 - 120, kind: level_goals::BELL, flag: false };
-        LevelContent { map, objs: vec![bell], stand_in: None, name: String::new(), start: Start::standing(64, 30 * 16), settings: Default::default(), under: Default::default(), secret: None }
+        LevelContent { map, objs: vec![bell], stand_in: None, name: String::new(), start: Start::standing(64, 30 * 16), settings: Default::default(), tables: Default::default(), under: Default::default(), secret: None }
     }
 
     #[test]
@@ -138,6 +145,16 @@ mod tests {
     #[test]
     fn a_good_level_has_no_warnings() {
         assert_eq!(check(&level(), false, true), vec![]);
+    }
+
+    #[test]
+    fn objects_on_the_first_screen_are_found() {
+        let mut c = level();
+        let near = Obj { x: c.start.mario_x + 48, y: c.start.mario_y, kind: 9, flag: false };
+        c.objs.push(near);
+        c.objs.push(Obj { x: c.start.mario_x + 48, y: c.start.mario_y + 8, kind: 9, flag: false });
+        c.objs.push(Obj { x: c.start.mario_x + 240, y: c.start.mario_y, kind: 9, flag: false });
+        assert_eq!(check(&c, false, true), vec![Warning::OnFirstScreen((near.x, near.y), 2)], "off the first screen they come in as usual");
     }
 
     #[test]

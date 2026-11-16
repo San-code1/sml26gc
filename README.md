@@ -56,7 +56,7 @@ the tag shown when a level begins lists them with the key that opens the menu.
 
 ## Editor
 
-- Levels: paint blocks, place and move objects (Tab), add new levels (Ctrl+N) and name them.
+- Levels: paint blocks, place and move objects (Tab), add new levels (Ctrl+N copies the level shown, Ctrl+B makes a blank one) and name them.
   PgUp / PgDn change level, F2 opens the world map editor. A game level or map whose saved
   copy differs from the game's (blocks, objects, start, points, picture) is marked "mod".
 - Where Mario begins a level is drawn on it; Place start (I) puts him on the block clicked, and
@@ -70,8 +70,13 @@ the tag shown when a level begins lists them with the key that opens the menu.
   level (dragged and deleted as objects); level 31 cannot have them. With more than one the
   copy gets a hook that remembers which bell was rung last.
 - The panel sets the level's start time (100-900), music (Listen plays it with the game's own
-  sound, at the listening volume kept in `editor.cfg`) and background shades, and lists its warnings (no finish, a bell without its finish,
-  more than 6 objects in one screen, more than 83 objects, Mario's start or a restart inside
+  sound, at the listening volume kept in `editor.cfg`), background shades, gravity (normal or
+  space), auto-scroll (the screen moves right by itself; Mario caught against a wall loses a
+  life), camera margin (wide: the camera moves up sooner) and, where the level has them,
+  animated tiles (its own or none), for the game's levels and new ones, and lists its warnings (no finish, a bell without its finish,
+  more than 6 objects in one screen, more than 83 objects, objects on the screen the level
+  begins on (the game brings objects to life only at the screen's edge, so those never
+  appear; Objects mode frames that screen), Mario's start or a restart inside
   blocks, a map point opening a level that does not exist); a click shows the place, and each
   level button shows its count.
 - World map: paint the world and zone maps (Picture tab); choose each point's level, draw
@@ -94,6 +99,13 @@ the tag shown when a level begins lists them with the key that opens the menu.
   exits and progress, entered from any world point. It plays with its base zone's graphics
   and music, and only in this game: the game puts it in place of its base while Mario is at
   its door or inside, and keeps its progress in `saves\<game>.zones`.
+- New blank level (Ctrl+B, the File menu or Blank level): choose one of the game's 32 levels
+  seeing only its blocks and the objects it draws right; the new level plays as it (tiles,
+  objects, music, time) and starts as an empty sky with a floor and Mario's start.
+- The object palette offers the types the level draws right (its own, and items that look
+  the same there); Show all adds the others, framed, as they may look broken. Clicking the
+  chosen type again, or right-clicking an empty place, leaves none chosen (clicks then only
+  pick objects; a right click on an object deletes it).
 - Restore (Ctrl+Shift+R) puts back the level or map shown as in the game; a new level or zone,
   as its base.
 - Painting: Pencil (B) and Box (R) paint the palette selection; drag over the palette, or
