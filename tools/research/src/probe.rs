@@ -12,8 +12,10 @@ pub struct Probe {
     /// (first address, last address, ROM bank or $FF for any)
     pub read_watch: Option<(u16, u16, usize)>,
     pub read_log: Vec<(u16, u16, u8)>, // (pc, addr, bank)
-    /// Code running between these addresses of bank 0 (first, last).
+    /// Code running between these addresses (first, last), of `run_bank` when set (the bank
+    /// mapped at $4000-$7FFF), else of bank 0.
     pub run_watch: Option<(u16, u16)>,
+    pub run_bank: Option<usize>,
     pub run_log: Vec<u16>,
 }
 
@@ -22,7 +24,7 @@ impl BusObserver for Probe {
 
     fn on_read(&mut self, pc: u16, bank: usize, addr: u16) {
         if let Some((lo, hi)) = self.run_watch {
-            if pc >= lo && pc <= hi && self.run_log.len() < 1000 {
+            if pc >= lo && pc <= hi && self.run_bank.is_none_or(|b| b == bank) && self.run_log.len() < 1000 {
                 self.run_log.push(pc);
             }
         }

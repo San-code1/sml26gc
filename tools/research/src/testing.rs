@@ -1301,3 +1301,831 @@ pub fn capture_bench(rom_path: &Path) {
     art::object_tiles(&g, &rom, &original, 1, 0x21, 600);
     println!("object_tiles (600 frames): {:?}", t.elapsed());
 }
+
+/// Remembers every byte written, and at each read of $AF06 from one of the four sites that
+/// pick the object catalogue, what the current object's copy in $FFD0-$FFDF says and which
+/// object slot ($AD00 + $20 n) it matches.
+#[derive(Clone)]
+pub struct Shadow {
+    mem: Vec<u8>,
+    /// (site pc, $FFD5, $FFDB, the slot whose first bytes match $FFD0, that slot's type, the
+    /// slot $AF28/$AF29 points at)
+    pub log: Vec<(u16, u8, u8, Option<u16>, u8, u16)>,
+}
+
+/// The `ld a,($AF06)` sites (pc of the instruction), bank 0 addresses as the CPU sees them.
+const CATALOGUE_SITES: [u16; 4] = [0x4036, 0x424D, 0x41D2, 0x400B];
+
+impl gb_core::BusObserver for Shadow {
+    const ENABLED: bool = true;
+
+    fn on_read(&mut self, pc: u16, _bank: usize, addr: u16) {
+        if addr != 0xAF06 || !CATALOGUE_SITES.contains(&pc) || self.log.len() > 200_000 {
+            return;
+        }
+        let m = &self.mem;
+        let copy = &m[0xFFD0..0xFFD6];
+        let slot = (0..16u16).map(|n| 0xAD00 + n * 0x20).find(|&s| m[s as usize + 8] != 0 && &m[s as usize..s as usize + 6] == copy);
+        let kind = slot.map_or(0, |s| m[s as usize + 5]);
+        let current = (m[0xAF28] as u16) << 8 | (m[0xAF29] & 0xF0) as u16;
+        self.log.push((pc, m[0xFFD5], m[0xFFDB], slot, kind, current));
+    }
+
+    fn on_write(&mut self, _pc: u16, _bank: usize, addr: u16, value: u8) {
+        self.mem[addr as usize] = value;
+    }
+}
+
+/// Level `level` played for `frames` frames (walking right, jumping now and then) with a
+/// `Shadow` watching: at each of the four reads of $AF06, whether $FFD5 is the type of the
+/// object slot being handled.
+pub fn catalogue_reads(rom_path: &Path, level: u8, frames: u32) {
+    let Ok(data) = std::fs::read(rom_path) else { return };
+    let Ok(mut g) = gb_core::GameBoy::with_observer(data, 1000, Shadow { mem: vec![0; 0x10000], log: Vec::new() }) else { return };
+    g.boot_to_map();
+    g.enter_level(level);
+    for f in 0..frames {
+        g.run_frame_with(if f % 60 < 10 { Buttons::RIGHT | Buttons::A } else { Buttons::RIGHT });
+        g.clear_audio();
+    }
+    let log = &g.observer().log;
+    for site in CATALOGUE_SITES {
+        let at: Vec<_> = log.iter().filter(|e| e.0 == site).collect();
+        let found = at.iter().filter(|e| e.3.is_some()).count();
+        let same = at.iter().filter(|e| e.3.is_some() && e.1 == e.4).count();
+        let kinds: std::collections::BTreeSet<u8> = at.iter().map(|e| e.1).collect();
+        println!("site {site:04x}: {} reads, {found} with a matching slot, {same} with $FFD5 = its type; types seen {kinds:02x?}", at.len());
+        let pointed = at.iter().filter(|e| e.3 == Some(e.5)).count();
+        println!("    $AF28 points at the matching slot: {pointed} of {found}");
+        let lost: std::collections::BTreeMap<u8, usize> = at.iter().filter(|e| e.3.is_none()).fold(Default::default(), |mut m, e| {
+            *m.entry(e.1).or_default() += 1;
+            m
+        });
+        if !lost.is_empty() {
+            println!("    no matching slot, by $FFD5: {lost:02x?}");
+        }
+    }
+}
+
+/// The catalogue hook by hand: `ld a,($AF06)` at the four sites becomes `call HOOK`, and HOOK
+/// returns, for a type whose byte in RAM at $A380 is set, that byte minus one (its own
+/// catalogue, whatever $AF06 says), else $AF06.
+const MIX_HOOK_AT: u16 = 0x1967;
+const MIX_TABLE: u16 = 0xA380;
+const MIX_SITES: [(usize, u16); 4] = [(0x16, 0x4036), (0x02, 0x424D), (0x02, 0x41D2), (0x03, 0x400B)];
+
+fn mix_hook(rom: &mut [u8]) {
+    use cart_model::{patch::TWIN, rom::offset};
+    // push hl / ldh a,($FFD5) / or $80 / ld l,a / ld h,$A3 / ld a,(hl) / pop hl / and a / jr z,+2 / dec a / ret / ld a,($AF06) / ret
+    let code = [0xE5, 0xF0, 0xD5, 0xF6, 0x80, 0x6F, 0x26, (MIX_TABLE >> 8) as u8, 0x7E, 0xE1, 0xA7, 0x28, 0x02, 0x3D, 0xC9, 0xFA, 0x06, 0xAF, 0xC9];
+    for base in [0, TWIN] {
+        let at = base + MIX_HOOK_AT as usize;
+        rom[at..at + code.len()].copy_from_slice(&code);
+    }
+    for (bank, addr) in MIX_SITES {
+        let at = offset(bank, addr);
+        assert_eq!(rom[at..at + 3], [0xFA, 0x06, 0xAF], "site {bank:02x}:{addr:04x}");
+        rom[at..at + 3].copy_from_slice(&[0xCD, MIX_HOOK_AT as u8, (MIX_HOOK_AT >> 8) as u8]);
+    }
+}
+
+/// One object of type `kind` on `level`'s capture start (`art::capture_rom`) in `rom`, Mario
+/// walking at it and jumping now and then: each frame, the object's place from Mario and
+/// whether it is alive, and the game mode.
+fn mix_trace(map_state: &gb_core::Gb, rom: &[u8], original: &[u8], level: usize, kind: u8, mark: u8) -> Vec<(Option<(i32, i32)>, u8)> {
+    use cart_model::{art, cheats, objects::Obj};
+    let base = art::capture_rom(rom, original, level, Vec::new()).unwrap();
+    let mut probe = map_state.clone();
+    probe.cart_mut().set_rom(&base);
+    probe.enter_level(level as u8);
+    let mx = probe.read(PLAYER_X) as u16 | (probe.read(PLAYER_X + 1) as u16) << 8;
+    let my = probe.read(PLAYER_Y) as u16 | (probe.read(PLAYER_Y + 1) as u16) << 8;
+    let r = art::capture_rom(rom, original, level, vec![Obj { x: (mx + 216) / 8 * 8, y: my / 8 * 8, kind, flag: false }]).unwrap();
+    let mut g = map_state.clone();
+    g.cart_mut().set_rom(&r);
+    g.write(MIX_TABLE + kind as u16, mark);
+    g.enter_level(level as u8);
+    let mut out = Vec::new();
+    for f in 0..600 {
+        g.run_frame_with(if f % 45 < 12 { Buttons::RIGHT | Buttons::A } else { Buttons::RIGHT });
+        g.clear_audio();
+        let mario = (g.read(PLAYER_X) as i32 | (g.read(PLAYER_X + 1) as i32) << 8, g.read(PLAYER_Y) as i32 | (g.read(PLAYER_Y + 1) as i32) << 8);
+        let cam = (g.read(0xFFCA) as i32 | (g.read(0xFFCB) as i32) << 8, g.read(0xFFC8) as i32 | (g.read(0xFFC9) as i32) << 8);
+        let it = cheats::active_objects(&mut g).into_iter().find(|o| o.kind == kind).map(|o| (o.x + cam.0 - 0x50 - mario.0, o.y + cam.1 - 0x48 - mario.1));
+        out.push((it, g.read(GAME_MODE)));
+    }
+    out
+}
+
+/// Can level `into` (the other object catalogue) use type `kind` of level `from`? The hook by
+/// hand, `into` given `kind`'s tiles through an enemy set (its own enemies that clash dropped),
+/// `kind` marked foreign; the picture and a played trace compared with `from`'s.
+pub fn mix_probe(rom_path: &Path, from: usize, kind: u8, into: usize) {
+    use cart_model::enemy_sets::{self, Enemy};
+    use cart_model::{art, objects, patch};
+    let Some(g) = crate::console::load(rom_path) else { return };
+    let original = g.cart().rom().to_vec();
+    let Ok(mut rom) = patch::expand(&original) else { return };
+    patch::upgrade(&mut rom);
+    let Ok(mut g) = gb_core::Gb::new(rom.clone(), 1000) else { return };
+    g.boot_to_map();
+    let theirs = art::object_tiles(&g, &rom, &original, from, kind, 600);
+    let mut kinds: Vec<u8> = objects::read(&original, into).0.iter().map(|o| o.kind).collect();
+    kinds.sort_unstable();
+    kinds.dedup();
+    let mut members = Vec::new();
+    for k in kinds {
+        let t = art::object_tiles(&g, &rom, &original, into, k, 600);
+        if !enemy_sets::area_tiles(&t).is_empty() && !enemy_sets::clash(&t, &theirs) && k != kind {
+            members.push((Enemy { level: into as u8, kind: k }, t));
+        }
+    }
+    let kept: Vec<String> = members.iter().map(|m| format!("{:02x}", m.0.kind)).collect();
+    members.push((Enemy { level: from as u8, kind }, theirs.clone()));
+    let block = enemy_sets::build(&original, into, &members);
+    let mut mixed = rom.clone();
+    enemy_sets::store(&mut mixed, &original, &[(into, members.iter().map(|m| m.0).collect(), block)]).unwrap();
+    mix_hook(&mut mixed);
+    println!("level {into:02}'s own enemies kept: {kept:?}; {:02x}'s tiles {theirs:02x?}", kind);
+    let mut gm = g.clone();
+    gm.cart_mut().set_rom(&mixed);
+    gm.write(MIX_TABLE + kind as u16, 1 + (from >= 10) as u8);
+    let pixels = |l: &Option<art::Look>| l.as_ref().map(|l| (l.w, l.h, l.px.clone()));
+    let own = art::capture_look(&g, &rom, &original, from, kind);
+    let there = art::capture_look(&gm, &mixed, &original, into, kind);
+    let plain = art::capture_look(&g, &rom, &original, into, kind);
+    println!("picture in level {into:02} with the hook: {}; without it (level {into:02}'s own ${kind:02x}): {}", if own.is_some() && pixels(&own) == pixels(&there) { "as in its own level" } else { "DIFFERENT" }, if pixels(&plain) == pixels(&own) { "the same" } else { "another object" });
+    let a = mix_trace(&g, &rom, &original, from, kind, 0);
+    let b = mix_trace(&gm, &mixed, &original, into, kind, 1 + (from >= 10) as u8);
+    let first = a.iter().zip(&b).position(|(x, y)| x != y);
+    let alive = |t: &[(Option<(i32, i32)>, u8)]| t.iter().filter(|e| e.0.is_some()).count();
+    let lost = |t: &[(Option<(i32, i32)>, u8)]| t.iter().position(|e| e.1 == 0x09);
+    println!("trace over 600 frames: {}; alive {} / {} frames; Mario hurt at {:?} / {:?}", match first { None => "the same".to_string(), Some(f) => format!("differs from frame {f}: {:?} / {:?}", a[f], b[f]) }, alive(&a), alive(&b), lost(&a), lost(&b));
+    // the level's own enemies with the hook in: as without it
+    for m in members.iter().filter(|m| m.0.level as usize == into) {
+        let k = m.0.kind;
+        let plain = mix_trace(&g, &rom, &original, into, k, 0);
+        let hooked = mix_trace(&gm, &mixed, &original, into, k, 0);
+        println!("level {into:02}'s own ${k:02x} with the hook: {}", if plain == hooked { "the same" } else { "DIFFERENT" });
+    }
+}
+
+/// Is bank 0 `lo`-`hi` ever run or read? Boot, the map, and every level entered and walked
+/// for a while, with a probe on the range.
+pub fn unused_check(rom_path: &Path, lo: u16, hi: u16, bank: Option<usize>) {
+    let Some(mut g) = probed(rom_path) else { return };
+    g.observer_mut().run_watch = Some((lo, hi));
+    g.observer_mut().run_bank = bank;
+    g.observer_mut().read_watch = Some((lo, hi, bank.unwrap_or(0xFF)));
+    g.boot_to_map();
+    for l in 0..32u8 {
+        g.enter_level(l);
+        for f in 0..400 {
+            g.run_frame_with(if f % 50 < 10 { Buttons::RIGHT | Buttons::A } else { Buttons::RIGHT });
+            g.clear_audio();
+        }
+        g.back_to_map();
+        for _ in 0..200 {
+            g.run_frame_with(Buttons::NONE);
+            g.clear_audio();
+        }
+    }
+    let o = g.observer();
+    println!("{lo:04x}-{hi:04x}: run {} times, read {} times {:04x?}; reads (pc, addr) {:04x?}", o.run_log.len(), o.read_log.len(), o.run_log.iter().take(5).collect::<Vec<_>>(), o.read_log.iter().take(5).map(|r| (r.0, r.1)).collect::<Vec<_>>());
+}
+
+/// How an object of one catalogue does in a level of the other (`mix_check`).
+#[derive(Clone, Debug)]
+pub struct MixResult {
+    pub from: usize,
+    pub kind: u8,
+    pub into: usize,
+    pub picture: bool,
+    pub trace: bool,
+    pub dropped: Vec<u8>,
+    pub note: String,
+}
+
+/// `mix_probe` without printing: type `kind` of level `from` in level `into` with the hook,
+/// its picture and its played trace against its own level's.
+pub fn mix_check(g: &gb_core::Gb, rom: &[u8], original: &[u8], from: usize, kind: u8, into: usize) -> MixResult {
+    use cart_model::enemy_sets::{self, Enemy};
+    use cart_model::{art, objects};
+    let theirs = art::object_tiles(g, rom, original, from, kind, 600);
+    let mut kinds: Vec<u8> = objects::read(original, into).0.iter().map(|o| o.kind).collect();
+    kinds.sort_unstable();
+    kinds.dedup();
+    let (mut members, mut dropped) = (Vec::new(), Vec::new());
+    for k in kinds {
+        let t = art::object_tiles(g, rom, original, into, k, 600);
+        if enemy_sets::area_tiles(&t).is_empty() {
+            continue;
+        }
+        if enemy_sets::clash(&t, &theirs) || k == kind {
+            dropped.push(k);
+        } else {
+            members.push((Enemy { level: into as u8, kind: k }, t));
+        }
+    }
+    members.push((Enemy { level: from as u8, kind }, theirs));
+    let block = enemy_sets::build(original, into, &members);
+    let mut mixed = rom.to_vec();
+    let _ = enemy_sets::store(&mut mixed, original, &[(into, members.iter().map(|m| m.0).collect(), block)]);
+    mix_hook(&mut mixed);
+    let mut gm = g.clone();
+    gm.cart_mut().set_rom(&mixed);
+    gm.write(MIX_TABLE + kind as u16, 1 + (from >= 10) as u8);
+    let pixels = |l: &Option<art::Look>| l.as_ref().map(|l| (l.w, l.h, l.px.clone()));
+    let own = art::capture_look(g, rom, original, from, kind);
+    let there = art::capture_look(&gm, &mixed, original, into, kind);
+    let a = mix_trace(g, rom, original, from, kind, 0);
+    let b = mix_trace(&gm, &mixed, original, into, kind, 1 + (from >= 10) as u8);
+    let note = match a.iter().zip(&b).position(|(x, y)| x != y) {
+        None => String::new(),
+        Some(f) => format!("differs from frame {f}"),
+    };
+    MixResult { from, kind, into, picture: pixels(&own) == pixels(&there), trace: a == b, dropped, note }
+}
+
+/// Every type the game's levels use, tried in a level of the other catalogue (types of levels
+/// 0-9 in `into_second`, of 10-31 in `into_first`), once per type and picture, on all cores.
+pub fn mix_all(rom_path: &Path, into_first: usize, into_second: usize) {
+    use cart_model::{art, level_graphics, objects, patch};
+    let Some(g) = crate::console::load(rom_path) else { return };
+    let original = g.cart().rom().to_vec();
+    let Ok(mut rom) = patch::expand(&original) else { return };
+    patch::upgrade(&mut rom);
+    let Ok(mut g) = gb_core::Gb::new(rom.clone(), 1000) else { return };
+    g.boot_to_map();
+    // one (level, type) per catalogue, type and picture
+    let mut jobs: Vec<(usize, u8)> = Vec::new();
+    let mut seen: Vec<(bool, u8, Option<(usize, usize, Vec<Option<u8>>)>)> = Vec::new();
+    for l in 0..32 {
+        let second = level_graphics::object_group(&original, l).1;
+        let mut ks: Vec<u8> = objects::read(&original, l).0.iter().map(|o| o.kind).collect();
+        ks.sort_unstable();
+        ks.dedup();
+        for k in ks {
+            let look = art::capture_look(&g, &rom, &original, l, k).map(|lk| (lk.w, lk.h, lk.px));
+            if look.is_none() {
+                continue; // markers and objects that draw nothing alone
+            }
+            if !seen.iter().any(|s| s.0 == second && s.1 == k && s.2 == look) {
+                seen.push((second, k, look));
+                jobs.push((l, k));
+            }
+        }
+    }
+    println!("{} objects to try", jobs.len());
+    let jobs = std::sync::Arc::new(std::sync::Mutex::new(jobs));
+    let (tx, rx) = std::sync::mpsc::channel();
+    let (rom, original) = (std::sync::Arc::new(rom), std::sync::Arc::new(original));
+    for _ in 0..12 {
+        let (jobs, tx, rom, original, g) = (jobs.clone(), tx.clone(), rom.clone(), original.clone(), g.clone());
+        std::thread::spawn(move || loop {
+            let Some((l, k)) = jobs.lock().ok().and_then(|mut j| j.pop()) else { return };
+            let into = if l >= 10 { into_first } else { into_second };
+            if tx.send(mix_check(&g, &rom, &original, l, k, into)).is_err() {
+                return;
+            }
+        });
+    }
+    drop(tx);
+    let mut all: Vec<MixResult> = rx.into_iter().collect();
+    all.sort_by_key(|r| (r.from >= 10, r.kind, r.from));
+    for r in &all {
+        println!("{} ${:02x} of level {:02} in level {:02}: picture {}, trace {} {} (dropped {:02x?})", if r.picture && r.trace { "OK  " } else { "FAIL" }, r.kind, r.from, r.into, r.picture, r.trace, r.note, r.dropped);
+    }
+    let ok = all.iter().filter(|r| r.picture && r.trace).count();
+    println!("{ok} of {} work as in their own level", all.len());
+}
+
+
+
+/// The types that appear in object slots while one object of type `kind` plays on `level`'s
+/// capture start (`mix_trace`'s setup, three ways of walking at it), besides `kind` itself.
+fn spawned_by(map_state: &gb_core::Gb, rom: &[u8], original: &[u8], level: usize, kind: u8) -> std::collections::BTreeSet<u8> {
+    use cart_model::{art, cheats, objects::Obj};
+    let mut out = std::collections::BTreeSet::new();
+    let Some(base) = art::capture_rom(rom, original, level, Vec::new()) else { return out };
+    let mut probe = map_state.clone();
+    probe.cart_mut().set_rom(&base);
+    probe.enter_level(level as u8);
+    let mx = probe.read(PLAYER_X) as u16 | (probe.read(PLAYER_X + 1) as u16) << 8;
+    let my = probe.read(PLAYER_Y) as u16 | (probe.read(PLAYER_Y + 1) as u16) << 8;
+    for (ahead, jump_every) in [(216u16, 45u32), (120, 30), (300, 60)] {
+        let Some(r) = art::capture_rom(rom, original, level, vec![Obj { x: (mx + ahead) / 8 * 8, y: my / 8 * 8, kind, flag: false }]) else { continue };
+        let mut g = map_state.clone();
+        g.cart_mut().set_rom(&r);
+        g.enter_level(level as u8);
+        for f in 0..600 {
+            g.run_frame_with(if f % jump_every < 12 { Buttons::RIGHT | Buttons::A } else { Buttons::RIGHT });
+            g.clear_audio();
+            for o in cheats::active_objects(&mut g) {
+                if o.kind != kind {
+                    out.insert(o.kind);
+                }
+            }
+        }
+    }
+    out
+}
+
+/// For every object of the game's levels (one per catalogue, type and picture, as `mix_all`):
+/// the other types it brings into play (defeated bodies, shots, pieces), on all cores.
+pub fn spawns(rom_path: &Path) {
+    use cart_model::{art, level_graphics, objects, patch};
+    let Some(g) = crate::console::load(rom_path) else { return };
+    let original = g.cart().rom().to_vec();
+    let Ok(mut rom) = patch::expand(&original) else { return };
+    patch::upgrade(&mut rom);
+    let Ok(mut g) = gb_core::Gb::new(rom.clone(), 1000) else { return };
+    g.boot_to_map();
+    let mut jobs: Vec<(usize, u8)> = Vec::new();
+    let mut seen: Vec<(bool, u8)> = Vec::new();
+    for l in 0..32 {
+        let second = level_graphics::object_group(&original, l).1;
+        let mut ks: Vec<u8> = objects::read(&original, l).0.iter().map(|o| o.kind).collect();
+        ks.sort_unstable();
+        ks.dedup();
+        for k in ks {
+            if !seen.contains(&(second, k)) && art::capture_look(&g, &rom, &original, l, k).is_some() {
+                seen.push((second, k));
+                jobs.push((l, k));
+            }
+        }
+    }
+    let jobs = std::sync::Arc::new(std::sync::Mutex::new(jobs));
+    let (tx, rx) = std::sync::mpsc::channel();
+    let (rom, original) = (std::sync::Arc::new(rom), std::sync::Arc::new(original));
+    for _ in 0..12 {
+        let (jobs, tx, rom, original, g) = (jobs.clone(), tx.clone(), rom.clone(), original.clone(), g.clone());
+        std::thread::spawn(move || loop {
+            let Some((l, k)) = jobs.lock().ok().and_then(|mut j| j.pop()) else { return };
+            if tx.send((l, k, spawned_by(&g, &rom, &original, l, k))).is_err() {
+                return;
+            }
+        });
+    }
+    drop(tx);
+    let mut all: Vec<_> = rx.into_iter().collect();
+    all.sort_by_key(|r| (r.0 >= 10, r.1, r.0));
+    for (l, k, s) in &all {
+        if !s.is_empty() {
+            println!("${k:02x} of level {l:02} ({}): {s:02x?}", if *l >= 10 { "10-31" } else { "0-9" });
+        }
+    }
+}
+
+/// Writes to the object slots' type bytes ($AD05 + $20 n): (pc, bank, slot, old, new).
+#[derive(Clone, Default)]
+pub struct TypeWrites {
+    types: [u8; 16],
+    pub log: Vec<(u16, usize, u8, u8, u8)>,
+    /// Instructions that read $AF06 (pc, bank).
+    pub flag_reads: std::collections::BTreeSet<(u16, usize)>,
+}
+
+impl gb_core::BusObserver for TypeWrites {
+    const ENABLED: bool = true;
+
+    fn on_read(&mut self, pc: u16, bank: usize, addr: u16) {
+        if addr == 0xAF06 {
+            self.flag_reads.insert((pc, if pc < 0x4000 { 0 } else { bank }));
+        }
+    }
+
+    fn on_write(&mut self, pc: u16, bank: usize, addr: u16, value: u8) {
+        if (0xAD00..0xAF00).contains(&addr) && (addr - 0xAD00) % 0x20 == 5 {
+            let n = ((addr - 0xAD00) / 0x20) as usize;
+            if self.types[n] != value && self.log.len() < 10_000 {
+                self.log.push((pc, bank, n as u8, self.types[n], value));
+            }
+            self.types[n] = value;
+        }
+    }
+}
+
+/// Type `kind` of `level` on its capture start, Mario jumping at it at many moments: every
+/// change of a slot's type away from `kind` (what it becomes, and the code that does it).
+pub fn stomp(rom_path: &Path, level: usize, kind: u8) {
+    use cart_model::{art, objects::Obj, patch};
+    let Some(g) = crate::console::load(rom_path) else { return };
+    let original = g.cart().rom().to_vec();
+    let Ok(mut rom) = patch::expand(&original) else { return };
+    patch::upgrade(&mut rom);
+    let Some(base) = art::capture_rom(&rom, &original, level, Vec::new()) else { return };
+    let Ok(mut probe) = gb_core::Gb::new(base, 1000) else { return };
+    probe.boot_to_map();
+    probe.enter_level(level as u8);
+    let mx = probe.read(PLAYER_X) as u16 | (probe.read(PLAYER_X + 1) as u16) << 8;
+    let my = probe.read(PLAYER_Y) as u16 | (probe.read(PLAYER_Y + 1) as u16) << 8;
+    let mut found = std::collections::BTreeMap::new();
+    let mut reads = std::collections::BTreeSet::new();
+    for ahead in [216u16, 260] {
+        let Some(r) = art::capture_rom(&rom, &original, level, vec![Obj { x: (mx + ahead) / 8 * 8, y: my / 8 * 8, kind, flag: false }]) else { continue };
+        for at in (20..240).step_by(4) {
+            let mut gm = match gb_core::GameBoy::with_observer(rom.clone(), 1000, TypeWrites::default()) {
+                Ok(g) => g,
+                Err(e) => return eprintln!("{e}"),
+            };
+            gm.boot_to_map();
+            gm.cart_mut().set_rom(&r);
+            if !gm.enter_level(level as u8) {
+                eprintln!("level {level} not entered");
+            }
+            gm.observer_mut().log.clear();
+            for f in 0..360 {
+                let jump = f >= at && f < at + 14;
+                gm.run_frame_with(if jump { Buttons::RIGHT | Buttons::A } else if f < at { Buttons::NONE } else { Buttons::RIGHT });
+                gm.clear_audio();
+            }
+            for &(pc, bank, _, old, new) in &gm.observer().log {
+                *found.entry((old, new, bank, pc)).or_insert(0) += 1;
+            }
+            reads.extend(gm.observer().flag_reads.iter().copied());
+        }
+    }
+    for ((old, new, bank, pc), n) in found {
+        println!("${old:02x} -> ${new:02x} by {bank:02x}:{pc:04x} ({n} times)");
+    }
+    println!("reads of $AF06: {:x?}", reads.iter().map(|(pc, b)| format!("{b:02x}:{pc:04x}")).collect::<Vec<_>>());
+}
+
+
+
+/// Type `kind` of `level` ahead of Mario, jumping at many moments: for the first run where Mario
+/// touches it without being hurt (it ends close to him), its slot's 32 bytes frame by frame
+/// around that moment, and every other slot that appears then.
+pub fn slot_watch(rom_path: &Path, level: usize, kind: u8, rom_override: Option<&str>) {
+    use cart_model::{art, objects::Obj, patch};
+    let Some(g) = crate::console::load(rom_path) else { return };
+    let original = g.cart().rom().to_vec();
+    let Ok(mut rom) = patch::expand(&original) else { return };
+    patch::upgrade(&mut rom);
+    if let Some(p) = rom_override {
+        let Ok(r) = std::fs::read(p) else { return };
+        rom = r;
+    }
+    let Ok(mut map) = gb_core::Gb::new(rom.clone(), 1000) else { return };
+    map.boot_to_map();
+    let Some(base) = art::capture_rom(&rom, &original, level, Vec::new()) else { return };
+    let mut probe = map.clone();
+    probe.cart_mut().set_rom(&base);
+    probe.enter_level(level as u8);
+    let mx = probe.read(PLAYER_X) as u16 | (probe.read(PLAYER_X + 1) as u16) << 8;
+    let my = probe.read(PLAYER_Y) as u16 | (probe.read(PLAYER_Y + 1) as u16) << 8;
+    for ahead in [216u16, 260] {
+        let Some(r) = art::capture_rom(&rom, &original, level, vec![Obj { x: (mx + ahead) / 8 * 8, y: my / 8 * 8, kind, flag: false }]) else { continue };
+        for at in (20..240).step_by(2) {
+            let mut gm = map.clone();
+            gm.cart_mut().set_rom(&r);
+            gm.enter_level(level as u8);
+            let mut frames: Vec<(u32, Vec<[u8; 32]>, u8)> = Vec::new();
+            for f in 0..360 {
+                gm.run_frame_with(if f >= at && f < at + 14 { Buttons::RIGHT | Buttons::A } else if f < at { Buttons::NONE } else { Buttons::RIGHT });
+                gm.clear_audio();
+                let slots = (0..16u16).map(|n| std::array::from_fn(|i| gm.read(0xAD00 + n * 0x20 + i as u16))).collect();
+                frames.push((f, slots, gm.read(GAME_MODE)));
+            }
+            // the frame where a used slot of `kind` changes its byte $0F or more than its place
+            let hurt = frames.iter().any(|f| f.2 == 0x09);
+            let change = frames.windows(2).find_map(|w| (0..16).find(|&n| {
+                let (a, b) = (&w[0].1[n], &w[1].1[n]);
+                a[8] != 0 && a[5] == kind && (b[5] != kind || b[8] == 0 || a[9..] != b[9..] && a[0x0F] != b[0x0F])
+            }).map(|n| (w[0].0, n)));
+            let Some((f, n)) = change else { continue };
+            if hurt {
+                continue;
+            }
+            println!("ahead {ahead} jump {at}: slot {n} changes at frame {f}");
+            for (ff, slots, mode) in frames.iter().filter(|x| x.0 + 3 >= f && x.0 <= f + 12) {
+                let used: Vec<String> = slots.iter().enumerate().filter(|(_, s)| s[8] != 0).map(|(i, s)| format!("{i}:{:02x}", s[5])).collect();
+                println!("f{ff} mode {mode:02x} slot {n}: {:02x?} | used {used:?}", &slots[n][..20]);
+            }
+            return;
+        }
+    }
+    println!("no run where Mario touches it unhurt");
+}
+
+
+
+
+/// Memory as written, plus: slot type and used-flag writes, and at each read of $AF06 at the
+/// four sites what $FFD5, $FFDB and $AF28/$AF29 hold.
+#[derive(Clone)]
+pub struct KillWatch {
+    mem: Vec<u8>,
+    pub frame: u32,
+    pub events: Vec<String>,
+}
+
+impl gb_core::BusObserver for KillWatch {
+    const ENABLED: bool = true;
+
+    fn on_read(&mut self, pc: u16, _bank: usize, addr: u16) {
+        if addr == 0xAF06 && CATALOGUE_SITES.contains(&pc) && self.events.len() < 200_000 {
+            let m = &self.mem;
+            let slot = ((m[0xAF28] as u16) << 8 | (m[0xAF29] & 0xF0) as u16).wrapping_sub(0xAD00) / 0x20;
+            self.events.push(format!("f{} read at {pc:04x}: $FFD5 {:02x} $FFDB {:02x} slot {slot}", self.frame, m[0xFFD5], m[0xFFDB]));
+        }
+    }
+
+    fn on_write(&mut self, pc: u16, bank: usize, addr: u16, value: u8) {
+        if (0xAD00..0xAF00).contains(&addr) && matches!((addr - 0xAD00) % 0x20, 5 | 8) && self.mem[addr as usize] != value && self.events.len() < 200_000 {
+            self.events.push(format!("f{} {bank:02x}:{pc:04x} slot {} byte {} {:02x} -> {value:02x}", self.frame, (addr - 0xAD00) / 0x20, (addr - 0xAD00) % 0x20, self.mem[addr as usize]));
+        }
+        self.mem[addr as usize] = value;
+    }
+}
+
+/// `stomp`'s runs (type `kind` of `level`, in `rom_override` when given, else the expanded
+/// copy): the first where a slot of `kind` becomes type $00 while Mario is not hurt, with
+/// every event `KillWatch` saw from 4 frames before to 30 after.
+pub fn kill_watch(rom_path: &Path, level: usize, kind: u8, foreign_mark: u8) {
+    use cart_model::{art, objects::Obj, patch};
+    let Some(g) = crate::console::load(rom_path) else { return };
+    let original = g.cart().rom().to_vec();
+    let Ok(mut rom) = patch::expand(&original) else { return };
+    patch::upgrade(&mut rom);
+    let Some(base) = art::capture_rom(&rom, &original, level, Vec::new()) else { return };
+    let Ok(mut probe) = gb_core::Gb::new(rom.clone(), 1000) else { return };
+    probe.boot_to_map();
+    probe.cart_mut().set_rom(&base);
+    probe.enter_level(level as u8);
+    let mx = probe.read(PLAYER_X) as u16 | (probe.read(PLAYER_X + 1) as u16) << 8;
+    let my = probe.read(PLAYER_Y) as u16 | (probe.read(PLAYER_Y + 1) as u16) << 8;
+    let _ = foreign_mark;
+    for ahead in [216u16, 260] {
+        let Some(r) = art::capture_rom(&rom, &original, level, vec![Obj { x: (mx + ahead) / 8 * 8, y: my / 8 * 8, kind, flag: false }]) else { continue };
+        for at in (20..240).step_by(4) {
+            let Ok(mut gm) = gb_core::GameBoy::with_observer(rom.clone(), 1000, KillWatch { mem: vec![0; 0x10000], frame: 0, events: Vec::new() }) else { return };
+            gm.boot_to_map();
+            gm.cart_mut().set_rom(&r);
+            gm.enter_level(level as u8);
+            gm.observer_mut().events.clear();
+            let mut hurt = false;
+            for f in 0..360 {
+                gm.observer_mut().frame = f;
+                gm.run_frame_with(if f >= at && f < at + 14 { Buttons::RIGHT | Buttons::A } else if f < at { Buttons::NONE } else { Buttons::RIGHT });
+                gm.clear_audio();
+                hurt |= gm.read(GAME_MODE) != 0x04;
+            }
+            let ev = &gm.observer().events;
+            let killed = ev.iter().find(|e| e.contains(&format!("byte 5 {kind:02x} -> 00")));
+            let Some(k) = killed else { continue };
+            let f: u32 = k[1..k.find(' ').unwrap_or(1)].parse().unwrap_or(0);
+            println!("ahead {ahead} jump {at}: {k} (Mario hurt or dead in the run: {hurt})");
+            for e in ev.iter().filter(|e| e[1..e.find(' ').unwrap_or(1)].parse::<u32>().is_ok_and(|x| x + 4 >= f && x <= f + 30)) {
+                println!("  {e}");
+            }
+            return;
+        }
+    }
+    println!("no run turns it into type $00");
+}
+
+
+
+
+/// Type `kind` of `level` on its capture start (walking right, jumping now and then): every
+/// write that gives a slot a type other than `kind`, with the code, the slot $AF28/$AF29 points
+/// at then (the object being handled) and that slot's type.
+pub fn spawn_code(rom_path: &Path, level: usize, kind: u8) {
+    use cart_model::{art, objects::Obj, patch};
+    let Some(g) = crate::console::load(rom_path) else { return };
+    let original = g.cart().rom().to_vec();
+    let Ok(mut rom) = patch::expand(&original) else { return };
+    patch::upgrade(&mut rom);
+    let Some(base) = art::capture_rom(&rom, &original, level, Vec::new()) else { return };
+    let Ok(mut probe) = gb_core::Gb::new(rom.clone(), 1000) else { return };
+    probe.boot_to_map();
+    probe.cart_mut().set_rom(&base);
+    probe.enter_level(level as u8);
+    let mx = probe.read(PLAYER_X) as u16 | (probe.read(PLAYER_X + 1) as u16) << 8;
+    let my = probe.read(PLAYER_Y) as u16 | (probe.read(PLAYER_Y + 1) as u16) << 8;
+    let Some(r) = art::capture_rom(&rom, &original, level, vec![Obj { x: (mx + 216) / 8 * 8, y: my / 8 * 8, kind, flag: false }]) else { return };
+    let Ok(mut gm) = gb_core::GameBoy::with_observer(rom.clone(), 1000, SpawnWatch { mem: vec![0; 0x10000], log: Vec::new() }) else { return };
+    gm.boot_to_map();
+    gm.cart_mut().set_rom(&r);
+    gm.enter_level(level as u8);
+    gm.observer_mut().log.clear();
+    for f in 0..600 {
+        gm.run_frame_with(if f % 45 < 12 { Buttons::RIGHT | Buttons::A } else { Buttons::RIGHT });
+        gm.clear_audio();
+    }
+    let mut seen = std::collections::BTreeSet::new();
+    for l in &gm.observer().log {
+        if seen.insert(l.clone()) {
+            println!("{l}");
+        }
+    }
+}
+
+/// Writes of a slot's type byte ($AD05 + $20 n) to a nonzero value from 0: the code, the slot
+/// written, and the slot $AF28/$AF29 points at with its type.
+#[derive(Clone)]
+pub struct SpawnWatch {
+    mem: Vec<u8>,
+    pub log: Vec<String>,
+}
+
+impl gb_core::BusObserver for SpawnWatch {
+    const ENABLED: bool = true;
+
+    fn on_write(&mut self, pc: u16, bank: usize, addr: u16, value: u8) {
+        if (0xAD00..0xAF00).contains(&addr) && (addr - 0xAD00) % 0x20 == 5 && value != 0 && self.mem[addr as usize] == 0 && self.log.len() < 10_000 {
+            let m = &self.mem;
+            let cur = (m[0xAF28] as u16) << 8 | (m[0xAF29] & 0xF0) as u16;
+            let cur_kind = if (0xAD00..0xAF00).contains(&cur) { m[cur as usize + 5] } else { 0xFF };
+            self.log.push(format!("{bank:02x}:{pc:04x} gives slot {:04x} type {value:02x}; handling slot {cur:04x} (type {cur_kind:02x}), $FFD5 {:02x}", addr - 5, m[0xFFD5]));
+        }
+        self.mem[addr as usize] = value;
+    }
+}
+
+
+
+
+const TILE_RUNS: [(u32, u32); 5] = [(1000, 0), (45, 12), (30, 8), (60, 20), (24, 4)];
+
+/// The sprite tiles shown while Mario plays `rom` from `entered` with jumps every `every`
+/// frames held `hold` (none when `every` is 1000) for `frames` frames (until he dies).
+fn shown_tiles(entered: &gb_core::Gb, every: u32, hold: u32, frames: u32) -> std::collections::BTreeSet<u8> {
+    let mut g = entered.clone();
+    let mut out = std::collections::BTreeSet::new();
+    for f in 0..frames {
+        g.run_frame_with(if every < 1000 && f % every < hold { Buttons::RIGHT | Buttons::A } else { Buttons::RIGHT });
+        g.clear_audio();
+        if g.read(GAME_MODE) != 0x04 {
+            break;
+        }
+        let tall = g.video().lcdc() & 0x04 != 0;
+        let oam = g.video().oam().to_vec();
+        for s in oam.chunks(4) {
+            if s[0] == 0 || s[0] >= 160 || s[1] == 0 || s[1] >= 168 {
+                continue;
+            }
+            let t = if tall { s[2] & 0xFE } else { s[2] };
+            out.insert(t);
+            if tall {
+                out.insert(t | 1);
+            }
+        }
+    }
+    out
+}
+
+/// Every object of the game's levels (as `mix_all`): the tiles it shows played many ways in its
+/// own level, Mario invincible (Mario's own tiles, from the same runs without it, left out) against the tiles
+/// captured (`art::object_tiles`); then, for each level of its catalogue it does not draw right,
+/// whether its tiles outside the enemy area are in sets both levels load the same.
+pub fn full_tiles(rom_path: &Path) {
+    use cart_model::{art, enemy_sets, level_graphics, objects, patch};
+    let Some(g) = crate::console::load(rom_path) else { return };
+    let original = g.cart().rom().to_vec();
+    let Ok(mut rom) = patch::expand(&original) else { return };
+    patch::upgrade(&mut rom);
+    let Ok(mut g) = gb_core::Gb::new(rom.clone(), 1000) else { return };
+    g.boot_to_map();
+    let mut jobs: Vec<(usize, u8)> = Vec::new();
+    let mut seen: Vec<(bool, u8, Option<(usize, usize, Vec<Option<u8>>)>)> = Vec::new();
+    for l in 0..32 {
+        let second = level_graphics::object_group(&original, l).1;
+        let mut ks: Vec<u8> = objects::read(&original, l).0.iter().map(|o| o.kind).collect();
+        ks.sort_unstable();
+        ks.dedup();
+        for k in ks {
+            let look = art::capture_look(&g, &rom, &original, l, k).map(|lk| (lk.w, lk.h, lk.px));
+            if look.is_some() && !seen.iter().any(|s| s.0 == second && s.1 == k && s.2 == look) {
+                seen.push((second, k, look));
+                jobs.push((l, k));
+            }
+        }
+    }
+    println!("{} objects", jobs.len());
+    let jobs = std::sync::Arc::new(std::sync::Mutex::new(jobs));
+    let (tx, rx) = std::sync::mpsc::channel();
+    let (rom, original) = (std::sync::Arc::new(rom), std::sync::Arc::new(original));
+    for _ in 0..12 {
+        let (jobs, tx, rom, original, g) = (jobs.clone(), tx.clone(), rom.clone(), original.clone(), g.clone());
+        std::thread::spawn(move || loop {
+            use cart_model::objects::Obj;
+            let Some((l, k)) = jobs.lock().ok().and_then(|mut j| j.pop()) else { return };
+            let captured = art::object_tiles(&g, &rom, &original, l, k, 600);
+            let mut safe = rom.to_vec();
+            cart_model::cheats::set_invincible(&mut safe, true);
+            let Some(base) = art::capture_rom(&safe, &original, l, Vec::new()) else { continue };
+            let mut probe = g.clone();
+            probe.cart_mut().set_rom(&base);
+            probe.enter_level(l as u8);
+            let mx = probe.read(PLAYER_X) as u16 | (probe.read(PLAYER_X + 1) as u16) << 8;
+            let my = probe.read(PLAYER_Y) as u16 | (probe.read(PLAYER_Y + 1) as u16) << 8;
+            let mut played = std::collections::BTreeSet::new();
+            for ahead in [120u16, 216] {
+                let Some(r) = art::capture_rom(&safe, &original, l, vec![Obj { x: (mx + ahead) / 8 * 8, y: my / 8 * 8, kind: k, flag: false }]) else { continue };
+                for (every, hold) in TILE_RUNS {
+                    let mut empty = g.clone();
+                    empty.cart_mut().set_rom(&base);
+                    empty.enter_level(l as u8);
+                    let mario = shown_tiles(&empty, every, hold, 900);
+                    let mut with = g.clone();
+                    with.cart_mut().set_rom(&r);
+                    with.enter_level(l as u8);
+                    played.extend(shown_tiles(&with, every, hold, 900).difference(&mario).copied());
+                }
+            }
+            played.extend(captured.iter().copied());
+            let missed: Vec<u8> = played.iter().copied().filter(|t| !captured.contains(t)).collect();
+            let outside = played.iter().filter(|t| !enemy_sets::AREA.contains(t)).fold(0u8, |m, &t| m | level_graphics::set_of(t));
+            // the levels of its catalogue that do not use it: whether its outside tiles agree
+            let second = l >= 10;
+            let (mut kept, mut lost) = (Vec::new(), Vec::new());
+            for to in (0..32usize).filter(|&to| (to >= 10) == second && !objects::read(&original, to).0.iter().any(|o| o.kind == k)) {
+                let agrees = level_graphics::same_sets(&original, to, l, outside);
+                let was = level_graphics::same_sets(&original, to, l, captured.iter().filter(|t| !enemy_sets::AREA.contains(t)).fold(0u8, |m, &t| m | level_graphics::set_of(t)));
+                if agrees {
+                    kept.push(to);
+                } else if was {
+                    lost.push(to);
+                }
+            }
+            let _ = tx.send((l, k, captured, missed, outside, kept, lost));
+        });
+    }
+    drop(tx);
+    let mut all: Vec<_> = rx.into_iter().collect();
+    all.sort_by_key(|r| (r.0 >= 10, r.1, r.0));
+    let (mut with_missed, mut missed_outside) = (0, 0);
+    for (l, k, captured, missed, outside, kept, lost) in &all {
+        let out_missed = missed.iter().filter(|t| !enemy_sets::AREA.contains(t)).count();
+        with_missed += !missed.is_empty() as u32;
+        missed_outside += (out_missed > 0) as u32;
+        println!("${k:02x} of level {l:02}: captured {} tiles, missed {missed:02x?} ({out_missed} outside the enemy area); outside sets {outside:03b}; fine in {} levels{}", captured.len(), kept.len(), if lost.is_empty() { String::new() } else { format!(", now refused in {lost:02?}") });
+    }
+    println!("{} objects; {with_missed} show tiles the capture missed, {missed_outside} of them outside the enemy area", all.len());
+}
+
+/// Which OAM entries hold sprites while Mario plays level `level`'s capture start with nothing
+/// else (walking, jumping, then with each power-up), and their tiles.
+pub fn mario_oam(rom_path: &Path, level: usize) {
+    use cart_model::{art, cheats, patch};
+    let Some(g) = crate::console::load(rom_path) else { return };
+    let original = g.cart().rom().to_vec();
+    let Ok(mut rom) = patch::expand(&original) else { return };
+    patch::upgrade(&mut rom);
+    let Ok(mut g) = gb_core::Gb::new(rom.clone(), 1000) else { return };
+    g.boot_to_map();
+    let Some(base) = art::capture_rom(&rom, &original, level, Vec::new()) else { return };
+    g.cart_mut().set_rom(&base);
+    g.enter_level(level as u8);
+    for (n, item) in [None, Some(cheats::Item::Mushroom), Some(cheats::Item::Carrot)].into_iter().enumerate() {
+        if let Some(i) = item {
+            cheats::summon(&mut g, i);
+        }
+        let mut used: std::collections::BTreeMap<usize, std::collections::BTreeSet<u8>> = Default::default();
+        for f in 0..300 {
+            g.run_frame_with(if f % 40 < 12 { Buttons::RIGHT | Buttons::A } else { Buttons::RIGHT });
+            g.clear_audio();
+            let oam = g.video().oam().to_vec();
+            for (i, s) in oam.chunks(4).enumerate() {
+                if s[0] != 0 && s[0] < 160 {
+                    used.entry(i).or_default().insert(s[2]);
+                }
+            }
+        }
+        println!("run {n}: {:?}", used.iter().map(|(i, t)| format!("{i}:{t:02x?}")).collect::<Vec<_>>());
+    }
+}
+
+/// Add type `kind` of game level `from` to level `level`'s enemy set in the edited copy `copy`
+/// (with the members it has, or the level's own enemies), as the editor's catalogue does.
+pub fn add_member(rom_path: &Path, copy: &str, level: usize, from: usize, kind: u8) {
+    use cart_model::enemy_sets::{self, Enemy};
+    use cart_model::{art, extra_levels, objects};
+    let Some(g) = crate::console::load(rom_path) else { return };
+    let original = g.cart().rom().to_vec();
+    let Ok(mut rom) = std::fs::read(copy) else { return };
+    let Ok(mut map) = gb_core::Gb::new(rom.clone(), 1000) else { return };
+    map.boot_to_map();
+    let base = if level < 32 { level } else { extra_levels::read(&rom)[level - 32].base as usize };
+    let sets = enemy_sets::read(&rom);
+    let mut members: Vec<Enemy> = sets.iter().find(|s| s.level == level).map(|s| s.enemies.clone()).unwrap_or_else(|| {
+        let mut ks: Vec<u8> = objects::read(&original, base).0.iter().map(|o| o.kind).collect();
+        ks.sort_unstable();
+        ks.dedup();
+        ks.into_iter().map(|k| Enemy { level: base as u8, kind: k }).collect()
+    });
+    members.push(Enemy { level: from as u8, kind });
+    let with: Vec<(Enemy, Vec<u8>)> = members.iter().map(|e| (*e, art::object_tiles(&map, &rom, &original, e.level as usize, e.kind, 600))).filter(|m| !enemy_sets::area_tiles(&m.1).is_empty()).collect();
+    let block = enemy_sets::build(&original, base, &with);
+    let mut all: Vec<(usize, Vec<Enemy>, Vec<u8>)> = sets.iter().filter(|s| s.level != level).map(|s| {
+        let at = cart_model::rom::offset(s.block.0 as usize, s.block.1);
+        (s.level, s.enemies.clone(), rom[at..at + enemy_sets::BLOCK].to_vec())
+    }).collect();
+    all.push((level, with.iter().map(|m| m.0).collect(), block));
+    enemy_sets::store(&mut rom, &original, &all).unwrap();
+    let _ = std::fs::write(copy, &rom);
+    println!("level {level}'s set: {:?}", with.iter().map(|m| m.0).collect::<Vec<_>>());
+}

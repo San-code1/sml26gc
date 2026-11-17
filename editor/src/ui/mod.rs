@@ -232,6 +232,7 @@ impl Editor {
         } else {
             format!("{} {}", tr(es, "Edited copy opened:", "Copia editada abierta:"), store.path().display())
         };
+
         let mut ed = Editor {
             es,
             doc,
@@ -328,6 +329,19 @@ impl Editor {
         ed.looks_saved = ed.look_data.len() + ed.tile_data.len();
         ed.build_menu();
         ed
+    }
+
+    /// Take the other object catalogue's objects out of the levels' sets (a copy saved when a
+    /// level could take them), and say so.
+    pub fn drop_other_catalogue(&mut self) {
+        let es = self.es;
+        let (dropped, objects) = self.doc.drop_other_catalogue();
+        if dropped.is_empty() {
+            return;
+        }
+        let levels: Vec<String> = dropped.iter().map(|l| format!("{l:02}")).collect();
+        self.status = format!("{} {} ({objects} {}). {}", tr(es, "Objects of the other object catalogue taken out of the enemies of levels", "Objetos del otro catalogo quitados de los enemigos de los niveles"), levels.join(", "), tr(es, "placed", "colocados"), tr(es, "A level plays its own catalogue's objects only; Ctrl+Z brings them back.", "Un nivel solo juega los objetos de su catalogo; Ctrl+Z los recupera."));
+        self.mark(Severity::Warning);
     }
 
     /// One frame: the menu, shortcuts, input, then drawing.

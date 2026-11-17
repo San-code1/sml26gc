@@ -75,6 +75,7 @@ async fn main() {
     let mut ed = Editor::new(opened.doc, ports, opened.had_copy, es);
 
     ed.select_level(level.unwrap_or(0).min(ed.level_count() - 1));
+    ed.drop_other_catalogue();
     if flag("--objects") {
         ed.set_mode(Mode::Objects);
     }
@@ -132,6 +133,10 @@ async fn main() {
     // --catalogue: the object catalogue open (--power-ups: only power-ups)
     if flag("--catalogue") {
         ed.show_catalogue(flag("--power-ups"));
+    }
+    // --catalogue-pick L:K: that object chosen in the open catalogue (level L's type K, hex)
+    if let Some((l, k)) = value("--catalogue-pick").and_then(|v| v.split_once(':')).and_then(|(l, k)| Some((l.parse::<usize>().ok()?, u8::from_str_radix(k, 16).ok()?))) {
+        ed.choose_in_catalogue(l, k);
     }
     // --blank N: the New blank level chooser on game level N
     if let Some(n) = value("--blank").and_then(|v| v.parse::<usize>().ok()) {
