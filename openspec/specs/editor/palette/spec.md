@@ -5,7 +5,7 @@
 The editor's palettes (level blocks, object types, world and zone map tiles) let the user choose
 what to paint, at a size that suits their screen, one cell or a rectangle of cells at a time;
 the object palette offers the types the level draws right, named as the object catalogue
-names them and filtered by category.
+names them and filtered by category; choosing a type never changes the object just placed.
 
 ## Requirements
 
@@ -140,3 +140,16 @@ together with Show all.
 #### Scenario: Only enemies
 - **WHEN** the filter is stepped to Enemies in level 01
 - **THEN** the palette shows level 01's enemies only
+
+### Requirement: Choosing a type keeps the placed object
+Choosing a type in the object palette SHALL let the selected object go, unchanged; Shift+click
+on a type SHALL change the selected object to that type instead, and the palette SHALL say so
+while an object is selected.
+
+#### Scenario: Placing two different objects
+- **WHEN** a Goomba is placed (and stays selected) and the Koopa is then clicked in the palette
+- **THEN** the Goomba stays a Goomba, nothing is selected, and the next click places a Koopa
+
+#### Scenario: Changing the selected object
+- **WHEN** an object is selected and a type is Shift+clicked in the palette
+- **THEN** the selected object becomes that type

@@ -54,7 +54,7 @@ pub fn levels_using(original: &[u8], level: usize, kind: u8) -> Vec<usize> {
 }
 
 /// The first level of the second object catalogue.
-const SECOND_CATALOGUE: usize = 10;
+pub const SECOND_CATALOGUE: usize = 10;
 
 /// What decides how level `level`'s objects look and act.
 pub fn object_group(rom: &[u8], level: usize) -> ([u8; 4], bool) {

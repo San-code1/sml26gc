@@ -155,6 +155,18 @@ const COMMANDS: &[(&str, Run)] = &[
     ("enemymix", |r, a| testing::enemy_mix(r, a.num(1) as usize, a.num(2) as usize, a.hex(3) as u8)),
     ("enemysetcheck", |r, _a| testing::enemy_set_check(r)),
     ("capturebench", |r, _a| testing::capture_bench(r)),
+    ("cataloguereads", |r, a| testing::catalogue_reads(r, a.num(1) as u8, a.num(2))),
+    ("mixprobe", |r, a| testing::mix_probe(r, a.num(1) as usize, a.hex(2) as u8, a.num(3) as usize)),
+    ("unusedcheck", |r, a| testing::unused_check(r, a.hex(1) as u16, a.hex(2) as u16, a.0.get(3).and_then(|b| usize::from_str_radix(b, 16).ok()))),
+    ("mixall", |r, a| testing::mix_all(r, a.num(1) as usize, a.num(2) as usize)),
+    ("spawns", |r, _| testing::spawns(r)),
+    ("stomp", |r, a| testing::stomp(r, a.num(1) as usize, a.hex(2) as u8)),
+    ("slotwatch", |r, a| testing::slot_watch(r, a.num(1) as usize, a.hex(2) as u8, None)),
+    ("killwatch", |r, a| testing::kill_watch(r, a.num(1) as usize, a.hex(2) as u8, 0)),
+    ("spawncode", |r, a| testing::spawn_code(r, a.num(1) as usize, a.hex(2) as u8)),
+    ("fulltiles", |r, _| testing::full_tiles(r)),
+    ("mariooam", |r, a| testing::mario_oam(r, a.num(1) as usize)),
+    ("addmember", |r, a| testing::add_member(r, &a.s(1), a.num(2) as usize, a.num(3) as usize, a.hex(4) as u8)),
     ("mapprobe", |r, a| testing::door_probe(r, a.hex(1) as u8, (a.num(2) > 0).then(|| a.num(2) as u8 - 1))),
     ("goalprobe", |r, a| levels::goal_probe(r, a.num(1) as u8, a.hex(2), a.hex(3), &a.s(4))),
 ];
@@ -190,6 +202,6 @@ mod tests {
         let a = Args(["watch", "x", "ffc2,a200-a202", "0x10", "12"].map(String::from).to_vec());
         assert_eq!(a.list(2), vec![0xFFC2, 0xA200, 0xA201, 0xA202]);
         assert_eq!((a.hex(3), a.big(3), a.num(4), a.num(9)), (0x10, 0x10, 12, 0));
-        assert_eq!(COMMANDS.len(), 97);
+        assert_eq!(COMMANDS.len(), 109);
     }
 }

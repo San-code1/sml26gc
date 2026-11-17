@@ -94,13 +94,15 @@ fn sprites(g: &Gb) -> Vec<[u8; 4]> {
 pub struct Baseline {
     /// The sprites at the end of the walk and on each frame after it.
     sprites: Vec<Vec<[u8; 4]>>,
+    /// The tiles Mario shows in the `PLAYS` with no object (left out of an object's).
+    mario: Vec<u8>,
     /// Where an object goes: just past the right edge of the screen (the game brings objects
     /// in as the view scrolls), at Mario's height.
     at: (u16, u16),
 }
 
 /// The level's map and start as captures play it (see `Baseline`), with these objects.
-fn capture_rom(rom: &[u8], original: &[u8], level: usize, objs: Vec<Obj>) -> Option<Vec<u8>> {
+pub fn capture_rom(rom: &[u8], original: &[u8], level: usize, objs: Vec<Obj>) -> Option<Vec<u8>> {
     if is_expanded(rom) {
         let mut e = extra_levels::based_on(rom, level as u8);
         let (map, start) = blank_level::blank(&e.map, &Start::read(&e.header));
@@ -132,7 +134,39 @@ fn walk(map_state: &Gb, r: &[u8], level: usize) -> Option<Gb> {
     Some(g)
 }
 
-/// Play `level`'s capture start with no objects and keep its sprites for `frames` frames more.
+/// How `object_tiles` plays an object besides watching it with Mario still: Mario invincible,
+/// walking right and jumping every `.0` frames for `.1` (never when `.0` is 0), so that the
+/// object shows what it does when Mario moves, touches and stomps it (research `fulltiles`:
+/// watching alone misses tiles of a third of the enemies, which then look cut in a set).
+const PLAYS: [(u32, u32); 4] = [(0, 0), (45, 12), (30, 8), (60, 20)];
+const PLAY_FRAMES: u32 = 900;
+
+/// The tiles shown while playing `r` on `level` as `PLAYS` says (`r` made invincible).
+fn played_tiles(map_state: &Gb, r: &[u8], level: usize, (every, hold): (u32, u32)) -> Vec<u8> {
+    let mut g = map_state.clone();
+    g.cart_mut().set_rom(r);
+    if !g.enter_level(level as u8) {
+        return Vec::new();
+    }
+    let mut tiles = Vec::new();
+    for f in 0..PLAY_FRAMES {
+        g.run_frame_with(if every > 0 && f % every < hold { Buttons::RIGHT | Buttons::A } else { Buttons::RIGHT });
+        g.clear_audio();
+        let tall = g.video().lcdc() & 0x04 != 0;
+        for s in sprites(&g) {
+            let t = if tall { s[2] & 0xFE } else { s[2] };
+            for t in if tall { [t, t | 1].to_vec() } else { vec![t] } {
+                if !tiles.contains(&t) {
+                    tiles.push(t);
+                }
+            }
+        }
+    }
+    tiles
+}
+
+/// Play `level`'s capture start with no objects and keep its sprites for `frames` frames more
+/// (and, when `frames` is not 0, the tiles Mario shows in the `PLAYS`).
 pub fn baseline(map_state: &Gb, rom: &[u8], original: &[u8], level: usize, frames: u32) -> Option<Baseline> {
     let r = capture_rom(rom, original, level, Vec::new())?;
     let mut g = map_state.clone();
@@ -148,7 +182,17 @@ pub fn baseline(map_state: &Gb, rom: &[u8], original: &[u8], level: usize, frame
         g.clear_audio();
         sprites.push(self::sprites(&g));
     }
-    Some(Baseline { sprites, at: (((mx + 216) / 8) * 8, (my / 8) * 8) })
+    let mut mario = Vec::new();
+    if frames > 0 {
+        let mut safe = r.clone();
+        crate::cheats::set_invincible(&mut safe, true);
+        for play in PLAYS {
+            mario.extend(played_tiles(map_state, &safe, level, play));
+        }
+        mario.sort_unstable();
+        mario.dedup();
+    }
+    Some(Baseline { sprites, mario, at: (((mx + 216) / 8) * 8, (my / 8) * 8) })
 }
 
 /// The same start as `base` with one object of type `kind`.
@@ -158,9 +202,9 @@ fn with_object(map_state: &Gb, rom: &[u8], original: &[u8], level: usize, kind: 
     Some((walk(map_state, &r, level)?, obj))
 }
 
-/// Every sprite tile an object of type `kind` shows in `level` over `frames` frames after it
-/// came in (see `Baseline`), sorted. Mario is invincible, so an enemy reaching him does not
-/// change his sprites.
+/// Every sprite tile an object of type `kind` shows in `level`: over `frames` frames after it
+/// came in with Mario still (see `Baseline`), and in the `PLAYS` (Mario's own tiles left out),
+/// sorted. Mario is invincible, so an enemy reaching him does not change his sprites.
 pub fn object_tiles(map_state: &Gb, rom: &[u8], original: &[u8], level: usize, kind: u8, frames: u32) -> Vec<u8> {
     match baseline(map_state, rom, original, level, frames) {
         Some(base) => object_tiles_with(map_state, rom, original, level, kind, &base),
@@ -172,8 +216,13 @@ pub fn object_tiles(map_state: &Gb, rom: &[u8], original: &[u8], level: usize, k
 pub fn object_tiles_with(map_state: &Gb, rom: &[u8], original: &[u8], level: usize, kind: u8, base: &Baseline) -> Vec<u8> {
     let mut safe = rom.to_vec();
     crate::cheats::set_invincible(&mut safe, true);
-    let Some((mut g, _)) = with_object(map_state, &safe, original, level, kind, base) else { return Vec::new() };
+    let Some((mut g, obj)) = with_object(map_state, &safe, original, level, kind, base) else { return Vec::new() };
     let mut tiles = Vec::new();
+    if let Some(r) = capture_rom(&safe, original, level, vec![obj]) {
+        for play in PLAYS {
+            tiles.extend(played_tiles(map_state, &r, level, play).into_iter().filter(|t| !base.mario.contains(t)));
+        }
+    }
     for still in &base.sprites {
         let tall = g.video().lcdc() & 0x04 != 0;
         for s in sprites(&g).into_iter().filter(|s| !still.contains(s)) {
@@ -188,6 +237,7 @@ pub fn object_tiles_with(map_state: &Gb, rom: &[u8], original: &[u8], level: usi
         g.clear_audio();
     }
     tiles.sort_unstable();
+    tiles.dedup();
     tiles
 }
 

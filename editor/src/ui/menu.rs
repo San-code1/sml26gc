@@ -25,11 +25,12 @@ const FILE_MENU: [Option<Action>; 13] = [
 ];
 
 /// The Tools menu; its entries' ids start at `TOOLS_ID`.
-const TOOLS_MENU: [Option<Action>; 1] = [Some(Action::RecaptureObjects)];
+const TOOLS_MENU: [Option<Action>; 3] = [Some(Action::ObjectCatalogue), None, Some(Action::RecaptureObjects)];
 const TOOLS_ID: u16 = 101;
 
 fn label(es: bool, a: Action) -> &'static str {
     match a {
+        Action::ObjectCatalogue => tr(es, "Object catalogue", "Catalogo de objetos"),
         Action::RecaptureObjects => tr(es, "Capture the object pictures again", "Volver a capturar los dibujos de objetos"),
         Action::Save => tr(es, "Save", "Guardar"),
         Action::NewBlankLevel => tr(es, "New blank level...", "Nivel en blanco..."),

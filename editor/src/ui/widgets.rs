@@ -40,7 +40,7 @@ pub enum Severity {
 }
 
 impl Severity {
-    fn colour(self) -> Color {
+    pub fn colour(self) -> Color {
         match self {
             Severity::Info => col(3),
             Severity::Done => Color::new(0.08, 0.40, 0.14, 1.0),
@@ -58,12 +58,6 @@ impl Severity {
             Severity::Error => "x ",
         }
     }
-}
-
-/// A message as its kind shows it: a sign, its colour, and bold (drawn twice, a pixel apart)
-/// for all but plain information.
-pub fn message(t: &str, x: f32, y: f32, size: f32, kind: Severity) {
-    kind_text(&format!("{}{t}", kind.sign()), x, y, size, kind);
 }
 
 /// Text in a kind's colour and weight, without its sign (a message's further lines).

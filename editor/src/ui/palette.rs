@@ -279,7 +279,7 @@ impl Editor {
         });
         self.level_palette = view;
         if let (true, Some(&k)) = (is_mouse_button_pressed(MouseButton::Left), hover.and_then(|(c, r)| shown.get((r * 8 + c) as usize))) {
-            self.choose_kind(k);
+            self.choose_kind(k, is_key_down(KeyCode::LeftShift) || is_key_down(KeyCode::RightShift));
         }
         // a right click on an enemy brought from the catalogue takes it, and its objects, out
         if let (true, Some(e)) = (is_mouse_button_pressed(MouseButton::Right), hover.and_then(|(c, r)| shown.get((r * 8 + c) as usize)).and_then(|&k| self.imported_enemy(k))) {
@@ -296,6 +296,7 @@ impl Editor {
                     let n = self.doc.levels[self.cur].content.objs.iter().filter(|o| o.kind == k).count();
                     format!("{name}, {} {:02}. {} {n} {}", tr(self.es, "from level", "del nivel"), e.level, tr(self.es, "Right click: remove it and its", "Clic derecho: quitarlo con sus"), tr(self.es, "objects", "objetos"))
                 }
+                None if self.sel_obj.is_some() => format!("{name}. {}", tr(self.es, "Shift+click: the selected object becomes it", "Mayus+clic: el objeto seleccionado pasa a serlo")),
                 None => name,
             }
         });

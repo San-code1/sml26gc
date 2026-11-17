@@ -34,7 +34,7 @@ use cart_model::objects::{self, Obj};
 use cart_model::original_notes::{self, Note};
 use cart_model::new_zones::ZonePoint;
 use cart_model::original_points::OnMap;
-use cart_model::{added_points, checkpoint, layout, new_zones, patch, world, zone_maps, CartError};
+use cart_model::{added_points, checkpoint, layout, mixed_catalogues, new_zones, patch, world, zone_maps, CartError};
 
 /// What a painting tool works on: a level's blocks or a map picture's tiles.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -440,6 +440,26 @@ impl EditorDocument {
 
     /// Level `l`'s set becomes `set` and every object of type `kind` goes (an enemy taken out
     /// of the set would look broken), with one undo step. Returns how many objects went.
+    /// Take out of every level's enemy set the members of the other object catalogue (a level
+    /// plays its own catalogue's objects only), with their objects, each an undo step: the
+    /// levels changed and the objects taken out.
+    pub fn drop_other_catalogue(&mut self) -> (Vec<usize>, usize) {
+        let (mut levels, mut objects) = (Vec::new(), 0);
+        for l in 0..self.levels.len() {
+            let own = mixed_catalogues::catalogue(self.base_of(l));
+            let Some(set) = self.levels[l].content.enemies.clone() else { continue };
+            for e in set.enemies.iter().filter(|e| mixed_catalogues::catalogue(e.level as usize) != own) {
+                let mut kept = self.levels[l].content.enemies.clone().unwrap_or(set.clone());
+                kept.enemies.retain(|m| m != e);
+                objects += self.drop_set_enemy(l, kept, e.kind);
+                if !levels.contains(&l) {
+                    levels.push(l);
+                }
+            }
+        }
+        (levels, objects)
+    }
+
     pub fn drop_set_enemy(&mut self, l: usize, set: EnemySet, kind: u8) -> usize {
         self.snapshot(l);
         let lv = &mut self.levels[l];
@@ -1093,6 +1113,7 @@ impl EditorDocument {
         }
         let mut rom = self.rom.clone();
         enemy_sets::store(&mut rom, &self.original, &sets)?;
+        mixed_catalogues::remove(&mut rom, &self.original);
         self.rom = rom;
         Ok(())
     }

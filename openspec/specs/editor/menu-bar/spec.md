@@ -2,8 +2,8 @@
 
 ## Purpose
 The editor window's menu bar, like other programs have: the File menu gathers saving and the
-level and project files, each entry showing its shortcut; the Tools menu captures the object
-pictures again.
+level and project files, each entry showing its shortcut; the Tools menu opens the object
+catalogue and captures the object pictures again.
 
 ## Requirements
 
@@ -58,3 +58,11 @@ in the background, the progress box showing how far it is.
 #### Scenario: Pictures captured again
 - **WHEN** Tools, Capture the object pictures again is chosen
 - **THEN** the progress box appears and counts every picture and enemy tile again
+
+### Requirement: Catalogue in the Tools menu
+The Tools menu SHALL have "Object catalogue" (with its shortcut, F3) as its first entry, which
+opens the catalogue as F3 does.
+
+#### Scenario: Opened from the menu
+- **WHEN** Tools, Object catalogue is chosen while a level is shown
+- **THEN** the object catalogue opens on that level

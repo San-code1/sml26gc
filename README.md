@@ -105,19 +105,25 @@ the tag shown when a level begins lists them with the key that opens the menu.
 - The object palette offers the types the level draws right (its own, and items that look
   the same there), filtered by category with its < > buttons; Show all adds the others,
   framed, as they may look broken. It names the chosen type and the one under the mouse as
-  the object catalogue does. Clicking the
+  the object catalogue does. Choosing a type lets the selected object go (Shift+click changes
+  the selected object to that type instead). Clicking the
   chosen type again, or right-clicking an empty place, leaves none chosen (clicks then only
   pick objects; a right click on an object deletes it).
 - The object catalogue (F3, or Catalogue in the Objects palette) lists the game's objects once
-  each with a name, picture, category and the levels that use them, filtered by category or
-  by what the level shown draws right; Use picks one's type. The palette shows a type's name
-  when the mouse is over it. An enemy of another level of the same catalogue (levels 0-9 or
-  10-31) can be added to the level's own enemy set when its tiles fit in the level's 56 enemy
-  tiles (each enemy's cell says whether it fits before Add, and which enemy it clashes with); the Level tab lists the set, removes
-  enemies (with every object of that type, as they would look broken; one Ctrl+Z brings them
-  back) and goes back to the game's. In the palette the enemies brought from other levels have
-  a corner mark; Remove beside the chosen one, a right click on it, or Remove from this level
-  in the catalogue takes it out the same way. Works for the game's levels and new ones; the copy
+  each with a name, picture, category and the levels that use them; Use picks one's type. Each
+  cell's tag says what it is to the level shown: none (the level draws it), added, fits, no
+  room, not here (other graphics) or other catalogue. Two filters combine: Show (all,
+  compatible, usable here or can be added; one at a time, as each is part of compatible) and
+  category. The palette shows a type's name
+  when the mouse is over it. An enemy, trap or platform of another level of the same catalogue
+  (levels 0-9 or 10-31) that draws with enemy tiles can be added to the level's own enemy set
+  when its tiles fit in the level's 56 enemy tiles (each cell says whether it fits before Add,
+  and which object it clashes with). Objects added show "added" in the catalogue and count as
+  usable here. Remove from this level in the catalogue takes any object of the set out (the
+  level's own too, to make room), with every object of that type, as they would look broken;
+  one Ctrl+Z brings them back. In the palette the objects brought from other levels have a
+  corner mark; Remove beside the chosen one or a right click on it takes it out the same way.
+  The Tools menu opens the catalogue too. Works for the game's levels and new ones; the copy
   keeps the sets' sprite blocks where the original maps were.
 - Messages say their kind: done in green (+), warnings in orange (!), errors in red (x), the
   rest as plain information.

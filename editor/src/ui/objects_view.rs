@@ -194,15 +194,20 @@ impl Editor {
 
     /// Pick an object type in the palette: the selected object takes it too. The type already
     /// chosen is put down instead.
-    pub(super) fn choose_kind(&mut self, k: u8) {
+    /// Type `k` chosen to place: the selected object is let go, or with `change` (Shift+click)
+    /// it becomes that type and stays selected.
+    pub(super) fn choose_kind(&mut self, k: u8, change: bool) {
+        if let (true, Some(i)) = (change, self.sel_obj) {
+            self.kind = Some(k);
+            self.doc.set_object_kind(self.cur, i, k);
+            return;
+        }
         if self.kind == Some(k) {
             self.drop_kind();
             return;
         }
         self.kind = Some(k);
-        if let Some(i) = self.sel_obj {
-            self.doc.set_object_kind(self.cur, i, k);
-        }
+        self.sel_obj = None;
     }
 
     /// Choose type `k` in the palette (for the command line).

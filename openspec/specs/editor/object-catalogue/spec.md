@@ -2,8 +2,8 @@
 
 ## Purpose
 The game's objects listed once each in the level editor, with a name, a picture, what kind
-of object each is, where the game uses it and where it can be used, so a level can be built
-knowing what each object is.
+of object each is, where the game uses it and what it is to the level shown (tagged and
+filtered), so a level can be built knowing what each object is.
 
 ## Requirements
 
@@ -57,3 +57,30 @@ complete yet. Nothing else SHALL wait for it.
 #### Scenario: Progress
 - **WHEN** the editor is opened with an empty picture cache
 - **THEN** a box at the bottom right counts the pictures and enemy tiles captured, and goes away when all are
+
+### Requirement: Objects added marked
+The catalogue SHALL frame and tag the objects added to the shown level's set from other levels
+(in the colour the palette marks them with), and count them as usable here.
+
+#### Scenario: The screw added
+- **WHEN** level 10's screw has been added to a level's set and the catalogue is open on that level
+- **THEN** its cell is framed and tagged as added, and Usable here shows it
+
+### Requirement: What each object is to the level
+Each cell SHALL carry a tag saying what the object is to the shown level: none when the level
+draws it right, added, fits (it can join the level's set now), no room, not here (the level
+loads other graphics for it, or cannot draw it) or other catalogue.
+
+#### Scenario: Level 05's catalogue
+- **WHEN** the catalogue is open on level 05
+- **THEN** level 05's own objects have no tag, level 12's enemies are tagged other catalogue, and enemies of other levels of 0-9 are tagged fits or no room
+
+### Requirement: Show filter
+The catalogue SHALL have a Show filter, one choice at a time (all, compatible, usable here,
+can be added), combined with the category filter: compatible shows the objects usable here or
+that can join the level's set (room or not), usable here those the level draws right, can be
+added those that fit now. The two filters SHALL be shown as labelled sections.
+
+#### Scenario: Traps that can be added
+- **WHEN** Can be added and the trap category are chosen
+- **THEN** only traps of other levels of the level's catalogue that fit its set now are shown
