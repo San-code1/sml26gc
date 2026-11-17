@@ -1,7 +1,8 @@
 //! The object catalogue (F3): the game's objects once each (`object_catalogue`), with the
 //! editor's names (`object_names`), filtered by category and by "usable here". Choosing one
-//! the shown level draws right picks its type; an enemy of another level of the same object
-//! catalogue can be added to the level's own enemy set (`enemy_sets`) when its tiles fit.
+//! the shown level draws right picks its type; an enemy, trap or platform of another level of
+//! the same object catalogue can be added to the level's own enemy set (`enemy_sets`) when its
+//! tiles fit.
 use super::level_panel::fit;
 use super::shortcuts::{keys, Action};
 use super::widgets::*;
@@ -22,9 +23,55 @@ const SECOND: usize = 10;
 pub struct CatalogueView {
     objects: Vec<CatalogueObject>,
     filter: Option<Category>,
-    usable_only: bool,
+    show: Show,
     chosen: Option<usize>,
     scroll: f32,
+}
+
+/// Which objects the catalogue shows for the shown level. One choice: each is part of
+/// Compatible, and Usable and Addable never overlap, so two at once would add nothing.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Show {
+    All,
+    /// Usable here, or that can join the level's set (room or not).
+    Compatible,
+    /// The level draws it right (its own, or added to its set).
+    Usable,
+    /// Can be added to the level's set now.
+    Addable,
+}
+
+/// What an object is to the shown level.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Standing {
+    Usable,
+    /// Brought into the level's set from another level.
+    Added,
+    /// Could join the level's set, as `Fit` says.
+    Joins(Fit),
+    /// Of the other object catalogue.
+    OtherCatalogue,
+    /// Of the level's catalogue, but the level does not draw it right and it cannot join.
+    NotDrawn,
+}
+
+impl Standing {
+    fn shown_by(self, show: Show) -> bool {
+        match show {
+            Show::All => true,
+            Show::Compatible => matches!(self, Standing::Usable | Standing::Added) || matches!(self, Standing::Joins(f) if f != Fit::Graphics),
+            Show::Usable => matches!(self, Standing::Usable | Standing::Added),
+            Show::Addable => self == Standing::Joins(Fit::Yes),
+        }
+    }
+}
+
+/// A tag in a cell's bottom right corner; its width.
+fn tag(r: Rect, text: &str, bg: Color, fg: Color) -> f32 {
+    let w = measure_text(text, None, 12, 1.0).width + 10.0;
+    draw_rectangle(r.x + r.w - w, r.y + r.h - 16.0, w, 16.0, bg);
+    draw_text(text, r.x + r.w - w + 5.0, r.y + r.h - 4.0, 12.0, fg);
+    w
 }
 
 /// Whether an enemy of another level can join the shown level's enemy set.
@@ -37,7 +84,13 @@ pub enum Fit {
     Full,
     /// Its tiles, or the set's, are still being captured.
     Pending,
+    /// It also draws with tiles outside the enemy area that this level loads with other
+    /// graphics.
+    Graphics,
 }
+
+/// The categories that can join a level's set.
+const JOINS: [Category; 3] = [Category::Enemy, Category::Trap, Category::Platform];
 
 /// A category as the palette's filter says it.
 pub fn category_plural(es: bool, c: Option<Category>) -> &'static str {
@@ -67,7 +120,7 @@ pub fn category_name(es: bool, c: Category) -> &'static str {
 
 impl Editor {
     pub(super) fn open_catalogue(&mut self) {
-        self.catalogue = Some(CatalogueView { objects: Vec::new(), filter: None, usable_only: false, chosen: None, scroll: 0.0 });
+        self.catalogue = Some(CatalogueView { objects: Vec::new(), filter: None, show: Show::All, chosen: None, scroll: 0.0 });
         self.status = tr(self.es, "Object catalogue: the game's objects. Esc: close.", "Catalogo de objetos: los objetos del juego. Esc: cerrar.").into();
     }
 
@@ -86,6 +139,15 @@ impl Editor {
         }
     }
 
+    /// Choose in the open catalogue the object level `level` has as type `kind`.
+    pub fn choose_in_catalogue(&mut self, level: usize, kind: u8) {
+        let objects = self.catalogue_objects().to_vec();
+        if let Some(v) = &mut self.catalogue {
+            v.objects = objects;
+            v.chosen = v.objects.iter().position(|o| o.uses.contains(&(level, kind)));
+        }
+    }
+
     /// The level shown's game level and whether it is in the second object catalogue.
     fn catalogue_of_shown(&self) -> (usize, bool) {
         let base = self.doc.base_of(self.cur);
@@ -99,19 +161,39 @@ impl Editor {
             v.objects = objects;
         }
         self.pump_looks();
-        let (_, second) = self.catalogue_of_shown();
+        let (base, second) = self.catalogue_of_shown();
         let offered = self.offered_here();
+        let set: Vec<(usize, u8)> = self.doc.level_enemies(self.cur).map(|s| s.enemies.iter().map(|e| (e.level as usize, e.kind)).collect()).unwrap_or_default();
         let es = self.es;
+        let members = self.set_with_tiles();
         let Some(v) = self.catalogue.take() else { return };
         let mut v = v;
         clear_background(col(3));
-        // which objects show, and which the level draws right (the type it has here)
-        let here = |o: &CatalogueObject| o.uses.iter().find(|u| (u.0 >= SECOND) == second && offered.contains(&u.1)).map(|u| u.1);
+        // which the level draws right (the type it has here), what each object is to the level,
+        // and which show
+        let here = |o: &CatalogueObject| o.uses.iter().find(|u| set.contains(u)).or_else(|| o.uses.iter().find(|u| (u.0 >= SECOND) == second && offered.contains(&u.1))).map(|u| u.1);
+        let standings: Vec<Standing> = v
+            .objects
+            .iter()
+            .map(|o| {
+                if o.uses.iter().any(|u| set.contains(u) && u.0 != base) {
+                    Standing::Added
+                } else if here(o).is_some() {
+                    Standing::Usable
+                } else if let Some(e) = self.joinable(o, second, false) {
+                    Standing::Joins(self.fit_with(e, members.as_deref()))
+                } else if !o.uses.iter().any(|u| (u.0 >= SECOND) == second) {
+                    Standing::OtherCatalogue
+                } else {
+                    Standing::NotDrawn
+                }
+            })
+            .collect();
         let shown: Vec<usize> = (0..v.objects.len())
             .filter(|&i| {
                 let o = &v.objects[i];
                 let cat = object_names::name(o.first().0, o.first().1).map(|n| n.1);
-                v.filter.is_none_or(|f| cat == Some(f)) && (!v.usable_only || here(o).is_some())
+                v.filter.is_none_or(|f| cat == Some(f)) && standings[i].shown_by(v.show)
             })
             .collect();
         // the side panel
@@ -119,29 +201,42 @@ impl Editor {
         draw_rectangle(self.panel - 3.0, 0.0, 3.0, screen_height(), col(3));
         let w = self.panel - 2.0 * PAD - 8.0;
         draw_text(tr(es, "OBJECT CATALOGUE", "CATALOGO DE OBJETOS"), PAD, 25.0, 20.0, col(3));
-        let mut y = 40.0;
         let half = (w - 4.0) / 2.0;
-        if button(Rect::new(PAD, y, half, ROW), tr(es, "All", "Todos"), v.filter.is_none(), 15.0) {
-            v.filter = None;
-        }
-        if button(Rect::new(PAD + half + 4.0, y, half, ROW), tr(es, "Usable here", "Usables aqui"), v.usable_only, 15.0) {
-            v.usable_only = !v.usable_only;
-        }
-        y += ROW + 4.0;
-        for (i, c) in CATEGORIES.iter().enumerate() {
+        // two filters, combined: what the objects are to this level (one choice), and category
+        let mut y = 46.0;
+        draw_text(tr(es, "SHOW", "MOSTRAR"), PAD, y, 13.0, col(2));
+        y += 8.0;
+        let shows = [
+            (Show::All, tr(es, "All", "Todos")),
+            (Show::Compatible, tr(es, "Compatible", "Compatibles")),
+            (Show::Usable, tr(es, "Usable here", "Usables aqui")),
+            (Show::Addable, tr(es, "Can be added", "Se pueden anadir")),
+        ];
+        for (i, (s, label)) in shows.iter().enumerate() {
             let r = Rect::new(PAD + (i % 2) as f32 * (half + 4.0), y + (i / 2) as f32 * (ROW + 4.0), half, ROW);
-            if button(r, category_name(es, *c), v.filter == Some(*c), 14.0) {
-                v.filter = Some(*c);
+            if button(r, label, v.show == *s, 14.0) {
+                v.show = *s;
             }
         }
-        y += CATEGORIES.len().div_ceil(2) as f32 * (ROW + 4.0) + 8.0;
+        y += 2.0 * (ROW + 4.0) + 18.0;
+        draw_text(tr(es, "CATEGORY", "CATEGORIA"), PAD, y, 13.0, col(2));
+        y += 8.0;
+        let categories: Vec<(Option<Category>, &str)> = std::iter::once((None, tr(es, "All", "Todas"))).chain(CATEGORIES.iter().map(|c| (Some(*c), category_name(es, *c)))).collect();
+        for (i, (c, label)) in categories.iter().enumerate() {
+            let r = Rect::new(PAD + (i % 2) as f32 * (half + 4.0), y + (i / 2) as f32 * (ROW + 4.0), half, ROW);
+            if button(r, label, v.filter == *c, 14.0) {
+                v.filter = *c;
+            }
+        }
+        y += categories.len().div_ceil(2) as f32 * (ROW + 4.0) + 6.0;
+        draw_rectangle(PAD, y, w, 1.0, col(2));
+        y += 8.0;
         draw_text(&format!("{} {}", shown.len(), tr(es, "objects", "objetos")), PAD, y + 12.0, 15.0, col(2));
         y += 24.0;
         let mut pick = None;
         let mut add = None;
         let mut remove = None;
         let mut blank_from = None;
-        let members = self.set_with_tiles();
         if let Some(o) = v.chosen.and_then(|i| v.objects.get(i)) {
             let (l, k) = o.first();
             let (name, cat) = object_names::name(l, k).unwrap_or(("?", Category::Marker));
@@ -152,9 +247,10 @@ impl Editor {
                 y += 17.0;
             }
             y += 6.0;
-            // brought into this level's enemies from the catalogue: it can be taken out again
-            let imported = o.uses.iter().find_map(|&(l, k)| self.imported_enemy(k).filter(|e| e.level as usize == l));
-            if let Some(e) = imported {
+            // in this level's set (its own enemies, or brought from another level): it can be
+            // taken out, to make room or to undo an Add
+            let member = o.uses.iter().find_map(|&(l, k)| members.as_ref()?.iter().find(|m| m.0.level as usize == l && m.0.kind == k).map(|m| m.0));
+            if let Some(e) = member {
                 let n = self.doc.levels[self.cur].content.objs.iter().filter(|ob| ob.kind == e.kind).count();
                 if button(Rect::new(PAD, y, w, ROW), &format!("{} ({n} {})", tr(es, "Remove from this level", "Quitar de este nivel"), tr(es, "placed", "colocados")), false, 15.0) {
                     remove = Some(e);
@@ -167,7 +263,7 @@ impl Editor {
                         pick = Some(k);
                     }
                 }
-                None if cat == Category::Enemy => {
+                None if JOINS.contains(&cat) => {
                     if let Some(e) = self.joinable(o, second, false) {
                         let label = tr(es, "Add to this level's enemies", "Anadir a los enemigos del nivel");
                         let r = Rect::new(PAD, y, w, ROW);
@@ -185,14 +281,15 @@ impl Editor {
                         y += ROW + 4.0;
                         let (why, kind) = match fit {
                             Fit::Yes => (tr(es, "Fits: its tiles are free in this level.", "Cabe: sus tiles estan libres en este nivel.").to_string(), Severity::Done),
+                            Fit::Graphics => (tr(es, "Not usable here: it also draws with common sprite tiles, which this level loads with other graphics (it would look broken).", "No se usa aqui: tambien se dibuja con tiles de sprites comunes, que este nivel carga con otros graficos (se veria roto).").to_string(), Severity::Warning),
                             Fit::Clash(other) => (format!("{} {} {}", tr(es, "Does not fit: it needs the tiles of", "No cabe: necesita los tiles de"), Self::enemy_name(other), tr(es, "(remove it first).", "(quitalo antes).")), Severity::Warning),
                             Fit::Full => (format!("{} {} {}.", tr(es, "Does not fit: the set has", "No cabe: el juego ya tiene"), enemy_sets::MOST, tr(es, "enemies", "enemigos")), Severity::Warning),
                             Fit::Pending => (format!("{} ({} {}).", tr(es, "Known once the enemies' tiles are captured", "Se sabra cuando se capturen los tiles de los enemigos"), self.look_loader.tiles_left(), tr(es, "left", "por capturar")), Severity::Info),
                         };
                         y += message_lines(&why, PAD, y + 12.0, w, 14.0, kind);
                         y -= ROW + 4.0;
-                    } else {
-                        // of the other object catalogue: say why, and where it can be used
+                    } else if !o.uses.iter().any(|u| (u.0 >= SECOND) == second) {
+                        // of the other object catalogue and not joinable: say why, and where it can be used
                         let theirs = if second { "0-9" } else { "10-31" };
                         let mine = if second { "10-31" } else { "0-9" };
                         let why = format!(
@@ -205,6 +302,8 @@ impl Editor {
                         if button(Rect::new(PAD, y, w, ROW), &format!("{} {theirs}", tr(es, "New blank level from levels", "Nivel en blanco de los niveles")), false, 14.0) {
                             blank_from = o.levels().first().copied();
                         }
+                    } else {
+                        y += message_lines(tr(es, "This level does not draw it right (its graphics are not loaded here).", "Este nivel no lo dibuja bien (sus graficos no se cargan aqui)."), PAD, y + 12.0, w, 14.0, Severity::Info) - ROW + 4.0;
                     }
                 }
                 None => {
@@ -241,16 +340,21 @@ impl Editor {
             if !usable {
                 draw_rectangle_lines(r.x + 1.0, r.y + 1.0, r.w - 2.0, r.h - 2.0, 2.0, Color::new(0.5, 0.5, 0.5, 1.0));
             }
-            // an enemy of another level: whether it can join this level's set
-            if let Some(e) = self.joinable(o, second, usable) {
-                let (badge, kind) = match self.fit_with(e, members.as_deref()) {
-                    Fit::Yes => (tr(es, "fits", "cabe"), Severity::Done),
-                    Fit::Clash(_) | Fit::Full => (tr(es, "no room", "no cabe"), Severity::Warning),
-                    Fit::Pending => ("...", Severity::Info),
-                };
-                let bw = measure_text(badge, None, 13, 1.0).width + 18.0;
-                message(badge, r.x + r.w - bw, r.y + r.h - 6.0, 13.0, kind);
-            }
+            // what it is to this level, as a tag (none: the level draws it right)
+            let muted = (col(2), col(0));
+            let badge_w = match standings[i] {
+                Standing::Usable => 0.0,
+                Standing::Added => {
+                    // framed in the palette's mark colour too
+                    draw_rectangle_lines(r.x, r.y, r.w, r.h, 2.0, MARK);
+                    tag(r, tr(es, "ADDED", "ANADIDO"), MARK, WHITE)
+                }
+                Standing::Joins(Fit::Yes) => tag(r, tr(es, "FITS", "CABE"), Severity::Done.colour(), WHITE),
+                Standing::Joins(Fit::Clash(_) | Fit::Full) => tag(r, tr(es, "NO ROOM", "NO CABE"), Severity::Warning.colour(), WHITE),
+                Standing::Joins(Fit::Pending) => tag(r, "...", muted.0, muted.1),
+                Standing::Joins(Fit::Graphics) | Standing::NotDrawn => tag(r, tr(es, "NOT HERE", "AQUI NO"), muted.0, muted.1),
+                Standing::OtherCatalogue => tag(r, tr(es, "OTHER CATALOGUE", "OTRO CATALOGO"), col(3), col(0)),
+            };
             let (l, k) = o.first();
             if let Some((tex, _, _)) = self.looks.get(&(l, k)).and_then(|t| t.as_ref()) {
                 let f = (40.0 / tex.width()).min(40.0 / tex.height()).min(2.0);
@@ -265,7 +369,7 @@ impl Editor {
             }
             draw_text(&fit(&cat, r.w - 50.0, 13.0), r.x + 48.0, r.y + 18.0 + lines.len().min(2) as f32 * 15.0, 13.0, col(2));
             let levels: Vec<String> = o.levels().iter().map(|l| format!("{l:02}")).collect();
-            draw_text(&fit(&levels.join(" "), r.w - 8.0, 13.0), r.x + 4.0, r.y + r.h - 6.0, 13.0, col(2));
+            draw_text(&fit(&levels.join(" "), r.w - 8.0 - badge_w, 13.0), r.x + 4.0, r.y + r.h - 6.0, 13.0, col(2));
             if r.contains(m) && is_mouse_button_pressed(MouseButton::Left) {
                 v.chosen = Some(i);
             }
@@ -287,7 +391,7 @@ impl Editor {
         if let Some(k) = pick {
             self.catalogue = None;
             self.kind = None;
-            self.choose_kind(k);
+            self.choose_kind(k, false);
         }
         if let Some(e) = add {
             self.add_enemy(e);
@@ -344,24 +448,31 @@ impl Editor {
         object_names::name(e.level as usize, e.kind).map_or(format!("#{:02X}", e.kind), |n| n.0.to_string())
     }
 
-    /// Whether enemy `e` can join the shown level's set, given the set with its tiles.
+    /// Whether `e` can join the shown level's set, given the set with its tiles.
     fn fit_with(&self, e: Enemy, members: Option<&[(Enemy, Vec<u8>)]>) -> Fit {
         let (Some(members), Some(tiles)) = (members, self.object_tiles.get(&(e.level as usize, e.kind))) else { return Fit::Pending };
+        let outside = tiles.iter().filter(|t| !enemy_sets::AREA.contains(t)).fold(0, |m, &t| m | cart_model::level_graphics::set_of(t));
+        if !cart_model::level_graphics::same_sets(&self.doc.original, self.doc.base_of(self.cur), e.level as usize, outside) {
+            return Fit::Graphics;
+        }
         if members.len() >= enemy_sets::MOST {
             return Fit::Full;
         }
         members.iter().find(|m| enemy_sets::clash(tiles, &m.1)).map_or(Fit::Yes, |m| Fit::Clash(m.0))
     }
 
-    /// The enemy of the shown level's catalogue an object is there, if it is an enemy that
-    /// level does not draw right yet.
+    /// The member an object would be in the shown level's set (from a level of its catalogue),
+    /// if it is an enemy, trap or platform that level does not draw right yet and that draws
+    /// with enemy tiles (or is not captured yet).
     fn joinable(&self, o: &CatalogueObject, second: bool, usable: bool) -> Option<Enemy> {
         let (l, k) = o.first();
-        let enemy = object_names::name(l, k).is_some_and(|n| n.1 == Category::Enemy);
-        if !enemy || usable {
+        let joins = object_names::name(l, k).is_some_and(|n| JOINS.contains(&n.1));
+        if !joins || usable {
             return None;
         }
-        o.uses.iter().find(|u| (u.0 >= SECOND) == second).map(|&(l, k)| Enemy { level: l as u8, kind: k })
+        let &(l, k) = o.uses.iter().find(|u| (u.0 >= SECOND) == second)?;
+        let no_enemy_tiles = self.object_tiles.get(&(l, k)).is_some_and(|t| enemy_sets::area_tiles(t).is_empty());
+        (!no_enemy_tiles).then_some(Enemy { level: l as u8, kind: k })
     }
 
     /// Put enemy `e` in the shown level's set, if its tiles are known and fit.
@@ -375,13 +486,18 @@ impl Editor {
         if members.iter().any(|m| m.0 == e) {
             return;
         }
+        if self.fit_with(e, Some(&members)) == Fit::Graphics {
+            self.status = format!("{} {}", Self::enemy_name(e), tr(es, "not added: it also draws with common sprite tiles this level loads with other graphics.", "no anadido: tambien se dibuja con tiles comunes que este nivel carga con otros graficos."));
+            self.mark(Severity::Warning);
+            return;
+        }
         if members.len() >= enemy_sets::MOST {
             self.status = format!("{} {} {}.", tr(es, "Not added: a level's set has at most", "No anadido: el juego de un nivel tiene como mucho"), enemy_sets::MOST, tr(es, "enemies", "enemigos"));
             self.mark(Severity::Warning);
             return;
         }
         if let Some((other, _)) = members.iter().find(|m| enemy_sets::clash(&tiles, &m.1)) {
-            self.status = format!("{} {} {} {}.", Self::enemy_name(e), tr(es, "does not fit: it needs the tiles of", "no cabe: necesita los tiles de"), Self::enemy_name(*other), tr(es, "(remove it first in the Level tab)", "(quitalo antes en la pestana Nivel)"));
+            self.status = format!("{} {} {} {}.", Self::enemy_name(e), tr(es, "does not fit: it needs the tiles of", "no cabe: necesita los tiles de"), Self::enemy_name(*other), tr(es, "(remove it first: choose it in the catalogue)", "(quitalo antes: eligelo en el catalogo)"));
             self.mark(Severity::Warning);
             return;
         }
@@ -429,18 +545,5 @@ impl Editor {
         let l = self.cur;
         self.doc.set_level_enemies(l, Some(set));
         self.offered.clear();
-    }
-
-    /// The shown level goes back to the game's enemies.
-    pub(super) fn game_enemies(&mut self) {
-        let l = self.cur;
-        self.doc.set_level_enemies(l, None);
-        self.offered.clear();
-    }
-
-    /// The names of the shown level's set (None: the game's).
-    pub(super) fn enemy_rows(&self) -> Option<Vec<(Enemy, String)>> {
-        let set = self.doc.level_enemies(self.cur)?;
-        Some(set.enemies.iter().map(|&e| (e, format!("{} ({:02})", Self::enemy_name(e), e.level))).collect())
     }
 }

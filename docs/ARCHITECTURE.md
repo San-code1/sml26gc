@@ -54,6 +54,7 @@ Each module documents the ROM addresses and formats it relies on.
 | `level_tables` | A level's entries in the bank-0 tables of gravity, auto-scroll, camera margin and animated tiles |
 | `level_graphics` | Which levels draw the same objects (enemy sprites 0:362A and the object catalogue split at level 10) |
 | `enemy_sets` | A level's enemies chosen from several levels: the sprite block built for them, where the copy keeps it (the low copies of the map banks' maps) and the 0:362A entry |
+| `mixed_catalogues` | The bytes a copy saved with the dropped object catalogue mixing patch has changed, and giving the game's back |
 | `blank_level` | An empty map and start made from a game level's (its sky, a floor under Mario's start) |
 | `objects` | Object lists: 3-byte format, reading, re-packing |
 | `patch` | The 1 MB edited copy (twin banks $20-$3F) that gives levels and objects more room |

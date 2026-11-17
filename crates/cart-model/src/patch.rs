@@ -32,8 +32,11 @@ pub fn is_expanded(rom: &[u8]) -> bool {
     rom.len() == EXPANDED_SIZE && rom[0x037C] == 0x01 && rom[STUB_AT..STUB_AT + STUB.len()] == STUB
 }
 
+/// The object patch, its `call $6BBB` operand aside (a copy with `mixed_catalogues`' patch calls
+/// another loader until saved).
 pub fn objects_patched(rom: &[u8]) -> bool {
-    is_expanded(rom) && rom[OBJ_STUB_AT..OBJ_STUB_AT + OBJ_STUB.len()] == OBJ_STUB && rom[0x0582] == OBJ_STUB_AT as u8
+    let stub = &rom[OBJ_STUB_AT..OBJ_STUB_AT + OBJ_STUB.len()];
+    is_expanded(rom) && stub[..6] == OBJ_STUB[..6] && stub[8..] == OBJ_STUB[8..] && rom[0x0582] == OBJ_STUB_AT as u8
 }
 
 /// The bank the decoder reads map data from: the level's own bank, or in an expanded
