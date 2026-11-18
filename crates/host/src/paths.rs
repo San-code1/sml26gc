@@ -3,7 +3,7 @@
 //!
 //! Next to the executables:
 //!   base_cartridge.txt                the original cartridge file both programs use
-//!   settings.cfg                      the game's settings (the editor reads the language)
+//!   settings.cfg                      the game's settings
 //!   editor.cfg                        the editor's own settings
 //!   editor\projects\<name>\           a project: its file `<name>.nmbproject` and the cartridge
 //!                                     made from it over the base cartridge, `<base> - <name>.gb`,

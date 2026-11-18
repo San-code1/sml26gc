@@ -16,11 +16,6 @@ pub fn value<'a>(text: &'a str, key: &str) -> Option<&'a str> {
     text.lines().filter_map(|l| l.split_once('=')).find(|(k, _)| k.trim() == key).map(|(_, v)| v.trim())
 }
 
-/// The language chosen in the game ("en", "es" or "ja"), if any.
-pub fn language() -> Option<String> {
-    read().and_then(|t| value(&t, "language").map(str::to_string))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

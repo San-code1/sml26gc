@@ -1,6 +1,7 @@
 //! The original cartridge both programs work from, chosen once and checked at every start: the
 //! tools patch one dump only (`SUPPORTED_SHA1`), whatever the file is called.
 use crate::paths::base_cartridge_path;
+use i18n::Lang;
 use std::path::{Path, PathBuf};
 
 /// Super Mario Land 2 - 6 Golden Coins (USA, Europe).
@@ -17,14 +18,30 @@ pub enum BaseProblem {
 }
 
 impl BaseProblem {
-    /// What to tell the person, in English or Spanish.
-    pub fn text(&self, es: bool) -> String {
-        let t = |en: &str, s: &str| if es { s.to_string() } else { en.to_string() };
+    /// What to tell the person.
+    pub fn text(&self, lang: Lang) -> String {
+        let t = |en: &str, es: &str, ja: &str| match lang {
+            Lang::En => en.to_string(),
+            Lang::Es => es.to_string(),
+            Lang::Ja => ja.to_string(),
+        };
         match self {
-            BaseProblem::NotChosen => t("Choose your Super Mario Land 2 - 6 Golden Coins (USA, Europe) cartridge file.", "Elige tu fichero de cartucho de Super Mario Land 2 - 6 Golden Coins (USA, Europe)."),
-            BaseProblem::Missing(p) => format!("{}\n{}", t("The cartridge file is not there any more:", "El fichero del cartucho ya no esta:"), p.display()),
-            BaseProblem::Unreadable(p) => format!("{}\n{}", t("The cartridge file could not be read:", "No se pudo leer el fichero del cartucho:"), p.display()),
-            BaseProblem::Other(p) => format!("{}\n{}", t("This file is not Super Mario Land 2 - 6 Golden Coins (USA, Europe), the cartridge the tools work with:", "Este fichero no es Super Mario Land 2 - 6 Golden Coins (USA, Europe), el cartucho con el que trabajan las herramientas:"), p.display()),
+            BaseProblem::NotChosen => t(
+                "Choose your Super Mario Land 2 - 6 Golden Coins (USA, Europe) cartridge file.",
+                "Elige tu fichero de cartucho de Super Mario Land 2 - 6 Golden Coins (USA, Europe).",
+                "Super Mario Land 2 - 6 Golden Coins (USA, Europe) のカートリッジファイルを選んでください。",
+            ),
+            BaseProblem::Missing(p) => format!("{}\n{}", t("The cartridge file is not there any more:", "El fichero del cartucho ya no esta:", "カートリッジファイルが見つかりません:"), p.display()),
+            BaseProblem::Unreadable(p) => format!("{}\n{}", t("The cartridge file could not be read:", "No se pudo leer el fichero del cartucho:", "カートリッジファイルを読み込めませんでした:"), p.display()),
+            BaseProblem::Other(p) => format!(
+                "{}\n{}",
+                t(
+                    "This file is not Super Mario Land 2 - 6 Golden Coins (USA, Europe), the cartridge the tools work with:",
+                    "Este fichero no es Super Mario Land 2 - 6 Golden Coins (USA, Europe), el cartucho con el que trabajan las herramientas:",
+                    "このファイルはツールが対応している Super Mario Land 2 - 6 Golden Coins (USA, Europe) ではありません:",
+                ),
+                p.display()
+            ),
         }
     }
 }

@@ -11,6 +11,8 @@ path = "src/main.rs"
 [dependencies]
 gb-core.workspace = true
 cart-model.workspace = true
+i18n.workspace = true
+gilrs.workspace = true
 host.workspace = true
 macroquad.workspace = true
 cpal.workspace = true

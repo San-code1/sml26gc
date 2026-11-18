@@ -9,7 +9,9 @@ use crate::domain::menu::{Action, CheatMenu, Menu};
 use crate::domain::i18n::texts;
 use crate::domain::overlay::draw_hint;
 use crate::domain::settings::Settings;
-use crate::ports::{AudioOut, Keyboard, SaveStore, ZoneProgressStore};
+use crate::domain::bindings::Bindings;
+use crate::domain::menu::MenuInput;
+use crate::ports::{AudioOut, Gamepad, Keyboard, SaveStore, ZoneProgressStore};
 use cart_model::cheats::{self as cheat_rules, Item};
 use cart_model::extra_levels;
 use cart_model::level_start::Start;
@@ -228,16 +230,17 @@ impl GameSession {
         (self.zones.swaps(), self.extra.as_ref().map(|e| e.0), self.cheats.is_some_and(|c| c.invincible), self.loads)
     }
 
-    /// F6 and F7 in the cheats mode.
-    fn save_states(&mut self, input: &dyn Keyboard) {
+    /// The save and load state bindings (F6 and F7) in the cheats mode.
+    fn save_states(&mut self, input: &dyn Keyboard, pad: &dyn Gamepad) {
         let Some(state) = self.cheats else { return };
         let t = texts(self.prefs.settings.lang);
-        let k = self.prefs.settings.keys;
-        if input.pressed(k[keys::SAVE_STATE]) {
+        let st = self.prefs.settings.clone();
+        let b = Bindings::new(input, pad, &st);
+        if b.pressed(keys::SAVE_STATE) {
             self.saved = Some(Box::new(Saved { gb: self.gb.clone(), extra: self.extra.clone(), zones: self.zones.clone(), frozen: self.frozen }));
             self.note = Some((t.saved, NOTE_SECONDS));
         }
-        if input.pressed(k[keys::LOAD_STATE]) {
+        if b.pressed(keys::LOAD_STATE) {
             match self.saved.as_deref().cloned() {
                 Some(s) => {
                     self.gb = s.gb;
@@ -254,18 +257,19 @@ impl GameSession {
         }
     }
 
-    /// Hold the rewind key to rewind, in the cheats mode.
-    fn rewinding(&self, input: &dyn Keyboard) -> bool {
-        self.cheats.is_some() && input.held(self.prefs.settings.keys[keys::REWIND])
+    /// Hold the rewind binding to rewind, in the cheats mode.
+    fn rewinding(&self, input: &dyn Keyboard, pad: &dyn Gamepad) -> bool {
+        self.cheats.is_some() && Bindings::new(input, pad, &self.prefs.settings).held(keys::REWIND)
     }
 
-    /// The start-up tag's lines: what opens the menu (Start in a level, else Esc), and the
-    /// cheats mode's keys.
-    fn hint_lines(&self, in_level: bool) -> Vec<String> {
+    /// The start-up tag's lines: what opens the menu (Start in a level, else the menu
+    /// binding) and the cheats mode's keys, as a connected controller or the keyboard name them.
+    fn hint_lines(&self, in_level: bool, input: &dyn Keyboard, pad: &dyn Gamepad) -> Vec<String> {
         let st = &self.prefs.settings;
         let t = texts(st.lang);
-        let key = |i: usize| st.keys[i].label(st.lang);
-        let menu = if in_level { key(keys::START) } else { "ESC" };
+        let b = Bindings::new(input, pad, st);
+        let key = |i: usize| b.label(i);
+        let menu = if in_level { key(keys::START) } else { key(keys::MENU) };
         let mut lines = vec![format!("{menu}: {}", t.hint_menu)];
         if self.cheats.is_some() {
             lines.push(format!("{}: {}", key(keys::SAVE_STATE), t.hint_save));
@@ -313,8 +317,14 @@ impl GameSession {
         self.saves.save(&mut self.gb);
     }
 
-    /// One window frame lasting `dt` seconds.
+    /// One window frame with no controller (tests).
+    #[cfg(test)]
     pub fn frame(&mut self, dt: f32, input: &dyn Keyboard, audio: &dyn AudioOut) -> Flow {
+        self.frame_with(dt, input, &crate::ports::NoPad, audio)
+    }
+
+    /// One window frame lasting `dt` seconds, read from the keyboard and the controller.
+    pub fn frame_with(&mut self, dt: f32, input: &dyn Keyboard, pad: &dyn Gamepad, audio: &dyn AudioOut) -> Flow {
         if input.pressed(Key::F11) {
             self.prefs.toggle_fullscreen();
         }
@@ -341,13 +351,14 @@ impl GameSession {
         }
 
         if self.menu.is_none() && !self.checking {
-            self.save_states(input);
+            self.save_states(input, pad);
         }
         let g = &mut self.gb;
         if self.menu.is_none() {
             if !self.checking {
-                let start_key = input.pressed(self.prefs.settings.keys[keys::START]) && in_level && !self.input_lock;
-                if input.pressed(Key::Escape) || start_key {
+                let b = Bindings::new(input, pad, &self.prefs.settings);
+                let start_key = b.pressed(keys::START) && in_level && !self.input_lock;
+                if b.pressed(keys::MENU) || start_key || b.guide() {
                     let mut menu = Menu::new(mode);
                     if let Some(state) = self.cheats {
                         let icons = in_level.then(|| Item::ALL.map(|i| cheat_rules::item_picture(g, i)));
@@ -361,7 +372,9 @@ impl GameSession {
             }
         } else if let Some(m) = self.menu.as_mut() {
             let before = self.prefs.settings.clone();
-            let action = m.update(input, &mut self.prefs.settings);
+            let uses_pad = pad.connected();
+            let menu_input = MenuInput::read(input, uses_pad.then_some(pad), &self.prefs.settings);
+            let action = m.update(&menu_input, &mut self.prefs.settings);
             self.prefs.changed_from(&before);
             match action {
                 Action::None => {}
@@ -400,7 +413,7 @@ impl GameSession {
             self.gb.clear_audio();
             self.acc = 0.0;
         } else {
-            self.play(dt, input, audio, in_level);
+            self.play(dt, input, pad, audio, in_level);
         }
 
         let st = &self.prefs.settings;
@@ -420,7 +433,7 @@ impl GameSession {
         } else if self.hint_time > 0.0 {
             self.hint_time -= dt;
             let playing = self.gb.mode() == GameMode::Playing;
-            let lines = self.hint_lines(playing);
+            let lines = self.hint_lines(playing, input, pad);
             draw_hint(&mut self.screen, &lines);
         }
         Flow::Continue
@@ -456,9 +469,9 @@ impl GameSession {
     }
 
     /// The game runs: buttons in, frames at the console's pace, sound out, periodic saves.
-    fn play(&mut self, dt: f32, input: &dyn Keyboard, audio: &dyn AudioOut, in_level: bool) {
+    fn play(&mut self, dt: f32, input: &dyn Keyboard, pad: &dyn Gamepad, audio: &dyn AudioOut, in_level: bool) {
         let program = self.program();
-        if self.rewinding(input) {
+        if self.rewinding(input, pad) {
             self.rewind.back(&mut self.gb, program);
             self.gb.clear_audio();
             self.acc = 0.0;
@@ -467,8 +480,10 @@ impl GameSession {
         let keep = self.cheats.is_some();
         let st = &self.prefs.settings;
         let g = &mut self.gb;
-        let mut b = keys::buttons(input, &st.keys);
-        let held_any = !b.is_empty() || input.held(Key::Enter) || input.held(Key::Space) || input.held(Key::Escape);
+        let bindings = Bindings::new(input, pad, st);
+        let mut b = bindings.buttons();
+        let fast = bindings.held(keys::FAST_FORWARD);
+        let held_any = !b.is_empty() || input.held(Key::Enter) || input.held(Key::Space) || bindings.held(keys::MENU);
         if self.input_lock {
             if held_any {
                 b = Buttons::NONE;
@@ -485,7 +500,6 @@ impl GameSession {
         }
         b |= self.zones.buttons();
         g.set_buttons(b);
-        let fast = input.held(self.prefs.settings.keys[keys::FAST_FORWARD]);
         self.acc += dt.min(0.1) as f64;
         // Keep the sound queue fed: nudge timing when it runs low or high.
         let q = audio.queued_seconds();

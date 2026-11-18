@@ -216,14 +216,19 @@ impl Picker {
         }
     }
 
-    pub fn es(&self) -> bool {
-        self.es
+    /// The language of the texts from `host` (the start screen speaks English or Spanish).
+    pub fn lang(&self) -> i18n::Lang {
+        if self.es {
+            i18n::Lang::Es
+        } else {
+            i18n::Lang::En
+        }
     }
 
     /// The cartridge to play: the base one, or the project's (made when needed).
     pub fn ready(&self, play: &Play) -> Result<Play, String> {
         let (Some(name), Ok(base)) = (&play.project, &self.base) else { return Ok(play.clone()) };
-        host::projects::ensure_rom(base, name).map(|rom| Play { project: play.project.clone(), rom }).map_err(|e| e.text(self.es))
+        host::projects::ensure_rom(base, name).map(|rom| Play { project: play.project.clone(), rom }).map_err(|e| e.text(self.lang()))
     }
 
     fn tr<'a>(&self, en: &'a str, es: &'a str) -> &'a str {
@@ -277,7 +282,7 @@ impl Picker {
         draw_rectangle_lines(card.x, card.y, card.w, card.h, 1.0, LINE);
         let mut y = card.y + 34.0;
         let c = if *problem == BaseProblem::NotChosen { TEXT } else { RED };
-        for line in problem.text(self.es).lines().flat_map(|l| wrap(l, col_w - 40.0, 18.0)) {
+        for line in problem.text(self.lang()).lines().flat_map(|l| wrap(l, col_w - 40.0, 18.0)) {
             draw_text(&line, x + 20.0, y, 18.0, c);
             y += 23.0;
         }

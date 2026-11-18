@@ -2,11 +2,17 @@
 //! `key=value` text form. Where the text is kept is a port (`SettingsStore`).
 use super::i18n::{LANG_EN, LANG_IDS};
 use super::keys::{Key, DEFAULT_KEYS, KEYS};
+use super::pad::{Input, PadButton, DEFAULT_PAD};
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct Settings {
-    /// Up, Down, Left, Right, A, B, Start, Select, save state, load state, rewind.
+    /// Up, Down, Left, Right, A, B, Start, Select, save state, load state, rewind, fast forward,
+    /// menu.
     pub keys: [Key; KEYS],
+    /// What plays: the keyboard or the controller.
+    pub input: Input,
+    /// The controller's bindings, in `keys` order.
+    pub pad: [PadButton; KEYS],
     pub palette: usize,
     pub volume: u8,
     pub fullscreen: bool,
@@ -20,7 +26,7 @@ pub struct Settings {
 
 impl Default for Settings {
     fn default() -> Self {
-        Settings { keys: DEFAULT_KEYS, palette: 0, volume: 8, fullscreen: false, integer_scale: true, lang: LANG_EN, cheats: false, last_play: String::new() }
+        Settings { keys: DEFAULT_KEYS, input: Input::Keyboard, pad: DEFAULT_PAD, palette: 0, volume: 8, fullscreen: false, integer_scale: true, lang: LANG_EN, cheats: false, last_play: String::new() }
     }
 }
 
@@ -38,7 +44,13 @@ impl Settings {
                     }
                 }
             }
+            if let Some(i) = k.strip_prefix("pad").and_then(|n| n.parse::<usize>().ok()) {
+                if let (true, Some(b)) = (i < KEYS, PadButton::from_id(v)) {
+                    s.pad[i] = b;
+                }
+            }
             match k {
+                "input" => s.input = Input::from_id(v).unwrap_or_default(),
                 "palette" => s.palette = v.parse().unwrap_or(0) % 3,
                 "volume" => s.volume = v.parse::<u8>().unwrap_or(8).min(10),
                 "fullscreen" => s.fullscreen = v == "1",
@@ -56,6 +68,10 @@ impl Settings {
         let mut out = String::new();
         for (i, k) in self.keys.iter().enumerate() {
             out += &format!("key{i}={}\n", k.id().unwrap_or("Unknown"));
+        }
+        out += &format!("input={}\n", self.input.id());
+        for (i, b) in self.pad.iter().enumerate() {
+            out += &format!("pad{i}={}\n", b.id().unwrap_or("Unknown"));
         }
         out += &format!(
             "palette={}\nvolume={}\nfullscreen={}\ninteger_scale={}\nlanguage={}\ncheats={}\nlast_play={}\n",
@@ -83,6 +99,15 @@ mod tests {
         assert_eq!((s.palette, s.fullscreen, s.lang, s.volume), (1, true, 1, 10));
         assert_eq!(Settings::from_text(&s.to_text()), s);
         assert_eq!(Settings::from_text(""), Settings::default());
+    }
+
+    #[test]
+    fn the_controller_is_kept_and_an_old_file_plays_from_the_keyboard() {
+        let mut s = Settings { input: Input::Controller, ..Settings::default() };
+        s.pad[4] = PadButton::North;
+        assert_eq!(Settings::from_text(&s.to_text()), s);
+        let old = Settings::from_text("key4=Space\npalette=1\n");
+        assert_eq!((old.input, old.pad), (Input::Keyboard, DEFAULT_PAD));
     }
 
     #[test]

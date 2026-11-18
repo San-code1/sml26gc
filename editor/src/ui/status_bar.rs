@@ -12,14 +12,14 @@ impl Editor {
         if pl == 0 && tl == 0 {
             return;
         }
-        let es = self.es;
-        let text = format!("{}: {} {}/{}  {} {}/{}", tr(es, "Capturing objects", "Capturando objetos"), tr(es, "pictures", "dibujos"), pt - pl, pt, tr(es, "enemy tiles", "tiles de enemigos"), tt - tl, tt);
-        let dim = measure_text(&text, None, 15, 1.0);
+        let lang = self.lang;
+        let text = format!("{}: {} {}/{}  {} {}/{}", tr(lang, "Capturing objects"), tr(lang, "pictures"), pt - pl, pt, tr(lang, "enemy tiles"), tt - tl, tt);
+        let dim = text_size(&text, 15);
         let (w, h) = (dim.width + 16.0, 30.0);
         let (x, y) = (screen_width() - w - 10.0, bottom - h - 6.0);
         draw_rectangle(x, y, w, h, col(0));
         draw_rectangle_lines(x, y, w, h, 2.0, col(3));
-        draw_text(&text, x + 8.0, y + 15.0, 15.0, col(3));
+        put_text(&text, x + 8.0, y + 15.0, 15.0, col(3));
         let done = (pt - pl + tt - tl) as f32 / (pt + tt).max(1) as f32;
         draw_rectangle(x + 8.0, y + 21.0, (w - 16.0) * done, 4.0, col(2));
     }
@@ -56,13 +56,13 @@ impl Editor {
         draw_rectangle(bx, ch + 6.0, bw * frac, 14.0, if need > cap { Color::from_rgba(170, 40, 30, 255) } else { col(2) });
         draw_rectangle_lines(bx, ch + 6.0, bw, 14.0, 2.0, col(3));
         let what = match (self.mode == Mode::Objects, self.cur >= cart_model::levels::LEVELS) {
-            (true, _) => tr(self.es, "object space", "espacio objetos"),
-            (false, false) => tr(self.es, "zone space", "espacio zona"),
-            (false, true) => tr(self.es, "level space", "espacio nivel"),
+            (true, _) => tr(self.lang, "object space"),
+            (false, false) => tr(self.lang, "zone space"),
+            (false, true) => tr(self.lang, "level space"),
         };
         let label = format!("{what} {need}/{cap}");
-        let dim = measure_text(&label, None, 16, 1.0);
-        draw_text(&label, bx - dim.width - 8.0, ch + 18.0, 16.0, col(3));
+        let dim = text_size(&label, 16);
+        put_text(&label, bx - dim.width - 8.0, ch + 18.0, 16.0, col(3));
         // the message takes the bar's left, and grows upwards when it is longer
         status_message(&self.status, self.panel, bx - dim.width - 20.0, ch, STATUS_H, 18.0, self.severity());
         self.capture_badge(ch);
