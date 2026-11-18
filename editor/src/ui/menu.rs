@@ -11,6 +11,9 @@ use cart_model::original_points::OnMap;
 const FILE_MENU: [Option<Action>; 13] = [
     Some(Action::Save),
     None,
+    Some(Action::Projects),
+    Some(Action::ExportProject),
+    None,
     Some(Action::NewBlankLevel),
     Some(Action::ExportLevel),
     Some(Action::ImportLevel),
@@ -19,18 +22,18 @@ const FILE_MENU: [Option<Action>; 13] = [
     Some(Action::ExportZone),
     Some(Action::ImportZone),
     Some(Action::ReplaceZone),
-    None,
-    Some(Action::ExportProject),
-    Some(Action::ImportProject),
 ];
 
 /// The Tools menu; its entries' ids start at `TOOLS_ID`.
 const TOOLS_MENU: [Option<Action>; 3] = [Some(Action::ObjectCatalogue), None, Some(Action::RecaptureObjects)];
+/// How many entries the Tools menu has, separators included.
+pub(super) const TOOLS_MENU_LEN: usize = TOOLS_MENU.len();
 const TOOLS_ID: u16 = 101;
 
 fn label(es: bool, a: Action) -> &'static str {
     match a {
         Action::ObjectCatalogue => tr(es, "Object catalogue", "Catalogo de objetos"),
+        Action::Projects => tr(es, "Projects...", "Proyectos..."),
         Action::RecaptureObjects => tr(es, "Capture the object pictures again", "Volver a capturar los dibujos de objetos"),
         Action::Save => tr(es, "Save", "Guardar"),
         Action::NewBlankLevel => tr(es, "New blank level...", "Nivel en blanco..."),
@@ -41,7 +44,6 @@ fn label(es: bool, a: Action) -> &'static str {
         Action::ImportZone => tr(es, "Import zone as a new zone...", "Importar zona como zona nueva..."),
         Action::ReplaceZone => tr(es, "Replace this zone from a file...", "Reemplazar esta zona con un fichero..."),
         Action::ExportProject => tr(es, "Export project...", "Exportar proyecto..."),
-        Action::ImportProject => tr(es, "Import project...", "Importar proyecto..."),
         _ => "",
     }
 }
@@ -83,12 +85,20 @@ impl Editor {
                 Action::ReplaceLevel => !self.in_world && self.cur >= LEVELS,
                 Action::ExportZone => self.in_world && self.zone_exportable(),
                 Action::ImportZone => self.in_world,
-                Action::ReplaceZone => self.in_world && matches!(self.world_map, OnMap::NewZone(_)),
+                Action::ReplaceZone => self.in_world && matches!(self.world_map, OnMap::NewZone(_) | OnMap::World),
                 _ => true,
             };
             if self.menu_enabled[i] != Some(on) {
                 self.menu_enabled[i] = Some(on);
                 self.menu.enable(i as u16 + 1, on);
+            }
+        }
+        for (i, a) in TOOLS_MENU.iter().enumerate() {
+            let Some(a) = *a else { continue };
+            let on = a != Action::ObjectCatalogue || !self.in_world;
+            if self.tools_enabled[i] != Some(on) {
+                self.tools_enabled[i] = Some(on);
+                self.menu.enable(TOOLS_ID + i as u16, on);
             }
         }
     }

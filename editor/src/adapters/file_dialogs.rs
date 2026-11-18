@@ -1,5 +1,6 @@
-//! The system's Save and Open dialogs for level and project files, starting in `exports\`
-//! (`host::exports_dir`). Off Windows there is no dialog: every request is cancelled.
+//! The system's Save and Open dialogs for level, zone, world map and project files, starting
+//! in the kind's folder of `exports\` (`host::paths`; a project's in its own,
+//! `exports\projects\<name>`). Off Windows there is no dialog: every request is cancelled.
 use crate::ports::{FileDialogs, FileKind};
 use std::path::PathBuf;
 
@@ -15,21 +16,40 @@ impl SystemDialogs {
         let pick = |en, sp| if es { sp } else { en };
         match kind {
             FileKind::Level => (pick("Level file", "Fichero de nivel"), pick("Export level", "Exportar nivel"), pick("Import level", "Importar nivel")),
-            FileKind::Zone => (pick("Zone file", "Fichero de zona"), pick("Export zone", "Exportar zona"), pick("Import zone", "Importar zona")),
+            FileKind::Zone => (pick("Zone or world map file", "Fichero de zona o de mapa de mundos"), pick("Export zone", "Exportar zona"), pick("Import zone", "Importar zona")),
+            FileKind::World => (pick("World map file", "Fichero de mapa de mundos"), pick("Export world map", "Exportar mapa de mundos"), pick("Import world map", "Importar mapa de mundos")),
             FileKind::Project => (pick("Project file", "Fichero de proyecto"), pick("Export project", "Exportar proyecto"), pick("Import project", "Importar proyecto")),
         }
+    }
+}
+
+/// Where a kind's dialogs start (`name`: the project, for its export).
+fn folder(kind: FileKind, name: Option<&str>) -> PathBuf {
+    match kind {
+        FileKind::Level => host::paths::level_exports(),
+        FileKind::Zone => host::paths::zone_exports(),
+        FileKind::World => host::paths::zone_exports(),
+        FileKind::Project => name.map_or_else(|| host::exports_dir().join("projects"), host::paths::project_exports),
     }
 }
 
 impl FileDialogs for SystemDialogs {
     fn save_as(&self, kind: FileKind, name: &str) -> Option<PathBuf> {
         let (what, title, _) = self.names(kind);
-        imp::dialog(self.owner, what, title, kind.extension(), Some(name))
+        imp::dialog(self.owner, what, title, kind.extension(), Some(name), &folder(kind, Some(name)))
     }
 
     fn open(&self, kind: FileKind) -> Option<PathBuf> {
         let (what, _, title) = self.names(kind);
-        imp::dialog(self.owner, what, title, kind.extension(), None)
+        // zones and world maps come through the same entries
+        let ext = if kind == FileKind::Zone { "nmbzone;*.nmbworld" } else { kind.extension() };
+        imp::dialog(self.owner, what, title, ext, None, &folder(kind, None))
+    }
+
+    fn pick_cartridge(&self) -> Option<PathBuf> {
+        let dir = host::base_cartridge::chosen_before().and_then(|p| p.parent().map(|d| d.to_path_buf())).unwrap_or_else(host::exe_dir);
+        let (what, title) = if self.es { ("Cartuchos de Game Boy", "Elige el cartucho de Super Mario Land 2") } else { ("Game Boy cartridges", "Choose the Super Mario Land 2 cartridge") };
+        imp::dialog(self.owner, what, title, "gb", None, &dir)
     }
 }
 
@@ -44,9 +64,8 @@ mod imp {
     }
 
     /// `save`: the suggested name, for a Save dialog; None for an Open dialog.
-    pub fn dialog(owner: &str, what: &str, title: &str, ext: &str, save: Option<&str>) -> Option<PathBuf> {
-        let dir = host::exports_dir();
-        let _ = std::fs::create_dir_all(&dir);
+    pub fn dialog(owner: &str, what: &str, title: &str, ext: &str, save: Option<&str>, dir: &std::path::Path) -> Option<PathBuf> {
+        let _ = std::fs::create_dir_all(dir);
         let owner = wide(owner);
         // pairs of (description, pattern), each ended by 0, the list by another 0
         let filter: Vec<u16> = format!("{what} (*.{ext})\0*.{ext}\0\0").encode_utf16().collect();
@@ -87,7 +106,7 @@ mod imp {
 
 #[cfg(not(windows))]
 mod imp {
-    pub fn dialog(_: &str, _: &str, _: &str, _: &str, _: Option<&str>) -> Option<std::path::PathBuf> {
+    pub fn dialog(_: &str, _: &str, _: &str, _: &str, _: Option<&str>, _: &std::path::Path) -> Option<std::path::PathBuf> {
         None
     }
 }

@@ -6,6 +6,11 @@ use std::path::{Path, PathBuf};
 pub trait EditedCopyStore {
     fn path(&self) -> &Path;
     fn write(&self, rom: &[u8]) -> std::io::Result<()>;
+    /// The project file, written before the cartridge (which is made from it).
+    fn write_project(&self, text: &str) -> std::io::Result<()>;
+    /// Where the editor was when the project was last saved (`place` text), if anywhere.
+    fn read_place(&self) -> Option<String>;
+    fn write_place(&self, text: &str) -> std::io::Result<()>;
 }
 
 /// The editor's own settings.
@@ -16,9 +21,10 @@ pub trait PrefsStore {
 
 /// Starting the game on the edited copy.
 pub trait GameLauncher {
-    /// `level`: go straight into that level; `start`: with Mario there (his left x and feet y)
-    /// this time only. The error names the program that failed.
-    fn launch(&self, rom: &Path, level: Option<usize>, start: Option<(u16, u16)>) -> Result<(), String>;
+    /// A test game (no saves) with Mario's `lives` and `coins`; `level`: go straight into that
+    /// level; `start`: with Mario there (his left x and feet y) this time only. The error names
+    /// the program that failed.
+    fn launch(&self, rom: &Path, level: Option<usize>, start: Option<(u16, u16)>, lives: u32, coins: u32) -> Result<(), String>;
 }
 
 /// Where the captured object pictures are kept between starts (`look_cache` text).
@@ -40,6 +46,7 @@ pub trait SoundOut {
 pub enum FileKind {
     Level,
     Zone,
+    World,
     Project,
 }
 
@@ -48,6 +55,7 @@ impl FileKind {
         match self {
             FileKind::Level => "nmblevel",
             FileKind::Zone => "nmbzone",
+            FileKind::World => "nmbworld",
             FileKind::Project => "nmbproject",
         }
     }
@@ -58,6 +66,8 @@ pub trait FileDialogs {
     /// Where to write a new file, `name` suggested.
     fn save_as(&self, kind: FileKind, name: &str) -> Option<PathBuf>;
     fn open(&self, kind: FileKind) -> Option<PathBuf>;
+    /// A Game Boy cartridge file, for the base cartridge.
+    fn pick_cartridge(&self) -> Option<PathBuf>;
 }
 
 pub trait TextFiles {
@@ -78,4 +88,6 @@ pub trait MenuBar {
     /// The ids of the entries chosen since the last call.
     fn chosen(&mut self) -> Vec<u16>;
     fn enable(&mut self, id: u16, on: bool);
+    /// Take every menu off the bar (to build it again).
+    fn clear(&mut self);
 }

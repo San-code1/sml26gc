@@ -150,6 +150,29 @@ impl EditorDocument {
         self.push_zone(z)
     }
 
+    /// An empty new zone with zone `z`'s graphics: its picture all its most common tile, one
+    /// point (where `z` is entered, with no paths or level), no exits and no door.
+    pub fn blank_zone(&mut self, z: usize) -> Result<usize, ZoneRefusal> {
+        let from = self.game_zone(z).ok_or(ZoneRefusal::NotABase)?;
+        let mut count = [0usize; 256];
+        for &t in &self.zones[z] {
+            count[t as usize] += 1;
+        }
+        let ground = (0..=255u8).max_by_key(|&t| count[t as usize]).unwrap_or(0);
+        let entry = from.points.iter().find(|p| p.number == from.entry).or(from.points.first()).ok_or(ZoneRefusal::NotABase)?;
+        let point = ZonePoint { ways: Default::default(), level: world::NO_LEVEL, shut: 0, ..entry.clone() };
+        let blank = NewZone {
+            base: z,
+            picture: vec![ground; from.picture.len()],
+            entry: point.number,
+            points: vec![point],
+            exits: from.exits.iter().map(|_| (NONE, Leads::World(NONE))).collect(),
+            door: NONE,
+            name: String::new(),
+        };
+        self.push_zone(blank)
+    }
+
     /// Delete new zone `k`: doors and exits into it lead nowhere, the ones after it move down
     /// a number. Empties the map undo histories.
     pub fn remove_zone(&mut self, k: usize) -> bool {
@@ -166,6 +189,7 @@ impl EditorDocument {
                 leads_after_removal(&mut e.1, k);
             }
         }
+        self.start_after_removal(k);
         self.zones_changed();
         true
     }
@@ -431,7 +455,7 @@ mod tests {
         assert_eq!(doc.new_zone(0), tree);
         doc.set_zone_door(0x07, Some(0));
         doc.zone_set_exit(0, 0, 0x23, Leads::NewZone(0));
-        let f = super::super::files::read_zone(&super::super::files::zone_text(&doc.zone_file(OnMap::NewZone(0)).unwrap())).unwrap();
+        let (f, _) = super::super::files::read_zone(&super::super::files::zone_text(&doc.zone_file(OnMap::NewZone(0)).unwrap(), None)).unwrap();
         assert_eq!((f.door, f.exits[0].1), (NONE, Leads::World(NONE)), "a file has no door and no new zones to go to");
         let pumpkin = doc.zone_file(OnMap::Zone(1)).unwrap();
         assert!(doc.replace_zone(0, pumpkin.clone()));
@@ -527,5 +551,20 @@ mod tests {
         }
         assert_eq!(doc.new_zones[k], before, "undo goes back step by step to before the point was added");
         assert!(!doc.zone_remove_point(k, 0x30), "not one of its points");
+    }
+
+    #[test]
+    fn a_blank_zone_has_its_base_graphics_one_point_and_nothing_else() {
+        let Some(mut doc) = open() else { return };
+        let k = doc.blank_zone(1).unwrap();
+        let z = doc.new_zone(k);
+        assert_eq!(z.base, 1);
+        assert_eq!(z.points.len(), 1);
+        assert_eq!(z.entry, z.points[0].number);
+        assert!(z.points[0].ways.iter().all(|w| w.is_none()) && z.points[0].level == world::NO_LEVEL);
+        assert!(z.picture.iter().all(|&t| t == z.picture[0]), "one tile all over");
+        assert!(z.exits.iter().all(|e| e.0 == NONE) && z.door == NONE);
+        assert_eq!(doc.blank_zone(4), Err(ZoneRefusal::NotABase), "the castle is no base");
+        doc.commit().unwrap();
     }
 }

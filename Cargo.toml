@@ -4,6 +4,7 @@ members = [
     "crates/gb-core",
     "crates/cart-model",
     "crates/host",
+    "crates/project-model",
     "game",
     "editor",
     "tools/research",
@@ -20,6 +21,7 @@ edition = "2021"
 gb-core = { path = "crates/gb-core" }
 cart-model = { path = "crates/cart-model" }
 host = { path = "crates/host" }
+project-model = { path = "crates/project-model" }
 macroquad = "0.4"
 cpal = "0.15"
 png = "0.17"

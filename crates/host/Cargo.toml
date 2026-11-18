@@ -7,3 +7,4 @@ edition.workspace = true
 [dependencies]
 gb-core.workspace = true
 png.workspace = true
+project-model.workspace = true

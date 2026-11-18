@@ -2,8 +2,8 @@
 //! tile by tile (Picture tab), and the points drawn where the game shows them with the level
 //! each one opens and the paths Mario walks between them (Points tab): levels, paths, doors,
 //! exits and new points can be changed there. New zones are made from a zone and deleted here.
-use super::shortcuts::{keys, with_keys, Action};
-use super::level_panel::SCROLL_STEP;
+use super::shortcuts::Action;
+use super::level_panel::{fit, GAP, LABEL_W, PAD, ROW, SCROLL_STEP};
 use super::palette::clip;
 use super::widgets::*;
 use super::names_view::Named;
@@ -21,10 +21,14 @@ use macroquad::prelude::*;
 
 /// Mario's place on a zone map is this far below where the game draws its point.
 const FEET: i32 = 4;
+/// A map's button in the map picker.
+const MAP_BUTTON_H: f32 = 23.0;
+/// A point's button in the list of the map's points (narrowest, height).
+const POINT_BUTTON: (f32, f32) = (64.0, 22.0);
 
 impl Editor {
     /// The maps in the order the map selector steps through them.
-    fn all_maps(&self) -> Vec<OnMap> {
+    pub(super) fn all_maps(&self) -> Vec<OnMap> {
         std::iter::once(OnMap::World).chain((0..ZONES.len()).map(OnMap::Zone)).chain((0..self.doc.new_zones.len()).map(OnMap::NewZone)).collect()
     }
 
@@ -224,21 +228,42 @@ impl Editor {
         }
     }
 
-    /// A `-` value `+` row with the keys of its two actions beside its name. Returns the
-    /// action clicked.
-    fn stepper(&self, y: f32, name: &str, value: &str, plus_x: f32, (minus, plus): (Action, Action)) -> Option<Action> {
-        draw_text(name, 10.0, y + 18.0, 18.0, col(3));
-        let k = format!("{} {}", keys(minus), keys(plus));
-        draw_text(&k, 10.0, y + 32.0, 15.0, col(2));
+    /// A label, then `-` value `+` over the rest of the panel (the keys in the buttons' tooltips).
+    /// Returns the action clicked.
+    fn stepper(&mut self, y: f32, name: &str, value: &str, (minus, minus_tip): (Action, &str), (plus, plus_tip): (Action, &str)) -> Option<Action> {
+        let (cx, cw) = (PAD + LABEL_W, self.inner_w() - LABEL_W);
+        draw_text(name, PAD, y + 18.0, 15.0, col(3));
         let mut act = None;
-        if button(Rect::new(70.0, y, 26.0, 26.0), "-", false, 18.0) {
+        if self.tip_button(Rect::new(cx, y, ROW, ROW), "-", minus_tip, minus, false) {
             act = Some(minus);
         }
-        draw_text(value, 104.0, y + 18.0, 16.0, col(3));
-        if button(Rect::new(plus_x, y, 26.0, 26.0), "+", false, 18.0) {
+        let vw = cw - 2.0 * (ROW + GAP);
+        let t = fit(value, vw - 4.0, 15.0);
+        let d = measure_text(&t, None, 15, 1.0);
+        draw_text(&t, (cx + ROW + GAP + (vw - d.width) / 2.0).round(), y + 18.0, 15.0, col(3));
+        if self.tip_button(Rect::new(cx + cw - ROW, y, ROW, ROW), "+", plus_tip, plus, false) {
             act = Some(plus);
         }
         act
+    }
+
+    /// Buttons sharing a row of the panel evenly. Returns the action clicked.
+    fn button_row(&mut self, y: f32, items: &[(&str, Action, bool)]) -> Option<Action> {
+        let n = items.len() as f32;
+        let bw = (self.inner_w() - (n - 1.0) * GAP) / n;
+        let mut act = None;
+        for (i, &(name, a, on)) in items.iter().enumerate() {
+            if self.tool_button(Rect::new(PAD + i as f32 * (bw + GAP), y, bw, ROW), name, a, on) {
+                act = Some(a);
+            }
+        }
+        act
+    }
+
+    /// A section's title; returns where the section starts.
+    fn section(&self, y: f32, text: &str, right: &str) -> f32 {
+        self.section_title(y + 6.0, text, right);
+        y + 6.0 + 18.0 + GAP
     }
 
     /// The doors part of the points panel: where the chosen point leads.
@@ -246,37 +271,40 @@ impl Editor {
         if self.doc.doors.into.is_empty() {
             return (y, None);
         }
+        let es = self.es;
+        let (cx, cw) = (PAD + LABEL_W, self.inner_w() - LABEL_W);
+        let place = 70.0;
         let p = self.point as u8;
         let mut act = None;
         let target = match self.exit_on(p) {
-            Some((_, leads)) => Some((tr(self.es, "Exit to", "Sale a"), self.leads_name(leads))),
+            Some((_, leads)) => Some((tr(es, "Exit to", "Sale a"), self.leads_name(leads))),
             None if self.world_map == OnMap::World && self.is_world_point(p) => Some((
-                tr(self.es, "Door", "Puerta"),
+                tr(es, "Door", "Puerta"),
                 match self.door_of(p) {
-                    Some(to) => format!("{} {}", tr(self.es, "into", "entra en"), self.leads_name(to)),
-                    None => tr(self.es, "none", "ninguna").to_string(),
+                    Some(to) => format!("{} {}", tr(es, "into", "entra en"), self.leads_name(to)),
+                    None => tr(es, "none", "ninguna").to_string(),
                 },
             )),
             None => None,
         };
         if let Some((name, value)) = target {
-            draw_text(name, 10.0, y + 18.0, 18.0, col(3));
-            draw_text(&value, 104.0, y + 18.0, 16.0, col(3));
-            y += 26.0;
-            if button(Rect::new(10.0, y, 276.0, 26.0), &with_keys(tr(self.es, "Choose on the map", "Elegir en el mapa"), Action::ChooseTarget), false, 15.0) {
+            draw_text(name, PAD, y + 18.0, 15.0, col(3));
+            if self.tip_button(Rect::new(cx, y, place, ROW), tr(es, "Choose", "Elegir"), tr(es, "Choose on the map", "Elegir en el mapa"), Action::ChooseTarget, false) {
                 act = Some(Action::ChooseTarget);
             }
-            y += 34.0;
+            draw_text(&fit(&value, cw - place - 8.0, 14.0), cx + place + 8.0, y + 18.0, 14.0, col(2));
+            y += ROW + GAP;
         } else {
             for (k, i) in self.exit_sites().into_iter().enumerate().take(2) {
                 let at = self.exit_at(i).0;
                 let a = if k == 0 { Action::MakeExit1 } else { Action::MakeExit2 };
-                let now = if at == doors::NONE { tr(self.es, "on no point", "en ningun punto").to_string() } else { format!("{} {at:02X}", tr(self.es, "now", "ahora")) };
-                let label = format!("{} ({now})", tr(self.es, "Make it the exit", "Hacer salida aqui"));
-                if button(Rect::new(10.0, y, 276.0, 26.0), &with_keys(&label, a), false, 15.0) {
+                draw_text(&format!("{} {}", tr(es, "Exit", "Salida"), k + 1), PAD, y + 18.0, 15.0, col(3));
+                if self.tip_button(Rect::new(cx, y, place, ROW), tr(es, "Here", "Aqui"), tr(es, "Make it the exit: move it to this point", "Hacer salida aqui: moverla a este punto"), a, false) {
                     act = Some(a);
                 }
-                y += 30.0;
+                let now = if at == doors::NONE { tr(es, "on no point", "en ningun punto").to_string() } else { format!("{} {at:02X}", tr(es, "now on", "ahora en")) };
+                draw_text(&fit(&now, cw - place - 8.0, 14.0), cx + place + 8.0, y + 18.0, 14.0, col(2));
+                y += ROW + GAP;
             }
         }
         (y, act)
@@ -303,6 +331,7 @@ impl Editor {
     /// A new zone made from the map shown, then shown.
     pub fn new_zone(&mut self) {
         let from = self.world_map;
+        let start = self.doc.map_start(from);
         let made = self.doc.add_zone(from);
         let refused = made.is_err();
         self.status = match made {
@@ -310,6 +339,7 @@ impl Editor {
                 self.clipboard = None;
                 self.show_map(OnMap::NewZone(k));
                 self.choose_on_new_zone();
+                self.offer_start(OnMap::NewZone(k), start);
                 format!("{} {}", self.map_name(OnMap::NewZone(k)), tr(self.es, "made; it has no door yet (Points tab).", "creada; aun no tiene puerta (pestana Puntos)."))
             }
             Err(ZoneRefusal::TooManyZones(max)) => format!("{} {max}.", tr(self.es, "No more new zones: there can be", "No caben mas zonas nuevas: puede haber")),
@@ -318,6 +348,58 @@ impl Editor {
         if refused {
             self.mark(Severity::Warning);
         }
+    }
+
+    /// Show Mario's start: its map, the Points tab, the point chosen.
+    pub fn go_to_start(&mut self) {
+        let Some(map) = self.doc.start_map() else {
+            self.status = tr(self.es, "Mario's start is missing: choose a point and press Mario's start (I) in the Points tab.", "Falta el inicio de Mario: elige un punto y pulsa Inicio de Mario (I) en la pestana Puntos.").into();
+            self.mark(Severity::Warning);
+            return;
+        };
+        self.cancel_picking();
+        self.show_map(map);
+        self.world_tab = TAB_POINTS;
+        self.point = self.doc.start.point as usize;
+        // the point in the middle of the view, with room above for its label
+        if let Some(&(_, x, y, _)) = self.map_points().iter().find(|s| s.0 == self.doc.start.point) {
+            let view = vec2(screen_width() - self.panel, screen_height() - STATUS_H) / self.scale();
+            let at = vec2(x as f32 - view.x / 2.0, y as f32 - view.y / 2.0);
+            self.cam = at.clamp(Vec2::ZERO, (self.map_px() - view).max(Vec2::ZERO)).floor();
+        }
+        self.status = format!("{} {} {:02X}.", tr(self.es, "Mario's start:", "Inicio de Mario:"), self.map_name(map), self.doc.start.point);
+    }
+
+    /// A map's short name for the map list.
+    fn map_short(&self, map: OnMap) -> String {
+        match map {
+            OnMap::World => tr(self.es, "World", "Mundo").to_string(),
+            OnMap::Zone(z) if self.es => ZONES[z].name_es.trim_start_matches("Zona ").to_string(),
+            OnMap::Zone(z) => ZONES[z].name.trim_end_matches(" Zone").to_string(),
+            OnMap::NewZone(k) => match self.doc.new_zones.get(k) {
+                Some(n) if !n.name.is_empty() => n.name.clone(),
+                _ => format!("{} {}", tr(self.es, "New", "Nueva"), k + 1),
+            },
+        }
+    }
+
+    /// Where Mario's start is on the shown map: a ring and a label that stand out, in both tabs.
+    fn draw_start_mark(&self) {
+        let Some(p) = self.doc.map_start(self.world_map) else { return };
+        let Some(&(_, x, y, _)) = self.map_points().iter().find(|s| s.0 == p) else { return };
+        let c = self.on_screen(x, y);
+        let r = (4.0 * self.scale()).max(6.0) + 9.0;
+        let red = Color::new(0.9, 0.1, 0.1, 1.0);
+        draw_circle_lines(c.x, c.y, r + 1.5, 6.0, WHITE);
+        draw_circle_lines(c.x, c.y, r, 4.0, red);
+        let t = tr(self.es, "MARIO STARTS HERE", "MARIO EMPIEZA AQUI");
+        let d = measure_text(t, None, 16, 1.0);
+        let (bw, bh) = (d.width + 14.0, 22.0);
+        let (bx, by) = (c.x - bw / 2.0, c.y - r - bh - 10.0);
+        draw_triangle(vec2(c.x - 7.0, by + bh), vec2(c.x + 7.0, by + bh), vec2(c.x, by + bh + 9.0), red);
+        draw_rectangle(bx, by, bw, bh, red);
+        draw_rectangle_lines(bx, by, bw, bh, 2.0, WHITE);
+        draw_text(t, bx + 7.0, by + 16.0, 16.0, WHITE);
     }
 
     /// Delete the new zone shown; its base is shown.
@@ -344,6 +426,8 @@ impl Editor {
         }
         match a {
             Action::NewZone => self.new_zone(),
+            Action::BlankZone => self.open_blank_zone_chooser(),
+            Action::GoToStart => self.go_to_start(),
             Action::DeleteZone => self.delete_zone(),
             Action::PrevPoint | Action::NextPoint if zone.is_some() => {
                 let list: Vec<usize> = self.map_points().iter().map(|s| s.0 as usize).collect();
@@ -365,6 +449,17 @@ impl Editor {
             Action::ChooseTarget => self.start_picking(),
             Action::MakeExit1 => self.make_exit(0),
             Action::MakeExit2 => self.make_exit(1),
+            Action::SetStart => match self.doc.start_at(self.world_map, self.point as u8) {
+                Some(s) => {
+                    self.doc.set_start(s);
+                    self.status = format!("{} {} {:02X}.", tr(self.es, "Mario's start: every new game begins on", "Inicio de Mario: toda partida nueva empieza en"), self.map_name(self.world_map), self.point);
+                    self.mark(Severity::Done);
+                }
+                None => {
+                    self.status = tr(self.es, "Mario's start goes on a point of the world map, a game zone or a new zone (not an added point).", "El inicio de Mario va en un punto del mapa de mundos, de una zona del juego o de una zona nueva (no en un punto anadido).").into();
+                    self.mark(Severity::Warning);
+                }
+            },
             Action::MakeEntry => match (zone, self.world_map) {
                 (Some(k), _) => self.doc.zone_set_entry(k, self.point as u8),
                 (None, OnMap::Zone(z)) if self.can_be_game_entry() => self.doc.set_game_entry(z, self.point as u8),
@@ -658,10 +753,12 @@ impl Editor {
             let m: Vec2 = mouse_position().into();
             if self.world_tab == TAB_POINTS {
                 self.draw_points();
+                self.draw_start_mark();
                 self.draw_picker();
             } else {
                 let cell = self.world_cell(m);
                 self.draw_grid_overlay(atlas, cell.map(|(x, y)| (x as i32, y as i32)));
+                self.draw_start_mark();
                 if let Some((x, y)) = cell {
                     let t = self.doc.tile(self.world_map, x, y);
                     draw_text(&format!("{x},{y}  #{t:02X}"), self.panel + 8.0, ch - 8.0, 20.0, WHITE);
@@ -678,6 +775,8 @@ impl Editor {
             _ => self.scrolled_points_panel(y).or(act),
         };
         self.status_line(cw, ch);
+        self.test_game_popover();
+        self.draw_tip();
         if let Some(a) = act {
             self.run(a);
         }
@@ -719,86 +818,101 @@ impl Editor {
     fn world_panel_top(&mut self) -> (Option<Action>, f32) {
         draw_rectangle(0.0, 0.0, self.panel, screen_height(), col(0));
         draw_rectangle(self.panel - 3.0, 0.0, 3.0, screen_height(), col(3));
-        draw_text(tr(self.es, "WORLD MAP EDITOR", "EDITOR DEL MAPA"), 10.0, 22.0, 24.0, col(3));
         let es = self.es;
-        let mut y = 34.0;
+        let w = self.inner_w();
         let mut act = None;
-        let mut b = |r: Rect, name: &str, a: Action, on: bool| {
-            if button(r, &with_keys(name, a), on, 16.0) {
+        let mut pick = |a: Action, clicked: bool| {
+            if clicked {
                 act = Some(a);
             }
         };
-        let (w2, w3) = (136.0, 89.0);
-        let col2 = |i: usize| 10.0 + i as f32 * (w2 + 4.0);
-        let col3 = |i: usize| 10.0 + i as f32 * (w3 + 4.0);
-        b(Rect::new(10.0, y, 276.0, 26.0), tr(es, "Back to the levels", "Volver a los niveles"), Action::WorldEditor, false);
-        y += 30.0;
-        // which map: the world map, a zone map or a new zone
+        draw_text(tr(es, "ZONE EDITOR", "EDITOR DE ZONAS"), PAD, 25.0, 20.0, col(3));
+        pick(Action::WorldEditor, self.tool_button(Rect::new(PAD + w - 104.0, 8.0, 104.0, 24.0), tr(es, "Levels", "Niveles"), Action::WorldEditor, false));
+        let mut y = 40.0;
+        // the map picker: < World map (M) v >
+        pick(Action::PrevMap, self.tool_button(Rect::new(PAD, y, 30.0, ROW), "<", Action::PrevMap, false));
+        pick(Action::NextMap, self.tool_button(Rect::new(PAD + w - 30.0, y, 30.0, ROW), ">", Action::NextMap, false));
         let mut name = self.map_name(self.world_map);
+        if self.doc.map_start(self.world_map).is_some() {
+            name.push_str(" (M)");
+        }
         if self.doc.mods.map(self.world_map) {
-            name.push_str(" (mod)");
+            name.push_str("  mod");
         }
-        let d = measure_text(&name, None, 18, 1.0);
-        draw_text(&name, 148.0 - d.width / 2.0, y + 15.0, 18.0, col(3));
-        let k = format!("{} / {}", keys(Action::PrevMap), keys(Action::NextMap));
-        let d = measure_text(&k, None, 12, 1.0);
-        draw_text(&k, 148.0 - d.width / 2.0, y + 27.0, 12.0, col(2));
-        if button(Rect::new(10.0, y, 30.0, 28.0), "<", false, 18.0) {
-            act = Some(Action::PrevMap);
+        let mid = Rect::new(PAD + 34.0, y, w - 68.0, ROW);
+        let shown = format!("{}  {}", fit(&name, mid.w - 30.0, 15.0), if self.maps_open { "^" } else { "v" });
+        if button(mid, &shown, self.maps_open, 15.0) {
+            self.maps_open = !self.maps_open;
         }
-        if button(Rect::new(256.0, y, 30.0, 28.0), ">", false, 18.0) {
-            act = Some(Action::NextMap);
-        }
-        y += 32.0;
-        let mut b = |r: Rect, name: &str, a: Action, on: bool| {
-            if button(r, &with_keys(name, a), on, 15.0) {
-                act = Some(a);
+        y += ROW + GAP;
+        if self.maps_open {
+            let third = (w - 2.0 * GAP) / 3.0;
+            let maps = self.all_maps();
+            let start = self.doc.start_map();
+            for (i, &m) in maps.iter().enumerate() {
+                let r = Rect::new(PAD + (i % 3) as f32 * (third + GAP), y + (i / 3) as f32 * (MAP_BUTTON_H + 2.0), third, MAP_BUTTON_H);
+                let mark = if start == Some(m) { " (M)" } else { "" };
+                let room = third - 10.0 - measure_text(mark, None, 15, 1.0).width;
+                let label = format!("{}{mark}", fit(&self.map_short(m), room, 15.0));
+                if button(r, &label, m == self.world_map, 15.0) {
+                    self.cancel_picking();
+                    self.show_map(m);
+                    self.choose_on_new_zone();
+                }
+                if self.doc.mods.map(m) {
+                    draw_triangle(vec2(r.x + r.w, r.y), vec2(r.x + r.w - 8.0, r.y), vec2(r.x + r.w, r.y + 8.0), col(2));
+                }
             }
-        };
-        if self.world_map != OnMap::World {
-            b(Rect::new(col2(0), y, w2, 26.0), tr(es, "New zone", "Zona nueva"), Action::NewZone, false);
-            if self.new_zone_shown().is_some() {
-                b(Rect::new(col2(1), y, w2, 26.0), tr(es, "Delete zone", "Borrar zona"), Action::DeleteZone, false);
+            y += maps.len().div_ceil(3) as f32 * (MAP_BUTTON_H + 2.0);
+            let copy = (self.world_map != OnMap::World).then_some((tr(es, "Copy zone", "Copiar zona"), Action::NewZone));
+            let delete = self.new_zone_shown().map(|_| (tr(es, "Delete zone", "Borrar zona"), Action::DeleteZone));
+            let (next, a) = self.picker_actions(y, [copy, Some((tr(es, "Blank zone", "Zona en blanco"), Action::BlankZone)), delete]);
+            y = next;
+            if let Some(a) = a {
+                pick(a, true);
             }
-            y += 30.0;
         }
+        y += 4.0;
+        let (next, a) = self.toolbar(y, &[(tr(es, "Save", "Guardar"), Action::Save, false), (tr(es, "Play", "Jugar"), Action::Play, false)]);
+        y = next;
+        if let Some(a) = a {
+            pick(a, true);
+        }
+        let missing = !self.doc.start_ok();
+        let go = if missing { tr(es, "Mario's start is missing!", "Falta el inicio de Mario!") } else { tr(es, "Go to Mario's start", "Ir al inicio de Mario") };
+        pick(Action::GoToStart, self.tool_button(Rect::new(PAD, y, w, ROW), go, Action::GoToStart, missing));
+        y += ROW + GAP + 6.0;
         if let Some(k) = self.new_zone_shown() {
-            self.name_field(Rect::new(10.0, y, 276.0, 24.0), Named::Zone(k));
-            y += 28.0;
+            self.name_field(Rect::new(PAD, y, w, 24.0), Named::Zone(k));
+            y += 24.0 + GAP + 6.0;
         }
+        // Picture / Points, then the picture's tools
+        let half = (w - GAP) / 2.0;
         let picture = self.world_tab == TAB_PICTURE;
-        if button(Rect::new(col3(0), y, w3, 26.0), &with_keys(tr(es, "Picture", "Dibujo"), Action::SwitchTab), picture, 15.0) {
+        if self.tool_button(Rect::new(PAD, y, half, ROW), tr(es, "Picture", "Dibujo"), Action::SwitchTab, picture) {
             self.world_tab = TAB_PICTURE;
         }
-        if button(Rect::new(col3(1), y, w3, 26.0), &with_keys(tr(es, "Points", "Puntos"), Action::SwitchTab), !picture, 15.0) {
+        if self.tool_button(Rect::new(PAD + half + GAP, y, half, ROW), tr(es, "Points", "Puntos"), Action::SwitchTab, !picture) {
             self.world_tab = TAB_POINTS;
         }
-        let mut b = |r: Rect, name: &str, a: Action, on: bool| {
-            if button(r, &with_keys(name, a), on, 16.0) {
-                act = Some(a);
+        y += ROW + GAP;
+        if picture {
+            let qw = (w - 3.0 * GAP) / 4.0;
+            let tool = self.tool.kind();
+            let tools = [
+                (tr(es, "Pencil", "Lapiz"), Action::Pencil, tool == ToolKind::Pencil),
+                (tr(es, "Box", "Caja"), Action::BoxFill, tool == ToolKind::Box),
+                (tr(es, "Select", "Seleccion"), Action::Select, tool == ToolKind::Select),
+                (tr(es, "Grid", "Rejilla"), Action::Grid, self.grid),
+            ];
+            for (i, (name, a, on)) in tools.into_iter().enumerate() {
+                pick(a, self.tool_button(Rect::new(PAD + i as f32 * (qw + GAP), y, qw, ROW), name, a, on));
             }
-        };
-        b(Rect::new(col3(2), y, w3, 26.0), tr(es, "Play", "Jugar"), Action::Play, false);
-        y += 30.0;
-        let tool = self.tool.kind();
-        if picture {
-            b(Rect::new(col3(0), y, w3, 26.0), tr(es, "Pencil", "Lapiz"), Action::Pencil, tool == ToolKind::Pencil);
-            b(Rect::new(col3(1), y, w3, 26.0), tr(es, "Box", "Caja"), Action::BoxFill, tool == ToolKind::Box);
-            b(Rect::new(col3(2), y, w3, 26.0), tr(es, "Select", "Seleccion"), Action::Select, tool == ToolKind::Select);
-            y += 30.0;
+            y += ROW + GAP;
         }
-        b(Rect::new(col2(0), y, w2, 26.0), tr(es, "Undo", "Deshacer"), Action::Undo, false);
-        b(Rect::new(col2(1), y, w2, 26.0), tr(es, "Redo", "Rehacer"), Action::Redo, false);
-        y += 30.0;
-        if picture {
-            b(Rect::new(col3(0), y, w3, 26.0), tr(es, "Grid", "Rejilla"), Action::Grid, self.grid);
-            b(Rect::new(col3(1), y, 276.0 - w3 - 4.0, 26.0), tr(es, "Restore", "Restaurar"), Action::Restore, false);
-        } else {
-            b(Rect::new(10.0, y, 276.0, 26.0), tr(es, "Restore", "Restaurar"), Action::Restore, false);
-        }
-        y += 30.0;
-        b(Rect::new(10.0, y, 276.0, 28.0), tr(es, "Save", "Guardar"), Action::Save, false);
-        y += 36.0;
+        y += 2.0;
+        draw_rectangle(PAD, y, w, 2.0, col(3));
+        y += 8.0;
         (act, y)
     }
 
@@ -887,6 +1001,9 @@ impl Editor {
                 if p == entry {
                     tag = format!("{tag} {}", tr(self.es, "(entry)", "(entrada)"));
                 }
+                if self.doc.map_start(self.world_map) == Some(p) {
+                    tag = format!("{tag} {}", tr(self.es, "(Mario's start)", "(inicio de Mario)"));
+                }
                 self.draw_point(p, (x, y), Color::new(0.95, 0.45, 0.1, 1.0), &tag);
             }
             return;
@@ -903,6 +1020,9 @@ impl Editor {
             if self.game_entry_shown() == Some(sp.point) {
                 tag = format!("{tag} {}", tr(self.es, "(entry)", "(entrada)"));
             }
+            if self.doc.map_start(self.world_map) == Some(sp.point) {
+                tag = format!("{tag} {}", tr(self.es, "(Mario's start)", "(inicio de Mario)"));
+            }
             if self.doc.point_notes(sp.point).contains(&Note::FlightOut) && tag == format!("{:02X}", sp.point) {
                 tag = format!("{tag} > {} {}", self.map_name(OnMap::Zone(original_notes::SPACE_ZONE)), tr(self.es, "(when cleared)", "(al superarlo)"));
             }
@@ -918,7 +1038,7 @@ impl Editor {
     }
 
     /// What the original game does with the chosen game point, and whether it was changed.
-    fn original_rows(&self, mut y: f32) -> f32 {
+    fn original_rows(&self, y: f32) -> f32 {
         let p = self.point as u8;
         let mut lines: Vec<String> = self.doc.point_notes(p).iter().map(|&n| self.note_text(n)).collect();
         if self.doc.point_changed(p) {
@@ -927,13 +1047,13 @@ impl Editor {
         if lines.is_empty() {
             return y;
         }
-        draw_text(tr(self.es, "In the original game:", "En el juego original:"), 10.0, y + 12.0, 15.0, col(3));
-        y += 18.0;
-        for line in lines.iter().flat_map(|l| wrap(l, 36)) {
-            marked_text(&line, 10.0, y + 12.0, 15.0, MARK);
+        let mut y = self.section(y, tr(self.es, "IN THE ORIGINAL GAME", "EN EL JUEGO ORIGINAL"), "");
+        let w = self.inner_w();
+        for line in lines.iter().flat_map(|l| wrap_px(l, w, 14.0)) {
+            marked_text(&line, PAD, y + 12.0, 14.0, MARK);
             y += 16.0;
         }
-        y + 8.0
+        y + 4.0
     }
 
     fn note_text(&self, n: Note) -> String {
@@ -995,11 +1115,14 @@ impl Editor {
     /// The chosen point: the level it opens, where it leads, its paths; the points of the map.
     /// Returns the action chosen and where the panel ends.
     fn points_panel(&mut self, mut y: f32) -> (Option<Action>, f32) {
+        let es = self.es;
+        let w = self.inner_w();
         let zone = self.new_zone_shown();
-        let (used, most) = self.doc.point_count(self.world_map);
-        draw_text(&format!("{} {used} / {most}", tr(self.es, "Points:", "Puntos:")), 10.0, y + 12.0, 16.0, col(3));
-        y += 20.0;
-        let mut act = self.stepper(y, tr(self.es, "Point", "Punto"), &format!("{:02X}", self.point), 130.0, (Action::PrevPoint, Action::NextPoint));
+        if !self.doc.start_ok() {
+            y += message_lines(tr(es, "Mario's start is missing: choose a point and press Mario's start. The project cannot be saved without it.", "Falta el inicio de Mario: elige un punto y pulsa Inicio de Mario. El proyecto no se puede guardar sin el."), PAD, y + 12.0, w, 14.0, Severity::Warning) + 4.0;
+        }
+        // the chosen point
+        y = self.section(y, tr(es, "POINT", "PUNTO"), "");
         let new = self.doc.routes.added.contains(&(self.point as u8));
         let on_zone = zone.is_some_and(|k| self.doc.new_zones[k].point(self.point as u8).is_some());
         let drawn = if on_zone {
@@ -1007,107 +1130,115 @@ impl Editor {
         } else if zone.is_some() {
             None
         } else if new {
-            Some(tr(self.es, "new point", "punto nuevo").to_string())
+            Some(tr(es, "new point", "punto nuevo").to_string())
         } else {
             original_points::SPOTS.iter().find(|s| s.point as usize == self.point).map(|s| self.map_name(s.map))
         };
-        draw_text(&drawn.unwrap_or_else(|| tr(self.es, "(not drawn)", "(no se dibuja)").to_string()), 162.0, y + 18.0, 15.0, col(2));
-        y += 34.0;
+        let shown = format!("{:02X}  {}", self.point, drawn.unwrap_or_else(|| tr(es, "(not drawn)", "(no se dibuja)").to_string()));
+        let mut act = self.stepper(y, tr(es, "Point", "Punto"), &shown, (Action::PrevPoint, tr(es, "Previous point", "Punto anterior")), (Action::NextPoint, tr(es, "Next point", "Punto siguiente")));
+        y += ROW + GAP;
         let cur = self.level_of(self.point);
         let level = (cur as usize) < self.doc.levels.len();
         let label = match cur as usize {
             l if level && l >= cart_model::levels::LEVELS => match self.doc.level_name(l) {
-                "" => format!("{} {l:02} ({} {:02})", tr(self.es, "level", "nivel"), tr(self.es, "new, as", "nuevo, como"), self.doc.base_of(l)),
-                name => format!("{l:02} {name} ({} {:02})", tr(self.es, "as", "como"), self.doc.base_of(l)),
+                "" => format!("{} {l:02} ({} {:02})", tr(es, "level", "nivel"), tr(es, "new, as", "nuevo, como"), self.doc.base_of(l)),
+                name => format!("{l:02} {name} ({} {:02})", tr(es, "as", "como"), self.doc.base_of(l)),
             },
-            l if level => format!("{} {l:02}", tr(self.es, "level", "nivel")),
-            _ if cur == world::NO_LEVEL => tr(self.es, "no level", "sin nivel").to_string(),
-            _ => format!("{} ${cur:02X}", tr(self.es, "special", "especial")),
+            l if level => format!("{} {l:02}", tr(es, "level", "nivel")),
+            _ if cur == world::NO_LEVEL => tr(es, "no level", "sin nivel").to_string(),
+            _ => format!("{} ${cur:02X}", tr(es, "special", "especial")),
         };
-        act = act.or(self.stepper(y, tr(self.es, "Opens", "Abre"), &label, 210.0, (Action::PrevOpens, Action::NextOpens)));
-        y += 34.0;
+        act = act.or(self.stepper(y, tr(es, "Opens", "Abre"), &label, (Action::PrevOpens, tr(es, "Previous level", "Nivel anterior")), (Action::NextOpens, tr(es, "Next level", "Nivel siguiente"))));
+        y += ROW + GAP;
         let (ny, door) = self.door_rows(y);
         y = ny;
         act = act.or(door);
+        // what the point is for: Mario's start, the zone's entry
+        let mut roles: Vec<(&str, Action, bool)> = Vec::new();
+        if self.doc.start_at(self.world_map, self.point as u8).is_some() {
+            roles.push((tr(es, "Mario's start", "Inicio de Mario"), Action::SetStart, self.doc.map_start(self.world_map) == Some(self.point as u8)));
+        }
+        if let Some(k) = zone.filter(|_| on_zone) {
+            roles.push((tr(es, "Zone entry", "Entrada de la zona"), Action::MakeEntry, self.doc.new_zones[k].entry as usize == self.point));
+        } else if !new && self.can_be_game_entry() {
+            roles.push((tr(es, "Zone entry", "Entrada de la zona"), Action::MakeEntry, self.game_entry_shown() == Some(self.point as u8)));
+        }
+        if !roles.is_empty() {
+            y += 2.0;
+            act = act.or(self.button_row(y, &roles));
+            y += ROW + GAP;
+        }
         if zone.is_none() && !new {
             y = self.original_rows(y);
         }
         // the ways out of the point
-        draw_text(tr(self.es, "Paths (pad > point); button: delete", "Caminos (cruceta > punto); boton: borrar"), 10.0, y + 12.0, 15.0, col(2));
-        y += 18.0;
+        y = self.section(y, tr(es, "PATHS", "CAMINOS"), tr(es, "pad > point", "cruceta > punto"));
         if let Some(ways) = self.ways_of(self.point).cloned() {
+            let half = (w - GAP) / 2.0;
             for (d, way) in ways.iter().enumerate() {
-                let r = Rect::new(10.0 + (d % 2) as f32 * 138.0, y + (d / 2) as f32 * 26.0, 134.0, 24.0);
+                let r = Rect::new(PAD + (d % 2) as f32 * (half + GAP), y + (d / 2) as f32 * (ROW + GAP), half, ROW);
+                draw_rectangle_lines(r.x, r.y, r.w, r.h, 1.0, col(2));
                 match way.as_ref().map(|w| w.to) {
                     Some(to) => {
-                        draw_text(&format!("{} > {to:02X}", DIRS[d]), r.x + 4.0, r.y + 17.0, 17.0, col(3));
+                        draw_text(&format!("{}  >  {to:02X}", DIRS[d]), r.x + 8.0, r.y + 18.0, 15.0, col(3));
                         let a = [Action::DeletePathRight, Action::DeletePathLeft, Action::DeletePathUp, Action::DeletePathDown][d];
-                        if button(Rect::new(r.x + 58.0, r.y, 76.0, 22.0), keys(a), false, 14.0) {
+                        if self.tip_button(Rect::new(r.x + r.w - ROW, r.y, ROW, ROW), "x", tr(es, "Delete this path", "Borrar este camino"), a, false) {
                             act = Some(a);
                         }
                     }
                     None => {
-                        draw_text(&format!("{}  -", DIRS[d]), r.x + 4.0, r.y + 17.0, 17.0, col(2));
+                        draw_text(&format!("{}  >  -", DIRS[d]), r.x + 8.0, r.y + 18.0, 15.0, col(2));
                     }
                 }
             }
-            y += 54.0;
+            y += 2.0 * (ROW + GAP);
             if self.doc.can_shut(zone, self.point as u8) {
-                draw_text(tr(self.es, "Shut until its level is cleared (Ctrl+arrows):", "Cerrado hasta superar su nivel (Ctrl+flechas):"), 10.0, y + 12.0, 15.0, col(2));
+                draw_text(tr(es, "Shut until its level is cleared:", "Cerrado hasta superar su nivel:"), PAD, y + 13.0, 14.0, col(2));
                 y += 18.0;
                 let shut = self.doc.shut_of(zone, self.point as u8);
+                let qw = (w - 3.0 * GAP) / 4.0;
                 for (d, &a) in Self::SHUT_ACTIONS.iter().enumerate() {
                     let on = shut & added_points::DIR_BITS[d] != 0;
-                    if button(Rect::new(10.0 + d as f32 * 69.0, y, 65.0, 24.0), &DIRS[d].to_string(), on, 15.0) {
+                    if self.tip_button(Rect::new(PAD + d as f32 * (qw + GAP), y, qw, ROW), &DIRS[d].to_string(), tr(es, "Shut this way", "Cerrar en esta direccion"), a, on) {
                         act = Some(a);
                     }
                 }
-                y += 30.0;
+                y += ROW + GAP;
             }
         }
-        if button(Rect::new(10.0, y, 134.0, 26.0), &with_keys(tr(self.es, "New path", "Nuevo camino"), Action::NewPath), self.route_draw.is_some(), 15.0) {
-            act = Some(Action::NewPath);
+        let drawing = self.route_draw.is_some();
+        act = act.or(self.button_row(y, &[(tr(es, "New path", "Nuevo camino"), Action::NewPath, drawing)]));
+        y += ROW + GAP;
+        // the map's points
+        let (used, most) = self.doc.point_count(self.world_map);
+        let title = format!("{} {}", tr(es, "POINTS ON", "PUNTOS EN"), self.map_short(self.world_map).to_uppercase());
+        y = self.section(y, &title, &format!("{used} / {most}"));
+        let mut edits: Vec<(&str, Action, bool)> = Vec::new();
+        if self.takes_new_points() {
+            edits.push((tr(es, "New point", "Nuevo punto"), Action::NewPoint, self.placing_point));
         }
-        if self.takes_new_points() && button(Rect::new(148.0, y, 138.0, 26.0), &with_keys(tr(self.es, "New point", "Nuevo punto"), Action::NewPoint), self.placing_point, 15.0) {
-            act = Some(Action::NewPoint);
-        }
-        y += 30.0;
         if new || on_zone {
-            if button(Rect::new(10.0, y, 134.0, 26.0), &with_keys(tr(self.es, "Delete point", "Borrar punto"), Action::DeletePoint), false, 15.0) {
-                act = Some(Action::DeletePoint);
-            }
-            if let Some(k) = zone.filter(|_| on_zone) {
-                let is_entry = self.doc.new_zones[k].entry as usize == self.point;
-                if button(Rect::new(148.0, y, 138.0, 26.0), &with_keys(tr(self.es, "Entry", "Entrada"), Action::MakeEntry), is_entry, 15.0) {
-                    act = Some(Action::MakeEntry);
-                }
-            }
-            y += 30.0;
-        } else if self.can_be_game_entry() {
-            let is_entry = self.game_entry_shown() == Some(self.point as u8);
-            if button(Rect::new(10.0, y, 276.0, 26.0), &with_keys(tr(self.es, "Entry (doors and exits into the zone)", "Entrada (puertas y salidas a la zona)"), Action::MakeEntry), is_entry, 15.0) {
-                act = Some(Action::MakeEntry);
-            }
-            y += 30.0;
+            edits.push((tr(es, "Delete point", "Borrar punto"), Action::DeletePoint, false));
         }
-        y += 4.0;
-        let count = zone.map(|k| format!(" ({} / {})", self.doc.new_zones[k].points.len(), self.doc.new_zones[k].room())).unwrap_or_default();
-        let title = format!("{} {}{count}:", tr(self.es, "Points on", "Puntos en"), self.map_name(self.world_map));
-        draw_text(&title, 10.0, y + 12.0, 15.0, col(2));
-        y += 18.0;
+        if !edits.is_empty() {
+            act = act.or(self.button_row(y, &edits));
+            y += ROW + GAP + 2.0;
+        }
         let list: Vec<usize> = self.map_points().iter().map(|s| s.0 as usize).collect();
+        let per_row = ((w + GAP) / (POINT_BUTTON.0 + GAP)).floor().max(1.0) as usize;
+        let bw = (w - (per_row - 1) as f32 * GAP) / per_row as f32;
         for (k, &p) in list.iter().enumerate() {
-            let r = Rect::new(10.0 + (k % 3) as f32 * 92.0, y + (k / 3) as f32 * 24.0, 88.0, 22.0);
+            let r = Rect::new(PAD + (k % per_row) as f32 * (bw + GAP), y + (k / per_row) as f32 * (POINT_BUTTON.1 + 2.0), bw, POINT_BUTTON.1);
             let l = self.level_of(p);
             let text = if (l as usize) < self.doc.levels.len() { format!("{p:02X} > {l:02}") } else { format!("{p:02X} > -") };
             if button(r, &text, p == self.point, 15.0) {
                 self.point = p;
             }
         }
-        let yy = y + list.len().div_ceil(3) as f32 * 24.0 + 16.0;
-        let note = if self.route_draw.is_some() {
+        y += list.len().div_ceil(per_row) as f32 * (POINT_BUTTON.1 + 2.0);
+        let note = if drawing {
             tr(
-                self.es,
+                es,
                 "Drawing a path: click the corners, then the point it goes to. The pad direction is the way it starts; the way back is added too if that point has none that way. Backspace: last corner off. Esc or right click: cancel.",
                 "Dibujando un camino: haz clic en las esquinas y luego en el punto al que va. La direccion de la cruceta es hacia donde empieza; tambien se crea la vuelta si ese punto no tiene camino en esa direccion. Retroceso: quitar la ultima esquina. Esc o clic derecho: cancelar.",
             )
@@ -1122,14 +1253,15 @@ impl Editor {
         } else {
             tr(
                 self.es,
-                "Click a point on the map to choose it; with - + choose the level it opens. Door: a world point can enter a zone or a new zone (A or START on it). Exit to: a zone's exit leads to a world point or straight into another zone; Choose on the map (U) picks where by clicking. Make it the exit moves it to the chosen zone point. Paths are drawn in yellow; New path draws one, New point puts one on the world map (6 numbers free). Play (F5) saves and tries it.",
-                "Haz clic en un punto del mapa para elegirlo; con - + elige el nivel que abre. Puerta: un punto del mundo puede entrar en una zona o en una zona nueva (A o START sobre el). Sale a: la salida de una zona lleva a un punto del mundo o directamente a otra zona; Elegir en el mapa (U) lo elige con un clic. Hacer salida aqui la mueve al punto elegido de la zona. Los caminos se ven en amarillo; Nuevo camino dibuja uno, Nuevo punto pone uno en el mundo (6 numeros libres). Jugar (F5) guarda y lo prueba.",
+                "Click a point on the map to choose it; with - + choose the level it opens. Door: a world point can enter a zone or a new zone (A or START on it). Exit to: a zone's exit leads to a world point or straight into another zone; Choose on the map (U) picks where by clicking. Exit 1 / 2: Here moves that exit to the chosen zone point. Paths are drawn in yellow; New path draws one, New point puts one on the world map (6 numbers free). Play (F5) saves and tries it.",
+                "Haz clic en un punto del mapa para elegirlo; con - + elige el nivel que abre. Puerta: un punto del mundo puede entrar en una zona o en una zona nueva (A o START sobre el). Sale a: la salida de una zona lleva a un punto del mundo o directamente a otra zona; Elegir en el mapa (U) lo elige con un clic. Salida 1 / 2: Aqui mueve esa salida al punto elegido de la zona. Los caminos se ven en amarillo; Nuevo camino dibuja uno, Nuevo punto pone uno en el mundo (6 numeros libres). Jugar (F5) guarda y lo prueba.",
             )
         };
-        let lines = wrap(note, 36);
-        for (i, line) in lines.iter().enumerate() {
-            draw_text(line, 10.0, yy + i as f32 * 16.0, 15.0, col(2));
+        let mut y = self.section(y, tr(es, "HELP", "AYUDA"), "");
+        for line in wrap_px(note, w, 14.0) {
+            draw_text(&line, PAD, y + 12.0, 14.0, col(2));
+            y += 16.0;
         }
-        (act, yy + lines.len() as f32 * 16.0)
+        (act, y + 8.0)
     }
 }

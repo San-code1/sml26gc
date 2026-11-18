@@ -15,6 +15,7 @@
 //! zones' added points (`zonepoints`: per zone, its number and its points as a new zone's),
 //! and (from version 5) the pad directions the world map's added points shut (`shuts`).
 use super::document::{EnemySet, StandIn};
+use cart_model::start_point::Start;
 use cart_model::enemy_sets::{Enemy, BLOCK};
 use cart_model::added_points::{self, ZoneAdded};
 use cart_model::doors::{Doors, Leads};
@@ -29,14 +30,19 @@ use std::fmt::Write;
 
 const LEVEL_KIND: &str = "NMB level";
 const PROJECT_KIND: &str = "NMB project";
+const WORLD_KIND: &str = "NMB world";
+/// Version 1 has no Mario's start.
+const WORLD_VERSION: u32 = 2;
 const ZONE_KIND: &str = "NMB zone";
 /// Version 1 has no names, version 2 no secret exit target, version 3 no tables, version 4
 /// no enemy set.
 const LEVEL_VERSION: u32 = 5;
-const ZONE_VERSION: u32 = 1;
+/// Version 1 has no Mario's start.
+const ZONE_VERSION: u32 = 2;
 /// Version 1 has no new zones, version 2 no secret exit targets, version 5 no level tables,
 /// version 6 no enemy sets.
-const PROJECT_VERSION: u32 = 7;
+/// Version 7 has no Mario's start (the game's own).
+const PROJECT_VERSION: u32 = 8;
 /// Point levels a project file kept before version 4.
 const OLD_LEVELS: usize = 0x82;
 const MAP_ROW: usize = 256;
@@ -46,6 +52,7 @@ pub enum FileError {
     NotLevel,
     NotProject,
     NotZone,
+    NotWorld,
     /// Made by a later editor.
     Newer,
     /// Cut short or changed by hand where it can't be read: the line (from 1).
@@ -94,7 +101,23 @@ pub struct ProjectFile {
     pub zone_points: Vec<ZoneAdded>,
     /// The pad directions the world map's added points shut, from `added_points::FIRST`
     /// (from version 5).
+    pub shuts: Vec<u8>,    /// Mario's start (from version 8; before, the game's own).
+    pub start: Start,
+}
+
+
+/// The world map as its own file: its picture, the level each point opens, the paths and
+/// Mario's places (with the added points), the doors and the added points' shut directions.
+#[derive(Clone, Debug, PartialEq)]
+pub struct WorldFile {
+    pub cartridge: u64,
+    pub world: Vec<u8>,
+    pub points: Vec<u8>,
+    pub routes: MapRoutes,
+    pub doors: Doors,
     pub shuts: Vec<u8>,
+    /// Mario's start, when it is on the world map (from version 2).
+    pub start: Option<u8>,
 }
 
 /// Tells cartridges apart (64-bit FNV-1a of the whole image).
@@ -189,19 +212,29 @@ fn point_lines(out: &mut String, points: &[ZonePoint]) {
     }
 }
 
-pub fn zone_text(z: &NewZone) -> String {
+/// A zone file; `start`: Mario's start, when it is on this zone.
+pub fn zone_text(z: &NewZone, start: Option<u8>) -> String {
     let mut out = format!("{ZONE_KIND} {ZONE_VERSION}\n");
     zone_block(&mut out, z);
+    start_line(&mut out, start);
     out.push_str("end\n");
     out
 }
 
-pub fn read_zone(text: &str) -> Result<NewZone, FileError> {
+/// A zone file and Mario's start, if the zone holds it.
+pub fn read_zone(text: &str) -> Result<(NewZone, Option<u8>), FileError> {
     let mut r = Reader::new(text);
     r.kind(ZONE_KIND, ZONE_VERSION, FileError::NotZone)?;
     let z = r.zone()?;
+    let start = r.start_line()?;
     r.end()?;
-    Ok(z)
+    Ok((z, start))
+}
+
+fn start_line(out: &mut String, start: Option<u8>) {
+    if let Some(p) = start {
+        let _ = writeln!(out, "start {p:02x}");
+    }
 }
 
 pub fn project_text(p: &ProjectFile) -> String {
@@ -215,25 +248,7 @@ pub fn project_text(p: &ProjectFile) -> String {
     for z in &p.zones {
         rows(&mut out, z, zone_maps::W);
     }
-    let _ = writeln!(out, "points {}", hex(&p.points));
-    let _ = writeln!(out, "ways {}", p.routes.ways.len());
-    for w in &p.routes.ways {
-        out.push_str(&w.iter().map(way_field).collect::<Vec<_>>().join(" "));
-        out.push('\n');
-    }
-    let _ = writeln!(out, "places {}", p.routes.places.len());
-    for pl in &p.routes.places {
-        let _ = writeln!(out, "{:04x} {:04x} {:02x} {:02x} {}", pl.cam_x, pl.cam_y, pl.x, pl.y, hex(&pl.rest));
-    }
-    let _ = writeln!(out, "added {}", hex(&p.routes.added));
-    let _ = writeln!(out, "into {}", p.doors.into.len());
-    for slots in &p.doors.into {
-        let _ = writeln!(out, "{}", hex(slots));
-    }
-    let _ = writeln!(out, "exits {}", p.doors.exits.len());
-    for &(at, leads) in &p.doors.exits {
-        exit_line(&mut out, at, leads);
-    }
+    map_lines(&mut out, &p.points, &p.routes, &p.doors);
     let _ = writeln!(out, "entries {}", hex(&p.entries));
     let _ = writeln!(out, "newzones {}", p.new_zones.len());
     for z in &p.new_zones {
@@ -245,8 +260,60 @@ pub fn project_text(p: &ProjectFile) -> String {
         point_lines(&mut out, &z.points);
     }
     let _ = writeln!(out, "shuts {}", hex(&p.shuts));
+    let _ = writeln!(out, "start {:02x} {}", p.start.point, p.start.new_zone.map_or("-".to_string(), |k| format!("{k:02x}")));
     out.push_str("end\n");
     out
+}
+
+/// The point levels, paths, places, added points and doors, as projects and world map files
+/// keep them.
+fn map_lines(out: &mut String, points: &[u8], routes: &MapRoutes, doors: &Doors) {
+    let _ = writeln!(out, "points {}", hex(points));
+    let _ = writeln!(out, "ways {}", routes.ways.len());
+    for w in &routes.ways {
+        out.push_str(&w.iter().map(way_field).collect::<Vec<_>>().join(" "));
+        out.push('\n');
+    }
+    let _ = writeln!(out, "places {}", routes.places.len());
+    for pl in &routes.places {
+        let _ = writeln!(out, "{:04x} {:04x} {:02x} {:02x} {}", pl.cam_x, pl.cam_y, pl.x, pl.y, hex(&pl.rest));
+    }
+    let _ = writeln!(out, "added {}", hex(&routes.added));
+    let _ = writeln!(out, "into {}", doors.into.len());
+    for slots in &doors.into {
+        let _ = writeln!(out, "{}", hex(slots));
+    }
+    let _ = writeln!(out, "exits {}", doors.exits.len());
+    for &(at, leads) in &doors.exits {
+        exit_line(out, at, leads);
+    }
+}
+
+pub fn world_text(w: &WorldFile) -> String {
+    let mut out = format!("{WORLD_KIND} {WORLD_VERSION}\ncartridge {:016x}\nworld\n", w.cartridge);
+    rows(&mut out, &w.world, world::W);
+    map_lines(&mut out, &w.points, &w.routes, &w.doors);
+    let _ = writeln!(out, "shuts {}", hex(&w.shuts));
+    start_line(&mut out, w.start);
+    out.push_str("end\n");
+    out
+}
+
+pub fn read_world(text: &str) -> Result<WorldFile, FileError> {
+    let mut r = Reader::new(text);
+    r.kind(WORLD_KIND, WORLD_VERSION, FileError::NotWorld)?;
+    let cartridge = r.hex::<u64>("cartridge")?;
+    r.word("world")?;
+    let world = r.rows(world::H, world::W)?;
+    let (points, routes, doors) = r.map_parts(world::POINT_COUNT, map_routes::ALL)?;
+    let mut shuts = r.bytes_field("shuts")?;
+    if shuts.len() > added_points::MAX {
+        return Err(r.damaged());
+    }
+    shuts.resize(added_points::MAX, 0);
+    let start = r.start_line()?;
+    r.end()?;
+    Ok(WorldFile { cartridge, world, points, routes, doors, shuts, start })
 }
 
 pub fn read_project(text: &str) -> Result<ProjectFile, FileError> {
@@ -263,20 +330,7 @@ pub fn read_project(text: &str) -> Result<ProjectFile, FileError> {
     let zones = (0..r.count("zones", zone_maps::ZONES.len())?).map(|_| r.rows(zone_maps::H, zone_maps::W)).collect::<Result<Vec<_>, _>>()?;
     // before version 4: the game's numbers only ($82 levels, $80 ways and places)
     let (n_levels, n_points) = if version >= 4 { (world::POINT_COUNT, map_routes::ALL) } else { (OLD_LEVELS, map_routes::POINTS) };
-    let mut points = r.bytes_field("points")?;
-    if points.len() != n_levels {
-        return Err(r.damaged());
-    }
-    points.resize(world::POINT_COUNT, world::NO_LEVEL);
-    let mut ways = (0..r.count("ways", n_points)?).map(|_| r.ways()).collect::<Result<Vec<_>, _>>()?;
-    let mut places = (0..r.count("places", n_points)?).map(|_| r.place()).collect::<Result<Vec<_>, _>>()?;
-    ways.resize(map_routes::ALL, Default::default());
-    places.resize(map_routes::ALL, Place { cam_x: 0, cam_y: 0, x: 0, y: 0, rest: [0, 0] });
-    let added = r.bytes_field("added")?;
-    let into_n = r.number("into")?;
-    let into = (0..into_n).map(|_| r.bytes_line()).collect::<Result<Vec<_>, _>>()?;
-    let exits_n = r.number("exits")?;
-    let exits = (0..exits_n).map(|_| r.exit()).collect::<Result<Vec<_>, _>>()?;
+    let (points, routes, doors) = r.map_parts(n_levels, n_points)?;
     let entries = if version >= 2 { r.bytes_field("entries")? } else { Vec::new() };
     let new_zones = if version >= 2 {
         let n = r.number("newzones")?;
@@ -298,22 +352,64 @@ pub fn read_project(text: &str) -> Result<ProjectFile, FileError> {
         return Err(r.damaged());
     }
     shuts.resize(added_points::MAX, 0);
+    let start = if version >= 8 { r.start()? } else { Start::default() };
     r.end()?;
-    Ok(ProjectFile { cartridge, levels, world, zones, points, routes: MapRoutes { ways, places, added }, doors: Doors { into, exits }, new_zones, entries, zone_points, shuts })
+    Ok(ProjectFile { cartridge, levels, world, zones, points, routes, doors, new_zones, entries, zone_points, shuts, start })
 }
 
 struct Reader<'a> {
-    lines: std::str::Lines<'a>,
+    lines: std::iter::Peekable<std::str::Lines<'a>>,
     at: usize,
 }
 
 impl<'a> Reader<'a> {
     fn new(text: &'a str) -> Reader<'a> {
-        Reader { lines: text.lines(), at: 0 }
+        Reader { lines: text.lines().peekable(), at: 0 }
     }
 
     fn damaged(&self) -> FileError {
         FileError::Damaged(self.at)
+    }
+
+    /// `start pp` when the map holds Mario's start.
+    fn start_line(&mut self) -> Result<Option<u8>, FileError> {
+        if !self.lines.peek().is_some_and(|l| l.trim().starts_with("start ")) {
+            return Ok(None);
+        }
+        self.hex::<u8>("start").map(Some)
+    }
+
+    /// A project's `start pp zz` (`-`: not in a new zone).
+    fn start(&mut self) -> Result<Start, FileError> {
+        let line = self.line()?;
+        let mut parts = line.strip_prefix("start ").ok_or_else(|| self.damaged())?.split_whitespace();
+        let point = parts.next().and_then(|p| u8::from_str_radix(p, 16).ok()).ok_or_else(|| self.damaged())?;
+        let new_zone = match parts.next() {
+            Some("-") => None,
+            Some(k) => Some(usize::from_str_radix(k, 16).map_err(|_| self.damaged())?),
+            None => return Err(self.damaged()),
+        };
+        Ok(Start { point, new_zone })
+    }
+
+    /// `map_lines`: `n_levels` point levels and `n_points` ways and places (fewer in older
+    /// projects), grown to every point.
+    fn map_parts(&mut self, n_levels: usize, n_points: usize) -> Result<(Vec<u8>, MapRoutes, Doors), FileError> {
+        let mut points = self.bytes_field("points")?;
+        if points.len() != n_levels {
+            return Err(self.damaged());
+        }
+        points.resize(world::POINT_COUNT, world::NO_LEVEL);
+        let mut ways = (0..self.count("ways", n_points)?).map(|_| self.ways()).collect::<Result<Vec<_>, _>>()?;
+        let mut places = (0..self.count("places", n_points)?).map(|_| self.place()).collect::<Result<Vec<_>, _>>()?;
+        ways.resize(map_routes::ALL, Default::default());
+        places.resize(map_routes::ALL, Place { cam_x: 0, cam_y: 0, x: 0, y: 0, rest: [0, 0] });
+        let added = self.bytes_field("added")?;
+        let into_n = self.number("into")?;
+        let into = (0..into_n).map(|_| self.bytes_line()).collect::<Result<Vec<_>, _>>()?;
+        let exits_n = self.number("exits")?;
+        let exits = (0..exits_n).map(|_| self.exit()).collect::<Result<Vec<_>, _>>()?;
+        Ok((points, MapRoutes { ways, places, added }, Doors { into, exits }))
     }
 
     fn line(&mut self) -> Result<&'a str, FileError> {
@@ -615,6 +711,7 @@ mod tests {
             entries: vec![0x23, 0x28, 0x32, 0x3C, 0x50],
             zone_points: vec![ZoneAdded { zone: 1, points: vec![ZonePoint { number: 0x80, flag: 0x80, ..zone().points[0].clone() }] }],
             shuts: (0..added_points::MAX).map(|j| if j == 0 { 0x90 } else { 0 }).collect(),
+            start: Start { point: 0x29, new_zone: None },
         }
     }
 
@@ -633,19 +730,21 @@ mod tests {
     #[test]
     fn a_zone_comes_back_as_it_was_written() {
         let z = zone();
-        let text = zone_text(&z);
-        assert!(text.starts_with("NMB zone 1\nbase 00\nname Big tree\n") && text.ends_with("end\n"));
-        assert_eq!(read_zone(&text), Ok(z));
+        let text = zone_text(&z, None);
+        assert!(text.starts_with("NMB zone 2\nbase 00\nname Big tree\n") && text.ends_with("end\n"));
+        assert_eq!(read_zone(&text), Ok((z.clone(), None)));
+        assert_eq!(read_zone(&zone_text(&z, Some(0x21))), Ok((z.clone(), Some(0x21))), "with Mario's start");
+        assert_eq!(read_zone(&text.replace("NMB zone 2", "NMB zone 1")), Ok((z, None)), "a version 1 file");
     }
 
     #[test]
     fn unusable_zone_files_are_refused() {
-        let text = zone_text(&zone());
+        let text = zone_text(&zone(), None);
         assert!(matches!(read_zone(&text[..text.len() / 2]), Err(FileError::Damaged(_))));
         assert_eq!(read_zone(&text.replace("base 00", "base 04")), Err(FileError::NotABase(4)));
         assert!(matches!(read_zone(&text.replace("entry 23", "entry 24")), Err(FileError::Damaged(_))), "the entry is one of its points");
         assert!(matches!(read_zone(&text.replace("\n25 ", "\n32 ")), Err(FileError::Damaged(_))), "points stay in the base's numbers");
-        assert_eq!(read_zone(&text.replace("NMB zone 1", "NMB zone 2")), Err(FileError::Newer));
+        assert_eq!(read_zone(&text.replace("NMB zone 2", "NMB zone 3")), Err(FileError::Newer));
         assert_eq!(read_zone(&level_text(&level(0))), Err(FileError::NotZone));
     }
 
@@ -690,6 +789,15 @@ mod tests {
     }
 
     #[test]
+    fn world_files_round_trip_and_are_not_projects() {
+        let p = project();
+        let w = WorldFile { cartridge: p.cartridge, world: p.world.clone(), points: p.points.clone(), routes: p.routes.clone(), doors: p.doors.clone(), shuts: p.shuts.clone(), start: Some(0x07) };
+        assert_eq!(read_world(&world_text(&w)), Ok(w.clone()));
+        assert_eq!(read_world(&project_text(&p)), Err(FileError::NotWorld));
+        assert_eq!(read_project(&world_text(&w)), Err(FileError::NotProject));
+    }
+
+    #[test]
     fn a_version_1_project_has_no_new_zones() {
         // the game's point numbers only
         let mut p = project();
@@ -698,13 +806,13 @@ mod tests {
         p.routes.places.truncate(map_routes::POINTS);
         p.routes.added.retain(|&a| a < 0x80);
         let text = project_text(&p);
-        let old = format!("{}end\n", &text[..text.find("entries").unwrap()]).replacen("NMB project 7", "NMB project 1", 1);
+        let old = format!("{}end\n", &text[..text.find("entries").unwrap()]).replacen("NMB project 8", "NMB project 1", 1);
         let old: String = old.lines().filter(|l| !l.starts_with("name ") && !l.starts_with("secret ") && !l.starts_with("tables ") && !l.starts_with("enemies ")).map(|l| format!("{l}\n")).collect();
         let levels = p.levels.iter().map(|l| LevelFile { name: String::new(), secret: None, tables: None, enemies: None, ..l.clone() }).collect();
         p.points.resize(world::POINT_COUNT, world::NO_LEVEL);
         p.routes.ways.resize(map_routes::ALL, Default::default());
         p.routes.places.resize(map_routes::ALL, Place { cam_x: 0, cam_y: 0, x: 0, y: 0, rest: [0, 0] });
-        assert_eq!(read_project(&old), Ok(ProjectFile { new_zones: Vec::new(), entries: Vec::new(), zone_points: Vec::new(), shuts: vec![0; added_points::MAX], levels, ..p }));
+        assert_eq!(read_project(&old), Ok(ProjectFile { new_zones: Vec::new(), entries: Vec::new(), zone_points: Vec::new(), shuts: vec![0; added_points::MAX], start: Start::default(), levels, ..p }));
     }
 
     #[test]

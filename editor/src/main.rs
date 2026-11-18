@@ -1,7 +1,7 @@
-//! Level editor: opens the person's cartridge (or their edited copy), shows each of the
-//! 32 levels with the game's own blocks and graphics, lets them paint blocks, place
-//! objects and edit the world map, and saves into an edited copy. The original file is
-//! never written.
+//! Level editor: works on projects over the person's base cartridge (checked first). A
+//! project shows each level with the game's own blocks and graphics, lets them paint blocks,
+//! place objects and edit the world map and zones, and saves into the project's own edited
+//! cartridge. The base cartridge is never written.
 //!
 //! Layers: `domain` (document, undo history, tools) ← `application` (saving, captured
 //! graphics) ← `ports` ← `adapters` (files, game.exe) and `ui` (macroquad panels). This
@@ -19,8 +19,9 @@ use adapters::process_launcher::GameProcess;
 use cart_model::original_points::OnMap;
 use cart_model::zone_maps::ZONES;
 use macroquad::prelude::*;
+use ports::{MenuBar, PrefsStore};
 use std::path::PathBuf;
-use ui::{col, Editor, Mode, Ports, TAB_POINTS};
+use ui::{BaseScreen, Editor, Leave, Mode, Ports, ProjectsChoice, ProjectsScreen, TAB_POINTS};
 
 const TITLE: &str = "Level Editor (Rust)";
 
@@ -28,54 +29,137 @@ fn conf() -> Conf {
     Conf { window_title: TITLE.into(), window_width: 1280, window_height: 820, window_resizable: true, high_dpi: false, ..Default::default() }
 }
 
-/// Show a message until the window is closed.
-async fn show_forever(text: &str, size: f32, line: f32) -> ! {
-    loop {
-        clear_background(col(3));
-        for (i, l) in text.lines().enumerate() {
-            draw_text(l, 40.0, 60.0 + i as f32 * line, size, col(0));
+#[macroquad::main(conf)]
+async fn main() {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    let value = |f: &str| args.iter().position(|a| a == f).and_then(|i| args.get(i + 1));
+    let shot = value("--screenshot").map(PathBuf::from);
+    let level = value("--level").and_then(|v| v.parse::<usize>().ok());
+    macroquad::input::prevent_quit();
+    let es = fs_repository::spanish();
+    let dialogs = SystemDialogs { es, owner: TITLE };
+    clear_background(ui::col(3));
+    next_frame().await;
+
+    // the base cartridge, asked for until a valid one is chosen
+    let base = match host::base_cartridge() {
+        Ok(p) => p,
+        Err(problem) => {
+            let mut screen = BaseScreen::new(es, problem);
+            let mut frames = 0;
+            loop {
+                if let Some(p) = screen.frame(&dialogs) {
+                    break p;
+                }
+                if macroquad::input::is_quit_requested() || shoot(&shot, &mut frames) {
+                    return;
+                }
+                next_frame().await;
+            }
         }
+    };
+    // --project NAME: open that project straight away (the game's "edit in the editor")
+    let mut straight = value("--project").cloned().filter(|n| host::project_dir(n).is_dir());
+    // --new-project: the project screen typing a new project's name
+    let mut new_project = args.iter().any(|a| a == "--new-project");
+    let mut menu: Box<dyn MenuBar> = Box::new(WindowMenu::new(TITLE));
+    let mut last = Some(fs_repository::PrefsFile.load().last_project).filter(|n| !n.is_empty());
+    let mut first = true;
+    loop {
+        let name = match straight.take() {
+            Some(n) => n,
+            None => {
+                let mut screen = ProjectsScreen::new(es, base.clone(), last.as_deref());
+                if std::mem::take(&mut new_project) {
+                    screen.start_new();
+                }
+                let mut frames = 0;
+                loop {
+                    match screen.frame(&dialogs) {
+                        Some(ProjectsChoice::Open(n)) => break n,
+                        Some(ProjectsChoice::Quit) => return,
+                        None => {}
+                    }
+                    if macroquad::input::is_quit_requested() || shoot(&shot, &mut frames) {
+                        return;
+                    }
+                    next_frame().await;
+                }
+            }
+        };
+        let Ok(opened) = fs_repository::open_project(&base, &name) else { continue };
+        let mut prefs = fs_repository::PrefsFile.load();
+        prefs.last_project = name.clone();
+        fs_repository::PrefsFile.save(&prefs);
+        last = Some(name.clone());
+        let looks = fs_repository::LookFile::for_cartridge(&opened.doc.original);
+        let ports = Ports {
+            store: Box::new(opened.store),
+            launcher: Box::new(GameProcess),
+            prefs: Box::new(fs_repository::PrefsFile),
+            dialogs: Box::new(SystemDialogs { es, owner: TITLE }),
+            text_files: Box::new(fs_repository::TextFile),
+            menu,
+            sound: Box::new(adapters::cpal_sound::Speakers::new()),
+            looks: Box::new(looks),
+        };
+        let mut ed = Editor::new(opened.doc, ports, name, es);
+        // --level N: that level; else where the project was last saved
+        match level.filter(|_| first) {
+            Some(l) => ed.select_level(l.min(ed.level_count() - 1)),
+            None => {
+                ed.select_level(0);
+                ed.open_at_saved_place();
+            }
+        }
+        ed.drop_other_catalogue();
+        if first && !command_line(&mut ed, &args) {
+            return;
+        }
+        if first && shot.is_some() {
+            ed.capture_level_looks();
+        }
+        first = false;
+        let mut frames = 0;
+        loop {
+            ed.frame();
+            if shoot(&shot, &mut frames) {
+                return;
+            }
+            if macroquad::input::is_quit_requested() {
+                ed.ask_leave(Leave::Quit);
+            }
+            match ed.leaving() {
+                Some(Leave::Quit) => return,
+                Some(Leave::Projects) => break,
+                None => {}
+            }
+            next_frame().await;
+        }
+        menu = ed.take_menu();
         next_frame().await;
     }
 }
 
-#[macroquad::main(conf)]
-async fn main() {
-    let args: Vec<String> = std::env::args().skip(1).collect();
+/// With `--screenshot`: after 20 frames, the window saved as a picture; true then (stop).
+fn shoot(shot: &Option<PathBuf>, frames: &mut u32) -> bool {
+    let Some(p) = shot else { return false };
+    *frames += 1;
+    if *frames < 20 {
+        return false;
+    }
+    if let Some(d) = p.parent() {
+        let _ = std::fs::create_dir_all(d);
+    }
+    get_screen_data().export_png(&p.to_string_lossy());
+    true
+}
+
+/// The options that show a part of the editor at start (for the check pictures). False when
+/// the editor should stop (`--capture-all` has done its job).
+fn command_line(ed: &mut Editor, args: &[String]) -> bool {
     let flag = |f: &str| args.iter().any(|a| a == f);
     let value = |f: &str| args.iter().position(|a| a == f).and_then(|i| args.get(i + 1));
-    let shot = value("--screenshot").map(PathBuf::from);
-    let level = value("--level").and_then(|v| v.parse::<usize>().ok());
-    let rom_arg = args.iter().find(|a| !a.starts_with("--") && a.to_lowercase().ends_with(".gb")).map(PathBuf::from);
-
-    clear_background(col(3));
-    draw_text("Loading...", 40.0, 60.0, 30.0, col(0));
-    next_frame().await;
-
-    let rom_path = match host::require_rom(rom_arg) {
-        Ok(p) => p,
-        Err(e) => show_forever(&e, 30.0, 34.0).await,
-    };
-    let opened = match fs_repository::open(&rom_path) {
-        Ok(o) => o,
-        Err(e) => show_forever(&e, 26.0, 0.0).await,
-    };
-    let es = fs_repository::spanish();
-    let looks = fs_repository::LookFile::for_cartridge(&opened.doc.original);
-    let ports = Ports {
-        store: Box::new(opened.store),
-        launcher: Box::new(GameProcess),
-        prefs: Box::new(fs_repository::PrefsFile),
-        dialogs: Box::new(SystemDialogs { es, owner: TITLE }),
-        text_files: Box::new(fs_repository::TextFile),
-        menu: Box::new(WindowMenu::new(TITLE)),
-        sound: Box::new(adapters::cpal_sound::Speakers::new()),
-        looks: Box::new(looks),
-    };
-    let mut ed = Editor::new(opened.doc, ports, opened.had_copy, es);
-
-    ed.select_level(level.unwrap_or(0).min(ed.level_count() - 1));
-    ed.drop_other_catalogue();
     if flag("--objects") {
         ed.set_mode(Mode::Objects);
     }
@@ -96,10 +180,24 @@ async fn main() {
         if flag("--new-zone") {
             ed.new_zone();
         }
+        // --maps-open: the map list unfolded; --blank-zone: the blank zone chooser
+        if flag("--maps-open") {
+            ed.open_map_list();
+        }
+        if flag("--go-to-start") {
+            ed.go_to_start();
+        }
+        if flag("--blank-zone") {
+            ed.show_blank_zone_chooser();
+        }
         // --choose: choose on the maps where the chosen point's door or exit leads
         if flag("--choose") {
             ed.choose_target();
         }
+    }
+    // --test-game: the test game's settings open
+    if flag("--test-game") {
+        ed.show_test_game();
     }
     // --inspector: the Level tab shown (with --levels-open, the level grid unfolded)
     if flag("--inspector") {
@@ -128,7 +226,7 @@ async fn main() {
     // --capture-all: capture every object picture and tile, keep them and stop
     if flag("--capture-all") {
         ed.capture_all();
-        return;
+        return false;
     }
     // --catalogue: the object catalogue open (--power-ups: only power-ups)
     if flag("--catalogue") {
@@ -142,22 +240,5 @@ async fn main() {
     if let Some(n) = value("--blank").and_then(|v| v.parse::<usize>().ok()) {
         ed.show_blank_chooser(n);
     }
-    if shot.is_some() {
-        ed.capture_level_looks();
-    }
-    let mut frames = 0;
-    loop {
-        ed.frame();
-        frames += 1;
-        if let Some(p) = &shot {
-            if frames >= 20 {
-                if let Some(d) = p.parent() {
-                    let _ = std::fs::create_dir_all(d);
-                }
-                get_screen_data().export_png(&p.to_string_lossy());
-                return;
-            }
-        }
-        next_frame().await;
-    }
+    true
 }

@@ -1,5 +1,5 @@
 //! The level editor's side panel. A fixed head: the level picker (its grid folds away), a
-//! toolbar (undo, redo, save, play, play here), the Blocks / Objects switch with its tools,
+//! toolbar (undo, redo, restore; save, play, play here), the Blocks / Objects switch with its tools,
 //! and two tabs. Below them the chosen tab fills the rest: the palette, or the level's
 //! inspector (level, goals, settings, warnings), which scrolls with the wheel when it does not
 //! fit. Buttons carry short names; their keys show in a tooltip.
@@ -25,11 +25,13 @@ pub(super) enum SideTab {
     Level,
 }
 
-const PAD: f32 = 10.0;
-const ROW: f32 = 26.0;
-const GAP: f32 = 4.0;
+pub(super) const PAD: f32 = 10.0;
+pub(super) const ROW: f32 = 26.0;
+pub(super) const GAP: f32 = 4.0;
 /// The inspector's label column.
-const LABEL_W: f32 = 96.0;
+pub(super) const LABEL_W: f32 = 96.0;
+/// The button beside Play that opens the test game's settings.
+const SPLIT_W: f32 = 22.0;
 const LEVEL_BUTTON: (f32, f32) = (33.0, 23.0);
 /// Seconds a warning's place stays marked after it is clicked.
 const MARK_SECONDS: f64 = 1.5;
@@ -64,17 +66,83 @@ pub(super) fn fit(t: &str, w: f32, size: f32) -> String {
 }
 
 impl Editor {
-    fn inner_w(&self) -> f32 {
+    pub(super) fn inner_w(&self) -> f32 {
         self.panel - 2.0 * PAD - 3.0
     }
 
-    /// A button whose name and keys show in a tooltip while the mouse is on it.
-    fn tool_button(&mut self, r: Rect, name: &str, a: Action, on: bool) -> bool {
+    pub(super) fn tip_for(&mut self, r: Rect, name: &str, a: Action) {
         if r.contains(mouse_position().into()) {
             let k = keys(a);
             self.tip = Some(if k.is_empty() { name.to_string() } else { format!("{name}  ({k})") });
         }
-        button(r, name, on, 15.0)
+    }
+
+    /// A button whose name and keys show in a tooltip while the mouse is on it.
+    pub(super) fn tool_button(&mut self, r: Rect, name: &str, a: Action, on: bool) -> bool {
+        self.tip_button(r, name, name, a, on)
+    }
+
+    /// A button labelled `label` whose tooltip says `tip` and its keys.
+    pub(super) fn tip_button(&mut self, r: Rect, label: &str, tip: &str, a: Action, on: bool) -> bool {
+        self.tip_for(r, tip, a);
+        button(r, label, on, 15.0)
+    }
+
+    /// A section's title with a rule after it, and `right` at the rule's end.
+    pub(super) fn section_title(&self, y: f32, text: &str, right: &str) {
+        let w = self.inner_w();
+        draw_text(text, PAD, y + 13.0, 14.0, col(2));
+        let d = measure_text(text, None, 14, 1.0);
+        let rw = if right.is_empty() { 0.0 } else { measure_text(right, None, 14, 1.0).width.ceil() + 8.0 };
+        draw_rectangle(PAD + d.width.ceil() + 8.0, y + 8.0, w - d.width.ceil() - 8.0 - rw, 1.0, col(1));
+        if !right.is_empty() {
+            draw_text(right, PAD + w - rw + 8.0, y + 13.0, 14.0, col(2));
+        }
+    }
+
+    /// Up to three actions under a picker's grid, set apart from it by a rule and their own
+    /// style. Returns where the panel continues and the action clicked.
+    pub(super) fn picker_actions(&mut self, y: f32, items: [Option<(&str, Action)>; 3]) -> (f32, Option<Action>) {
+        let w = self.inner_w();
+        let third = (w - 2.0 * GAP) / 3.0;
+        let y = y + 4.0;
+        draw_rectangle(PAD, y, w, 1.0, col(2));
+        let y = y + 6.0;
+        let mut act = None;
+        for (i, (name, a)) in items.into_iter().enumerate().filter_map(|(i, it)| it.map(|it| (i, it))) {
+            let r = Rect::new(PAD + i as f32 * (third + GAP), y, third, ROW);
+            self.tip_for(r, name, a);
+            if action_button(r, name, 15.0) {
+                act = Some(a);
+            }
+        }
+        (y + ROW + GAP + 4.0, act)
+    }
+
+    /// The toolbar: history and Restore, then file and game (`second`). Returns where the
+    /// panel continues and the action clicked.
+    pub(super) fn toolbar(&mut self, y: f32, second: &[(&str, Action, bool)]) -> (f32, Option<Action>) {
+        let es = self.es;
+        let w = self.inner_w();
+        let mut act = None;
+        let history = [(tr(es, "Undo", "Deshacer"), Action::Undo, false), (tr(es, "Redo", "Rehacer"), Action::Redo, false), (tr(es, "Restore", "Restaurar"), Action::Restore, false)];
+        let mut y = y;
+        for row in [&history[..], second] {
+            let n = row.len() as f32;
+            let bw = (w - (n - 1.0) * GAP) / n;
+            for (i, &(name, a, on)) in row.iter().enumerate() {
+                let mut r = Rect::new(PAD + i as f32 * (bw + GAP), y, bw, ROW);
+                if a == Action::Play {
+                    r.w -= SPLIT_W - 2.0;
+                    self.test_game_button(Rect::new(r.x + r.w - 2.0, y, SPLIT_W, ROW));
+                }
+                if self.tool_button(r, name, a, on) {
+                    act = Some(a);
+                }
+            }
+            y += ROW + GAP;
+        }
+        (y + 6.0, act)
     }
 
     /// The tooltip of the button under the mouse, over everything.
@@ -100,7 +168,7 @@ impl Editor {
         let mut act = None;
         let mut pick = None;
         draw_text(tr(es, "LEVEL EDITOR", "EDITOR DE NIVELES"), PAD, 25.0, 20.0, col(3));
-        if self.tool_button(Rect::new(PAD + w - 104.0, 8.0, 104.0, 24.0), tr(es, "World map", "Mapa mundial"), Action::WorldEditor, false) {
+        if self.tool_button(Rect::new(PAD + w - 104.0, 8.0, 104.0, 24.0), tr(es, "Zones", "Zonas"), Action::WorldEditor, false) {
             act = Some(Action::WorldEditor);
         }
         let mut y = 40.0;
@@ -147,35 +215,16 @@ impl Editor {
                 }
             }
             y += count.div_ceil(per_row) as f32 * (LEVEL_BUTTON.1 + 2.0) + 2.0;
-            let third = (w - 2.0 * GAP) / 3.0;
-            if self.tool_button(Rect::new(PAD, y, third, ROW), tr(es, "Copy level", "Copiar nivel"), Action::NewLevel, false) {
-                act = Some(Action::NewLevel);
-            }
-            if self.tool_button(Rect::new(PAD + third + GAP, y, third, ROW), tr(es, "Blank level", "Nivel en blanco"), Action::NewBlankLevel, false) {
-                act = Some(Action::NewBlankLevel);
-            }
-            if self.cur >= LEVELS && self.tool_button(Rect::new(PAD + 2.0 * (third + GAP), y, third, ROW), tr(es, "Delete level", "Borrar nivel"), Action::DeleteLevel, false) {
-                act = Some(Action::DeleteLevel);
-            }
-            y += ROW + GAP;
+            let delete = (self.cur >= LEVELS).then_some((tr(es, "Delete level", "Borrar nivel"), Action::DeleteLevel));
+            let (next, a) = self.picker_actions(y, [Some((tr(es, "Copy level", "Copiar nivel"), Action::NewLevel)), Some((tr(es, "Blank level", "Nivel en blanco"), Action::NewBlankLevel)), delete]);
+            y = next;
+            act = a.or(act);
         }
-        // toolbar: history | file and game
         y += 4.0;
-        let bw = (w - 4.0 * GAP - 10.0) / 5.0;
-        let tools = [
-            (tr(es, "Undo", "Deshacer"), Action::Undo, false, 0.0),
-            (tr(es, "Redo", "Rehacer"), Action::Redo, false, 0.0),
-            (tr(es, "Save", "Guardar"), Action::Save, false, 10.0),
-            (tr(es, "Play", "Jugar"), Action::Play, false, 10.0),
-            (tr(es, "Here", "Aqui"), Action::PlayFromHere, self.placing == Some(Placing::PlayHere), 10.0),
-        ];
-        for (i, (name, a, on, shift)) in tools.into_iter().enumerate() {
-            let x = PAD + i as f32 * (bw + GAP) + shift;
-            if self.tool_button(Rect::new(x, y, bw, ROW), name, a, on) {
-                act = Some(a);
-            }
-        }
-        y += ROW + GAP + 6.0;
+        let here = self.placing == Some(Placing::PlayHere);
+        let (next, a) = self.toolbar(y, &[(tr(es, "Save", "Guardar"), Action::Save, false), (tr(es, "Play", "Jugar"), Action::Play, false), (tr(es, "Here", "Aqui"), Action::PlayFromHere, here)]);
+        y = next;
+        act = a.or(act);
         // Blocks / Objects, then the mode's tools
         let half = (w - GAP) / 2.0;
         let blocks = self.mode == Mode::Blocks;
@@ -231,9 +280,7 @@ impl Editor {
 
     fn heading(&self, rows: &mut Rows, text: &str) {
         let Some(y) = rows.next(18.0) else { return };
-        draw_text(text, PAD, y + 13.0, 14.0, col(2));
-        let d = measure_text(text, None, 14, 1.0);
-        draw_rectangle(PAD + d.width + 8.0, y + 8.0, self.inner_w() - d.width - 8.0, 1.0, col(1));
+        self.section_title(y, text, "");
     }
 
     fn label(y: f32, text: &str) {
@@ -270,7 +317,9 @@ impl Editor {
         let (cx, cw) = (PAD + LABEL_W, w - LABEL_W);
         let l = self.cur;
 
-        self.heading(&mut rows, tr(es, "LEVEL", "NIVEL"));
+        if l >= LEVELS || self.doc.mods.level(l) {
+            self.heading(&mut rows, tr(es, "LEVEL", "NIVEL"));
+        }
         if l >= LEVELS {
             if let Some(y) = rows.next(ROW) {
                 self.name_field(Rect::new(PAD, y, w, ROW), Named::Level(l));
@@ -280,13 +329,10 @@ impl Editor {
                 Self::note(cx, y, cw, &format!("{} {:02}", tr(es, "level", "nivel"), self.doc.base_of(l)));
             }
         }
-        if let Some(y) = rows.next(ROW) {
-            Self::label(y, tr(es, "Original", "Original"));
-            if self.tool_button(Rect::new(cx, y, 90.0, ROW), tr(es, "Restore", "Restaurar"), Action::Restore, false) {
-                act = Some(Action::Restore);
-            }
-            if self.doc.mods.level(l) {
-                Self::note(cx + 96.0, y, cw - 96.0, tr(es, "mod (saved)", "mod (guardado)"));
+        if self.doc.mods.level(l) {
+            if let Some(y) = rows.next(ROW) {
+                Self::label(y, tr(es, "Original", "Original"));
+                Self::note(cx, y, cw, tr(es, "mod (saved; Restore puts it back)", "mod (guardado; Restaurar lo devuelve)"));
             }
         }
 

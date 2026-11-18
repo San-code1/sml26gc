@@ -98,6 +98,11 @@ impl Editor {
         self.prefs_store.save(&self.prefs);
     }
 
+    pub(super) fn set_test_game(&mut self, lives: u32, coins: u32) {
+        (self.prefs.test_lives, self.prefs.test_coins) = (lives, coins);
+        self.prefs_store.save(&self.prefs);
+    }
+
     pub(super) fn warning_text(&self, w: &Warning) -> String {
         let es = self.es;
         match *w {
@@ -109,7 +114,7 @@ impl Editor {
             Warning::StartBlocked(_) => tr(es, "Start inside blocks", "Inicio dentro de bloques").into(),
             Warning::RestartBlocked(_) => tr(es, "Checkpoint restart inside blocks", "Reaparicion dentro de bloques").into(),
             Warning::MissingLevel(p, l) => format!("{} {p:02X} {} {l:02}", tr(es, "Point", "Punto"), tr(es, "opens missing level", "abre el nivel inexistente")),
-            Warning::OnFirstScreen(_, n) => format!("{n} {}", tr(es, "objects on the first screen never appear", "objetos en la primera pantalla nunca aparecen")),
+            Warning::OnFirstScreen(_, n) => format!("{n} {}", tr(es, "objects that do not appear at the start", "objetos que no aparecen al empezar")),
         }
     }
 }

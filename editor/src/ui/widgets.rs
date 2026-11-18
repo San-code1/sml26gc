@@ -145,19 +145,34 @@ pub fn wrap(t: &str, n: usize) -> Vec<String> {
 /// Draw a button, its label made smaller if it doesn't fit; true when it was clicked this
 /// frame.
 pub fn button(r: Rect, label: &str, active: bool, size: f32) -> bool {
-    let m: Vec2 = mouse_position().into();
-    let hover = r.contains(m);
+    let hover = r.contains(mouse_position().into());
     let (bg, fg) = if active { (col(3), col(0)) } else if hover { (col(1), col(3)) } else { (col(0), col(3)) };
+    framed_label(r, label, bg, fg, col(3), 2.0, size);
+    hover && is_mouse_button_pressed(MouseButton::Left)
+}
+
+/// A button set apart from the choices beside it (dark, with a thin frame): for the actions
+/// under a list of things to choose.
+pub fn action_button(r: Rect, label: &str, size: f32) -> bool {
+    let hover = r.contains(mouse_position().into());
+    let bg = if hover { col(3) } else { col(2) };
+    framed_label(r, label, bg, col(0), col(3), 1.0, size);
+    hover && is_mouse_button_pressed(MouseButton::Left)
+}
+
+/// The text lands on whole pixels: the font blurs between them.
+fn framed_label(r: Rect, label: &str, bg: Color, fg: Color, frame: Color, thick: f32, size: f32) {
     draw_rectangle(r.x, r.y, r.w, r.h, bg);
-    draw_rectangle_lines(r.x, r.y, r.w, r.h, 2.0, col(3));
+    draw_rectangle_lines(r.x, r.y, r.w, r.h, thick, frame);
     let mut size = size;
     let mut dim = measure_text(label, None, size as u16, 1.0);
     while dim.width > r.w - 6.0 && size > 10.0 {
         size -= 1.0;
         dim = measure_text(label, None, size as u16, 1.0);
     }
-    draw_text(label, r.x + (r.w - dim.width) / 2.0, r.y + (r.h + dim.offset_y) / 2.0 - 1.0, size, fg);
-    hover && is_mouse_button_pressed(MouseButton::Left)
+    let x = (r.x + (r.w - dim.width) / 2.0).round();
+    let y = (r.y + (r.h + dim.offset_y) / 2.0 - 1.0).round();
+    draw_text(label, x, y, size, fg);
 }
 
 fn texture(img: &Image) -> Texture2D {

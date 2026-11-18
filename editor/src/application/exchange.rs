@@ -17,8 +17,10 @@ pub enum ExchangeError {
     Protected,
     /// A new zone was not made.
     Zone(ZoneRefusal),
-    /// One of the game's zones (or the world map): never replaced from a file.
+    /// One of the game's zones: never replaced from a file.
     ProtectedZone,
+    /// A world map file imported as a new zone.
+    WorldAsZone,
 }
 
 /// What a finished action did; None from the functions below means the dialog was cancelled.
@@ -62,34 +64,45 @@ pub fn replace_level(doc: &mut EditorDocument, l: usize, dialogs: &dyn FileDialo
 /// Map `map` as a zone file (a new zone, or a zone a door enters).
 pub fn export_zone(doc: &EditorDocument, map: OnMap, name: &str, dialogs: &dyn FileDialogs, out: &dyn TextFiles) -> Done<PathBuf> {
     let z = doc.zone_file(map).ok_or(ExchangeError::Zone(ZoneRefusal::NotABase))?;
-    write(dialogs, out, FileKind::Zone, name, || files::zone_text(&z))
+    write(dialogs, out, FileKind::Zone, name, || files::zone_text(&z, doc.map_start(map)))
 }
 
-/// A zone file as a new zone: its number.
-pub fn import_zone(doc: &mut EditorDocument, dialogs: &dyn FileDialogs, input: &dyn TextFiles) -> Done<usize> {
+/// A zone file as a new zone: its number, and Mario's start if the file has it. A world map
+/// file is refused (the game has one world map).
+pub fn import_zone(doc: &mut EditorDocument, dialogs: &dyn FileDialogs, input: &dyn TextFiles) -> Done<(usize, Option<u8>)> {
     if doc.new_zones.len() >= cart_model::new_zones::MAX {
         return Err(ExchangeError::Zone(ZoneRefusal::TooManyZones(cart_model::new_zones::MAX)));
     }
     let Some(text) = read(dialogs, input, FileKind::Zone)? else { return Ok(None) };
-    let f = files::read_zone(&text).map_err(ExchangeError::File)?;
-    doc.import_zone(f).map(Some).map_err(ExchangeError::Zone)
+    if files::read_world(&text).is_ok() {
+        return Err(ExchangeError::WorldAsZone);
+    }
+    let (f, start) = files::read_zone(&text).map_err(ExchangeError::File)?;
+    doc.import_zone(f).map(|k| Some((k, start))).map_err(ExchangeError::Zone)
 }
 
 /// A zone file in place of the new zone shown on `map`.
-pub fn replace_zone(doc: &mut EditorDocument, map: OnMap, dialogs: &dyn FileDialogs, input: &dyn TextFiles) -> Done<()> {
+/// A zone file in place of the new zone shown on `map`: Mario's start if the file has it.
+pub fn replace_zone(doc: &mut EditorDocument, map: OnMap, dialogs: &dyn FileDialogs, input: &dyn TextFiles) -> Done<Option<u8>> {
     let OnMap::NewZone(k) = map else { return Err(ExchangeError::ProtectedZone) };
     let Some(text) = read(dialogs, input, FileKind::Zone)? else { return Ok(None) };
-    let f = files::read_zone(&text).map_err(ExchangeError::File)?;
-    Ok(doc.replace_zone(k, f).then_some(()))
+    let (f, start) = files::read_zone(&text).map_err(ExchangeError::File)?;
+    Ok(doc.replace_zone(k, f).then_some(start))
 }
 
 pub fn export_project(doc: &EditorDocument, name: &str, dialogs: &dyn FileDialogs, out: &dyn TextFiles) -> Done<PathBuf> {
     write(dialogs, out, FileKind::Project, name, || files::project_text(&doc.project_file()))
 }
 
-pub fn import_project(doc: &mut EditorDocument, dialogs: &dyn FileDialogs, input: &dyn TextFiles) -> Done<()> {
-    let Some(text) = read(dialogs, input, FileKind::Project)? else { return Ok(None) };
-    let p = files::read_project(&text).map_err(ExchangeError::File)?;
-    doc.replace_project(p).map_err(ExchangeError::File)?;
-    Ok(Some(()))
+pub fn export_world(doc: &EditorDocument, name: &str, dialogs: &dyn FileDialogs, out: &dyn TextFiles) -> Done<PathBuf> {
+    write(dialogs, out, FileKind::World, name, || files::world_text(&doc.world_file()))
+}
+
+/// A world map file in place of the world map: how many points and exits lost their target.
+/// Also Mario's start, if the file has it.
+pub fn import_world(doc: &mut EditorDocument, dialogs: &dyn FileDialogs, input: &dyn TextFiles) -> Done<(usize, usize, Option<u8>)> {
+    let Some(text) = read(dialogs, input, FileKind::Zone)? else { return Ok(None) };
+    let w = files::read_world(&text).map_err(ExchangeError::File)?;
+    let start = w.start;
+    doc.replace_world(w).map(|(p, e)| Some((p, e, start))).map_err(ExchangeError::File)
 }

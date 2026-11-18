@@ -15,5 +15,8 @@ host.workspace = true
 macroquad.workspace = true
 cpal.workspace = true
 
+[dev-dependencies]
+project-model.workspace = true
+
 [target.'cfg(windows)'.dependencies]
 windows-sys.workspace = true
