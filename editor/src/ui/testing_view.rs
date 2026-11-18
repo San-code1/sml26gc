@@ -37,9 +37,9 @@ impl Editor {
         let ok = !s.blocked(&self.doc.levels[self.cur].content.map);
         let c = if ok { Color::new(1.0, 0.85, 0.1, 1.0) } else { warn_col() };
         marker(Rect::new(x, y, SPRITE_W as f32 * k, (SPRITE_H - SPRITE_TOP) as f32 * k), 2.0, c);
-        let t = tr(self.es, "PLAY HERE", "JUGAR AQUI");
-        draw_text(t, x + 1.0, y - 5.0, 16.0, BLACK);
-        draw_text(t, x, y - 6.0, 16.0, c);
+        let t = tr(self.lang, "PLAY HERE");
+        put_text(t, x + 1.0, y - 5.0, 16.0, BLACK);
+        put_text(t, x, y - 6.0, 16.0, c);
     }
 
     /// A click on the level while placing a checkpoint. True when it took the click.
@@ -62,8 +62,8 @@ impl Editor {
 
     fn refused_text(&self, why: CheckpointRefused) -> String {
         match why {
-            CheckpointRefused::NoRoom => tr(self.es, "The game keeps no restart place for this level: it cannot have checkpoints.", "El juego no guarda punto de reaparicion para este nivel: no puede tener puntos de control.").into(),
-            CheckpointRefused::Full => format!("{} {}.", tr(self.es, "A level can have at most", "Un nivel puede tener como mucho"), checkpoint::MAX),
+            CheckpointRefused::NoRoom => tr(self.lang, "The game keeps no restart place for this level: it cannot have checkpoints.").into(),
+            CheckpointRefused::Full => format!("{} {}.", tr(self.lang, "A level can have at most"), checkpoint::MAX),
         }
     }
 
@@ -76,14 +76,14 @@ impl Editor {
         for (n, i) in checkpoint::bells(&c.objs).into_iter().enumerate() {
             let b = &c.objs[i];
             let (x, y) = (self.panel + (b.x as f32 - self.cam.x) * k, (b.y as f32 - self.cam.y) * k);
-            let name = format!("{} {}", tr(self.es, "CHECKPOINT", "CONTROL"), n + 1);
-            draw_text(&name, x + 1.0, y - 5.0, 16.0, BLACK);
-            draw_text(&name, x, y - 6.0, 16.0, colour);
+            let name = format!("{} {}", tr(self.lang, "CHECKPOINT"), n + 1);
+            put_text(&name, x + 1.0, y - 5.0, 16.0, BLACK);
+            put_text(&name, x, y - 6.0, 16.0, colour);
             let s = checkpoint::restart_for(&c.map, b);
             let (sx, sy) = s.sprite_at();
             let (rx, ry) = (self.panel + (sx as f32 - self.cam.x) * k, (sy as f32 - self.cam.y) * k);
             marker(Rect::new(rx, ry, SPRITE_W as f32 * k, (SPRITE_H - SPRITE_TOP) as f32 * k), 2.0, colour);
-            draw_text(&format!("{}", n + 1), rx + 3.0, ry + 14.0, 16.0, colour);
+            put_text(&format!("{}", n + 1), rx + 3.0, ry + 14.0, 16.0, colour);
         }
         if let Some((p, until)) = self.mark {
             if get_time() < until && (get_time() * 6.0) as i64 % 2 == 0 {
@@ -104,17 +104,17 @@ impl Editor {
     }
 
     pub(super) fn warning_text(&self, w: &Warning) -> String {
-        let es = self.es;
+        let lang = self.lang;
         match *w {
-            Warning::NoFinish => tr(es, "No finish", "Sin meta").into(),
-            Warning::FinishWithoutBell(_) => tr(es, "Finish without its bell", "Meta sin su campana").into(),
-            Warning::BellWithoutFinish(_) => tr(es, "Bell with no finish below", "Campana sin meta debajo").into(),
-            Warning::CrowdedScreen(_, n) => format!("{n} {}", tr(es, "objects in one screen (game: 6 at most)", "objetos en una pantalla (el juego: 6 como mucho)")),
-            Warning::TooManyObjects(n) => format!("{n} {}", tr(es, "objects (the game holds 83)", "objetos (el juego admite 83)")),
-            Warning::StartBlocked(_) => tr(es, "Start inside blocks", "Inicio dentro de bloques").into(),
-            Warning::RestartBlocked(_) => tr(es, "Checkpoint restart inside blocks", "Reaparicion dentro de bloques").into(),
-            Warning::MissingLevel(p, l) => format!("{} {p:02X} {} {l:02}", tr(es, "Point", "Punto"), tr(es, "opens missing level", "abre el nivel inexistente")),
-            Warning::OnFirstScreen(_, n) => format!("{n} {}", tr(es, "objects that do not appear at the start", "objetos que no aparecen al empezar")),
+            Warning::NoFinish => tr(lang, "No finish").into(),
+            Warning::FinishWithoutBell(_) => tr(lang, "Finish without its bell").into(),
+            Warning::BellWithoutFinish(_) => tr(lang, "Bell with no finish below").into(),
+            Warning::CrowdedScreen(_, n) => format!("{n} {}", tr(lang, "objects in one screen (game: 6 at most)")),
+            Warning::TooManyObjects(n) => format!("{n} {}", tr(lang, "objects (the game holds 83)")),
+            Warning::StartBlocked(_) => tr(lang, "Start inside blocks").into(),
+            Warning::RestartBlocked(_) => tr(lang, "Checkpoint restart inside blocks").into(),
+            Warning::MissingLevel(p, l) => format!("{} {p:02X} {} {l:02}", tr(lang, "Point"), tr(lang, "opens missing level")),
+            Warning::OnFirstScreen(_, n) => format!("{n} {}", tr(lang, "objects that do not appear at the start")),
         }
     }
 }

@@ -48,11 +48,11 @@ impl Editor {
             self.look = Some((vec2(c as f32, r as f32) * BLOCK, false));
         }
         self.status = match self.placing {
-            Some(Placing::Start) => tr(self.es, "Click the block Mario should stand on when the level begins. Esc: done.", "Haz clic en el bloque sobre el que Mario empieza el nivel. Esc: terminar.").into(),
-            Some(Placing::Secret) => tr(self.es, "Click the cell of the secret exit. Esc: done.", "Haz clic en la celda de la salida secreta. Esc: terminar.").into(),
-            Some(Placing::Finish) => tr(self.es, "Click the cell where the level ends (its bell goes along). Esc: done.", "Haz clic en la celda donde termina el nivel (su campana va con ella). Esc: terminar.").into(),
-            Some(Placing::PlayHere) => tr(self.es, "Click where Mario should start: the copy is saved and the game starts there. Esc: cancel.", "Haz clic donde debe empezar Mario: se guarda la copia y el juego empieza ahi. Esc: cancelar.").into(),
-            Some(Placing::Checkpoint) => tr(self.es, "Click the cell for a checkpoint bell; Mario starts again just left of it, on the ground below. Esc: done.", "Haz clic en la celda de una campana de control; Mario vuelve a salir a su izquierda, sobre el suelo. Esc: terminar.").into(),
+            Some(Placing::Start) => tr(self.lang, "Click the block Mario should stand on when the level begins. Esc: done.").into(),
+            Some(Placing::Secret) => tr(self.lang, "Click the cell of the secret exit. Esc: done.").into(),
+            Some(Placing::Finish) => tr(self.lang, "Click the cell where the level ends (its bell goes along). Esc: done.").into(),
+            Some(Placing::PlayHere) => tr(self.lang, "Click where Mario should start: the copy is saved and the game starts there. Esc: cancel.").into(),
+            Some(Placing::Checkpoint) => tr(self.lang, "Click the cell for a checkpoint bell; Mario starts again just left of it, on the ground below. Esc: done.").into(),
             None => String::new(),
         };
     }
@@ -107,7 +107,7 @@ impl Editor {
             let col = if crowded { warn_col() } else { MARK };
             marker(Rect::new(at.x, at.y, (right + 1 - l) as f32 * k, (ROWS * 16) as f32 * k), 2.0, col);
             // the note at the foot of the view, clear of the overview
-            let t = tr(self.es, "objects here do not appear at the start (only if Mario comes back)", "aqui los objetos no aparecen al empezar (solo si Mario vuelve)");
+            let t = tr(self.lang, "objects here do not appear at the start (only if Mario comes back)");
             let left = at.x.max(self.panel) + 6.0;
             let width = at.x + (right + 1 - l) as f32 * k - left - 6.0;
             let lines = wrap_px(t, width.max(120.0), 14.0);
@@ -123,8 +123,8 @@ impl Editor {
         }
         let c = if self.placing == Some(Placing::Start) { Color::new(1.0, 0.85, 0.1, 1.0) } else { Color::new(1.0, 1.0, 1.0, 0.6) };
         marker(Rect::new(x - 2.0, y - 2.0, r.w * k + 4.0, r.h * k + 4.0), 2.0, c);
-        let t = tr(self.es, "START", "INICIO");
-        draw_text(t, x + 1.0, y - 5.0, 16.0, BLACK);
-        draw_text(t, x, y - 6.0, 16.0, c);
+        let t = tr(self.lang, "START");
+        put_text(t, x + 1.0, y - 5.0, 16.0, BLACK);
+        put_text(t, x, y - 6.0, 16.0, c);
     }
 }

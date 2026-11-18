@@ -52,18 +52,7 @@ impl Rows {
     }
 }
 
-/// `t` cut to fit `w` pixels at `size`.
-pub(super) fn fit(t: &str, w: f32, size: f32) -> String {
-    let width = |s: &str| measure_text(s, None, size as u16, 1.0).width;
-    if width(t) <= w {
-        return t.to_string();
-    }
-    let mut s = t.to_string();
-    while !s.is_empty() && width(&format!("{s}..")) > w {
-        s.pop();
-    }
-    format!("{s}..")
-}
+pub(super) use super::widgets::fit;
 
 impl Editor {
     pub(super) fn inner_w(&self) -> f32 {
@@ -91,12 +80,12 @@ impl Editor {
     /// A section's title with a rule after it, and `right` at the rule's end.
     pub(super) fn section_title(&self, y: f32, text: &str, right: &str) {
         let w = self.inner_w();
-        draw_text(text, PAD, y + 13.0, 14.0, col(2));
-        let d = measure_text(text, None, 14, 1.0);
-        let rw = if right.is_empty() { 0.0 } else { measure_text(right, None, 14, 1.0).width.ceil() + 8.0 };
+        put_text(text, PAD, y + 13.0, 14.0, col(2));
+        let d = text_size(text, 14);
+        let rw = if right.is_empty() { 0.0 } else { text_size(right, 14).width.ceil() + 8.0 };
         draw_rectangle(PAD + d.width.ceil() + 8.0, y + 8.0, w - d.width.ceil() - 8.0 - rw, 1.0, col(1));
         if !right.is_empty() {
-            draw_text(right, PAD + w - rw + 8.0, y + 13.0, 14.0, col(2));
+            put_text(right, PAD + w - rw + 8.0, y + 13.0, 14.0, col(2));
         }
     }
 
@@ -122,10 +111,10 @@ impl Editor {
     /// The toolbar: history and Restore, then file and game (`second`). Returns where the
     /// panel continues and the action clicked.
     pub(super) fn toolbar(&mut self, y: f32, second: &[(&str, Action, bool)]) -> (f32, Option<Action>) {
-        let es = self.es;
+        let lang = self.lang;
         let w = self.inner_w();
         let mut act = None;
-        let history = [(tr(es, "Undo", "Deshacer"), Action::Undo, false), (tr(es, "Redo", "Rehacer"), Action::Redo, false), (tr(es, "Restore", "Restaurar"), Action::Restore, false)];
+        let history = [(tr(lang, "Undo"), Action::Undo, false), (tr(lang, "Redo"), Action::Redo, false), (tr(lang, "Restore"), Action::Restore, false)];
         let mut y = y;
         for row in [&history[..], second] {
             let n = row.len() as f32;
@@ -145,17 +134,18 @@ impl Editor {
         (y + 6.0, act)
     }
 
-    /// The tooltip of the button under the mouse, over everything.
+    /// The tooltip of the button under the mouse, or the whole of a text cut short under it,
+    /// over everything.
     pub(super) fn draw_tip(&mut self) {
-        let Some(t) = self.tip.take() else { return };
+        let Some(t) = self.tip.take().or_else(take_cut_tip) else { return };
         let m: Vec2 = mouse_position().into();
-        let d = measure_text(&t, None, 15, 1.0);
+        let d = text_size(&t, 15);
         let (w, h) = (d.width + 12.0, 22.0);
         let x = (m.x + 14.0).min(screen_width() - w - 4.0);
         let y = (m.y + 18.0).min(screen_height() - h - 4.0);
         draw_rectangle(x, y, w, h, col(3));
         draw_rectangle_lines(x, y, w, h, 1.0, col(1));
-        draw_text(&t, x + 6.0, y + 15.0, 15.0, col(0));
+        put_text(&t, x + 6.0, y + 15.0, 15.0, col(0));
     }
 
     /// Level buttons, toolbar, mode, tools, tabs and the chosen tab. Returns the action
@@ -163,12 +153,12 @@ impl Editor {
     pub(super) fn level_panel(&mut self) -> (Option<Action>, Option<usize>) {
         draw_rectangle(0.0, 0.0, self.panel, screen_height(), col(0));
         draw_rectangle(self.panel - 3.0, 0.0, 3.0, screen_height(), col(3));
-        let es = self.es;
+        let lang = self.lang;
         let w = self.inner_w();
         let mut act = None;
         let mut pick = None;
-        draw_text(tr(es, "LEVEL EDITOR", "EDITOR DE NIVELES"), PAD, 25.0, 20.0, col(3));
-        if self.tool_button(Rect::new(PAD + w - 104.0, 8.0, 104.0, 24.0), tr(es, "Zones", "Zonas"), Action::WorldEditor, false) {
+        put_text(tr(lang, "LEVEL EDITOR"), PAD, 25.0, 20.0, col(3));
+        if self.tool_button(Rect::new(PAD + w - 104.0, 8.0, 104.0, 24.0), tr(lang, "Zones"), Action::WorldEditor, false) {
             act = Some(Action::WorldEditor);
         }
         let mut y = 40.0;
@@ -180,7 +170,7 @@ impl Editor {
             act = Some(Action::NextLevel);
         }
         let lv = &self.doc.levels[self.cur];
-        let mut label = format!("{} {:02}", tr(es, "Level", "Nivel"), self.cur);
+        let mut label = format!("{} {:02}", tr(lang, "Level"), self.cur);
         if !lv.content.name.is_empty() {
             label += &format!("  {}", lv.content.name);
         }
@@ -202,8 +192,16 @@ impl Editor {
             for l in 0..count {
                 let (cx, cy) = (PAD + (l % per_row) as f32 * (LEVEL_BUTTON.0 + 2.0), y + (l / per_row) as f32 * (LEVEL_BUTTON.1 + 2.0));
                 let label = format!("{:02}{}", l, if self.doc.levels[l].dirty() { "*" } else { "" });
-                if button(Rect::new(cx, cy, LEVEL_BUTTON.0, LEVEL_BUTTON.1), &label, l == self.cur, 15.0) {
+                let r = Rect::new(cx, cy, LEVEL_BUTTON.0, LEVEL_BUTTON.1);
+                if button(r, &label, l == self.cur, 15.0) {
                     pick = Some(l);
+                }
+                if l >= LEVELS {
+                    user_tag(r, l == self.cur);
+                    if r.contains(mouse_position().into()) {
+                        let name = self.doc.level_name(l);
+                        self.tip = Some(format!("{} {l:02}{}{name}  ({})", tr(lang, "Level"), if name.is_empty() { "" } else { "  " }, tr(lang, "made in the editor")));
+                    }
                 }
                 if self.doc.mods.level(l) {
                     draw_triangle(vec2(cx + LEVEL_BUTTON.0, cy), vec2(cx + LEVEL_BUTTON.0 - 8.0, cy), vec2(cx + LEVEL_BUTTON.0, cy + 8.0), col(2));
@@ -211,50 +209,53 @@ impl Editor {
                 let n = self.doc.warnings(l).len();
                 if n > 0 {
                     draw_circle(cx + LEVEL_BUTTON.0 - 5.0, cy + LEVEL_BUTTON.1 - 5.0, 5.0, warn_col());
-                    draw_text(&n.to_string(), cx + LEVEL_BUTTON.0 - 8.0, cy + LEVEL_BUTTON.1 - 1.0, 12.0, BLACK);
+                    put_text(&n.to_string(), cx + LEVEL_BUTTON.0 - 8.0, cy + LEVEL_BUTTON.1 - 1.0, 12.0, BLACK);
                 }
             }
             y += count.div_ceil(per_row) as f32 * (LEVEL_BUTTON.1 + 2.0) + 2.0;
-            let delete = (self.cur >= LEVELS).then_some((tr(es, "Delete level", "Borrar nivel"), Action::DeleteLevel));
-            let (next, a) = self.picker_actions(y, [Some((tr(es, "Copy level", "Copiar nivel"), Action::NewLevel)), Some((tr(es, "Blank level", "Nivel en blanco"), Action::NewBlankLevel)), delete]);
+            if count > LEVELS {
+                y += user_tag_legend(PAD, y + 2.0, tr(lang, "made in the editor"));
+            }
+            let delete = (self.cur >= LEVELS).then_some((tr(lang, "Delete level"), Action::DeleteLevel));
+            let (next, a) = self.picker_actions(y, [Some((tr(lang, "Copy level"), Action::NewLevel)), Some((tr(lang, "Blank level"), Action::NewBlankLevel)), delete]);
             y = next;
             act = a.or(act);
         }
         y += 4.0;
         let here = self.placing == Some(Placing::PlayHere);
-        let (next, a) = self.toolbar(y, &[(tr(es, "Save", "Guardar"), Action::Save, false), (tr(es, "Play", "Jugar"), Action::Play, false), (tr(es, "Here", "Aqui"), Action::PlayFromHere, here)]);
+        let (next, a) = self.toolbar(y, &[(tr(lang, "Save"), Action::Save, false), (tr(lang, "Play"), Action::Play, false), (tr(lang, "Here"), Action::PlayFromHere, here)]);
         y = next;
         act = a.or(act);
         // Blocks / Objects, then the mode's tools
         let half = (w - GAP) / 2.0;
         let blocks = self.mode == Mode::Blocks;
-        if self.tool_button(Rect::new(PAD, y, half, ROW), tr(es, "Blocks", "Bloques"), Action::BlocksObjects, blocks) {
+        if self.tool_button(Rect::new(PAD, y, half, ROW), tr(lang, "Blocks"), Action::BlocksObjects, blocks) {
             self.set_mode(Mode::Blocks);
         }
-        if self.tool_button(Rect::new(PAD + half + GAP, y, half, ROW), tr(es, "Objects", "Objetos"), Action::BlocksObjects, !blocks) {
+        if self.tool_button(Rect::new(PAD + half + GAP, y, half, ROW), tr(lang, "Objects"), Action::BlocksObjects, !blocks) {
             self.set_mode(Mode::Objects);
         }
         y += ROW + GAP;
         let qw = (w - 3.0 * GAP) / 4.0;
         if blocks {
             let tool = self.tool.kind();
-            for (i, (name, a, k)) in [(tr(es, "Pencil", "Lapiz"), Action::Pencil, ToolKind::Pencil), (tr(es, "Box", "Caja"), Action::BoxFill, ToolKind::Box), (tr(es, "Select", "Seleccion"), Action::Select, ToolKind::Select)].into_iter().enumerate() {
+            for (i, (name, a, k)) in [(tr(lang, "Pencil"), Action::Pencil, ToolKind::Pencil), (tr(lang, "Box"), Action::BoxFill, ToolKind::Box), (tr(lang, "Select"), Action::Select, ToolKind::Select)].into_iter().enumerate() {
                 if self.tool_button(Rect::new(PAD + i as f32 * (qw + GAP), y, qw, ROW), name, a, tool == k) {
                     act = Some(a);
                 }
             }
         } else {
             let n = self.doc.levels[self.cur].content.objs.len();
-            draw_text(&format!("{n} {}", tr(es, "objects", "objetos")), PAD + 2.0, y + 18.0, 16.0, col(3));
+            put_text(&format!("{n} {}", tr(lang, "objects")), PAD + 2.0, y + 18.0, 16.0, col(3));
         }
-        if self.tool_button(Rect::new(PAD + 3.0 * (qw + GAP), y, qw, ROW), tr(es, "Grid", "Rejilla"), Action::Grid, self.grid) {
+        if self.tool_button(Rect::new(PAD + 3.0 * (qw + GAP), y, qw, ROW), tr(lang, "Grid"), Action::Grid, self.grid) {
             act = Some(Action::Grid);
         }
         y += ROW + GAP + 6.0;
         // tabs
         let warnings = self.doc.warnings(self.cur).len();
-        let level_tab = if warnings > 0 { format!("{}  ! {warnings}", tr(es, "Level", "Nivel")) } else { tr(es, "Level", "Nivel").to_string() };
-        for (i, (name, tab)) in [(tr(es, "Palette", "Paleta").to_string(), SideTab::Palette), (level_tab, SideTab::Level)].into_iter().enumerate() {
+        let level_tab = if warnings > 0 { format!("{}  ! {warnings}", tr(lang, "Level")) } else { tr(lang, "Level").to_string() };
+        for (i, (name, tab)) in [(tr(lang, "Palette").to_string(), SideTab::Palette), (level_tab, SideTab::Level)].into_iter().enumerate() {
             let r = Rect::new(PAD + i as f32 * (half + GAP), y, half, ROW);
             if button(r, &name, self.side_tab == tab, 15.0) {
                 self.side_tab = tab;
@@ -284,7 +285,7 @@ impl Editor {
     }
 
     fn label(y: f32, text: &str) {
-        draw_text(text, PAD, y + 18.0, 15.0, col(3));
+        put_text(text, PAD, y + 18.0, 15.0, col(3));
     }
 
     /// A note over as many rows as it needs.
@@ -292,18 +293,18 @@ impl Editor {
         let per_line = ((w / 7.5) as usize).max(10);
         for line in wrap(text, per_line) {
             if let Some(y) = rows.next(16.0) {
-                draw_text(&line, PAD, y + 12.0, 14.0, col(2));
+                put_text(&line, PAD, y + 12.0, 14.0, col(2));
             }
         }
     }
 
     fn note(x: f32, y: f32, w: f32, text: &str) {
-        draw_text(&fit(text, w, 14.0), x, y + 18.0, 14.0, col(2));
+        put_text(&fit(text, w, 14.0), x, y + 18.0, 14.0, col(2));
     }
 
     /// The shown level's inspector: level, goals, settings and warnings.
     fn inspector(&mut self, top: f32) -> Option<Action> {
-        let es = self.es;
+        let lang = self.lang;
         let w = self.inner_w();
         let bottom = screen_height() - 6.0;
         let m: Vec2 = mouse_position().into();
@@ -318,63 +319,63 @@ impl Editor {
         let l = self.cur;
 
         if l >= LEVELS || self.doc.mods.level(l) {
-            self.heading(&mut rows, tr(es, "LEVEL", "NIVEL"));
+            self.heading(&mut rows, tr(lang, "LEVEL"));
         }
         if l >= LEVELS {
             if let Some(y) = rows.next(ROW) {
                 self.name_field(Rect::new(PAD, y, w, ROW), Named::Level(l));
             }
             if let Some(y) = rows.next(ROW) {
-                Self::label(y, tr(es, "Plays as", "Se juega como"));
-                Self::note(cx, y, cw, &format!("{} {:02}", tr(es, "level", "nivel"), self.doc.base_of(l)));
+                Self::label(y, tr(lang, "Plays as"));
+                Self::note(cx, y, cw, &format!("{} {:02}", tr(lang, "level"), self.doc.base_of(l)));
             }
         }
         if self.doc.mods.level(l) {
             if let Some(y) = rows.next(ROW) {
-                Self::label(y, tr(es, "Original", "Original"));
-                Self::note(cx, y, cw, tr(es, "mod (saved; Restore puts it back)", "mod (guardado; Restaurar lo devuelve)"));
+                Self::label(y, tr(lang, "Original"));
+                Self::note(cx, y, cw, tr(lang, "mod (saved; Restore puts it back)"));
             }
         }
 
-        self.heading(&mut rows, tr(es, "GOALS", "METAS"));
+        self.heading(&mut rows, tr(lang, "GOALS"));
         let place = 70.0;
         let start = self.doc.level_start(l);
         let goals = [
-            (tr(es, "Start", "Inicio"), Action::PlaceStart, Placing::Start, format!("x {:04X} y {:04X}", start.mario_x, start.mario_y), true),
-            (tr(es, "Finish", "Meta"), Action::PlaceFinish, Placing::Finish, self.goal_text(Goal::Finish), !self.doc.ends_with_boss(l)),
-            (tr(es, "Secret exit", "Salida secreta"), Action::PlaceSecret, Placing::Secret, self.goal_text(Goal::Secret), true),
+            (tr(lang, "Start"), Action::PlaceStart, Placing::Start, format!("x {:04X} y {:04X}", start.mario_x, start.mario_y), true),
+            (tr(lang, "Finish"), Action::PlaceFinish, Placing::Finish, self.goal_text(Goal::Finish), !self.doc.ends_with_boss(l)),
+            (tr(lang, "Secret exit"), Action::PlaceSecret, Placing::Secret, self.goal_text(Goal::Secret), true),
         ];
         for (name, a, p, text, can) in goals {
             if let Some(y) = rows.next(ROW) {
                 Self::label(y, name);
-                if can && self.tool_button(Rect::new(cx, y, place, ROW), tr(es, "Place", "Colocar"), a, self.placing == Some(p)) {
+                if can && self.tool_button(Rect::new(cx, y, place, ROW), tr(lang, "Place"), a, self.placing == Some(p)) {
                     act = Some(a);
                 }
                 Self::note(cx + place + 6.0, y, cw - place - 6.0, &text);
             }
         }
         if let Some(y) = rows.next(ROW) {
-            Self::label(y, tr(es, "Leads to", "Lleva a"));
-            if self.tool_button(Rect::new(cx, y, place, ROW), tr(es, "Choose", "Elegir"), Action::SecretLeads, false) {
+            Self::label(y, tr(lang, "Leads to"));
+            if self.tool_button(Rect::new(cx, y, place, ROW), tr(lang, "Choose"), Action::SecretLeads, false) {
                 act = Some(Action::SecretLeads);
             }
             Self::note(cx + place + 6.0, y, cw - place - 6.0, &self.secret_leads());
         }
         if let Some(y) = rows.next(ROW) {
-            Self::label(y, tr(es, "Checkpoints", "Controles"));
+            Self::label(y, tr(lang, "Checkpoints"));
             let refused = self.doc.checkpoint_refused(l);
-            if refused != Some(CheckpointRefused::NoRoom) && self.tool_button(Rect::new(cx, y, place, ROW), tr(es, "Add", "Poner"), Action::PlaceCheckpoint, self.placing == Some(Placing::Checkpoint)) {
+            if refused != Some(CheckpointRefused::NoRoom) && self.tool_button(Rect::new(cx, y, place, ROW), tr(lang, "Add"), Action::PlaceCheckpoint, self.placing == Some(Placing::Checkpoint)) {
                 act = Some(Action::PlaceCheckpoint);
             }
             let n = checkpoint::bells(&self.doc.levels[l].content.objs).len();
             let t = match refused {
-                Some(CheckpointRefused::NoRoom) => tr(es, "none in this level", "ninguno en este nivel").to_string(),
+                Some(CheckpointRefused::NoRoom) => tr(lang, "none in this level").to_string(),
                 _ => format!("{n} / {}", checkpoint::MAX),
             };
             Self::note(cx + place + 6.0, y, cw - place - 6.0, &t);
         }
 
-        self.heading(&mut rows, tr(es, "SETTINGS", "AJUSTES"));
+        self.heading(&mut rows, tr(lang, "SETTINGS"));
         let mut s = self.doc.level_settings(l);
         let small = 26.0;
         // a value between - and + (or < and >) buttons; returns -1, 0 or 1
@@ -385,21 +386,21 @@ impl Editor {
             }
             let vw = cw - 2.0 * small - 2.0 * GAP;
             let t = fit(value, vw - 4.0, 15.0);
-            let dim = measure_text(&t, None, 15, 1.0);
-            draw_text(&t, cx + small + GAP + (vw - dim.width) / 2.0, rows_y + 18.0, 15.0, col(3));
+            let dim = text_size(&t, 15);
+            put_text(&t, cx + small + GAP + (vw - dim.width) / 2.0, rows_y + 18.0, 15.0, col(3));
             if button(Rect::new(cx + cw - small, rows_y, small, ROW), plus, false, 16.0) {
                 d = 1;
             }
             d
         };
         if let Some(y) = rows.next(ROW) {
-            Self::label(y, tr(es, "Time", "Tiempo"));
+            Self::label(y, tr(lang, "Time"));
             let d = stepper(y, "-", "+", &format!("{}", s.time as u32 * 100));
             s.time = (s.time as i32 + d).clamp(TIME_MIN as i32, TIME_MAX as i32) as u8;
         }
         if let Some(y) = rows.next(ROW) {
-            Self::label(y, tr(es, "Background", "Fondo"));
-            let names = [tr(es, "normal", "normal"), tr(es, "dark", "oscuro"), tr(es, "darker", "mas oscuro")];
+            Self::label(y, tr(lang, "Background"));
+            let names = [tr(lang, "normal"), tr(lang, "dark"), tr(lang, "darker")];
             let i = PALETTES.iter().position(|&p| p == s.palette);
             let d = stepper(y, "<", ">", i.map_or("?", |i| names[i]));
             if d != 0 {
@@ -407,9 +408,9 @@ impl Editor {
             }
         }
         if let Some(y) = rows.next(ROW) {
-            Self::label(y, tr(es, "Music", "Musica"));
+            Self::label(y, tr(lang, "Music"));
             let i = MUSICS.iter().position(|&(m, _)| m == s.music);
-            let name = i.map_or(format!("${:02X}", s.music), |i| format!("{} {:02}", tr(es, "as level", "la del"), MUSICS[i].1));
+            let name = i.map_or(format!("${:02X}", s.music), |i| format!("{} {:02}", tr(lang, "as level"), MUSICS[i].1));
             let d = stepper(y, "<", ">", &name);
             if d != 0 {
                 s.music = MUSICS[(i.unwrap_or(0) as i32 + d).rem_euclid(MUSICS.len() as i32) as usize].0;
@@ -417,12 +418,12 @@ impl Editor {
         }
         let playing = self.music_playing();
         if let Some(y) = rows.next(ROW) {
-            if button(Rect::new(PAD, y, LABEL_W - GAP, ROW), if playing { tr(es, "Stop", "Parar") } else { tr(es, "Listen", "Escuchar") }, playing, 15.0) {
+            if button(Rect::new(PAD, y, LABEL_W - GAP, ROW), if playing { tr(lang, "Stop") } else { tr(lang, "Listen") }, playing, 15.0) {
                 self.toggle_music(s.music);
             }
             // how loud Listen plays: the editor's own setting, not the game's volume
             let v = self.prefs.music_volume as i32;
-            let d = stepper(y, "-", "+", &format!("{} {v}", tr(es, "editor vol", "vol. editor")));
+            let d = stepper(y, "-", "+", &format!("{} {v}", tr(lang, "editor vol")));
             let nv = (v + d).clamp(*MUSIC_VOLUMES.start() as i32, *MUSIC_VOLUMES.end() as i32) as u32;
             if nv != self.prefs.music_volume {
                 self.set_music_volume(nv);
@@ -449,44 +450,44 @@ impl Editor {
             pick
         };
         if let Some(y) = rows.next(ROW) {
-            Self::label(y, tr(es, "Gravity", "Gravedad"));
-            if let Some(on) = choice(y, [tr(es, "normal", "normal"), tr(es, "space", "espacio")], t.space_gravity()) {
+            Self::label(y, tr(lang, "Gravity"));
+            if let Some(on) = choice(y, [tr(lang, "normal"), tr(lang, "space")], t.space_gravity()) {
                 t.set_space_gravity(on, &game);
             }
         }
         if let Some(y) = rows.next(ROW) {
-            Self::label(y, tr(es, "Auto-scroll", "Auto-scroll"));
-            if let Some(on) = choice(y, [tr(es, "off", "no"), tr(es, "on", "si")], t.scrolls()) {
+            Self::label(y, tr(lang, "Auto-scroll"));
+            if let Some(on) = choice(y, [tr(lang, "off"), tr(lang, "on")], t.scrolls()) {
                 t.set_scrolls(on);
             }
         }
         if let Some(y) = rows.next(ROW) {
-            Self::label(y, tr(es, "Camera", "Camara"));
-            if let Some(on) = choice(y, [tr(es, "normal", "normal"), tr(es, "wide", "amplia")], t.wide_camera()) {
+            Self::label(y, tr(lang, "Camera"));
+            if let Some(on) = choice(y, [tr(lang, "normal"), tr(lang, "wide")], t.wide_camera()) {
                 t.set_wide_camera(on);
             }
         }
-        Self::explain(&mut rows, w, tr(es, "Wide: when Mario climbs or jumps high the camera goes up sooner, so more of what is above shows.", "Amplia: si Mario trepa o salta alto, la camara sube antes y se ve mas de lo que hay arriba."));
+        Self::explain(&mut rows, w, tr(lang, "Wide: when Mario climbs or jumps high the camera goes up sooner, so more of what is above shows."));
         if game.animated() {
             if let Some(y) = rows.next(ROW) {
-                Self::label(y, tr(es, "Animation", "Animacion"));
-                if let Some(on) = choice(y, [tr(es, "none", "ninguna"), tr(es, "its own", "la suya")], t.animated()) {
+                Self::label(y, tr(lang, "Animation"));
+                if let Some(on) = choice(y, [tr(lang, "none"), tr(lang, "its own")], t.animated()) {
                     t.set_animated(on, &game);
                 }
             }
         }
         if t.scrolls() {
-            Self::explain(&mut rows, w, tr(es, "Auto-scroll: the screen moves right by itself; caught against a wall Mario loses a life.", "Auto-scroll: la pantalla avanza sola; atrapado contra una pared Mario pierde una vida."));
+            Self::explain(&mut rows, w, tr(lang, "Auto-scroll: the screen moves right by itself; caught against a wall Mario loses a life."));
         }
         if t != self.doc.level_tables(l) {
             self.doc.set_level_tables(l, t);
         }
 
         let warnings = self.doc.warnings(l);
-        self.heading(&mut rows, &format!("{} ({})", tr(es, "WARNINGS", "AVISOS"), warnings.len()));
+        self.heading(&mut rows, &format!("{} ({})", tr(lang, "WARNINGS"), warnings.len()));
         if warnings.is_empty() {
             if let Some(y) = rows.next(20.0) {
-                draw_text(tr(es, "None: the level looks fine.", "Ninguno: el nivel parece correcto."), PAD, y + 14.0, 15.0, col(2));
+                put_text(tr(lang, "None: the level looks fine."), PAD, y + 14.0, 15.0, col(2));
             }
         }
         for wa in &warnings {
@@ -495,7 +496,7 @@ impl Editor {
             let place = wa.place();
             if r.contains(m) && place.is_some() {
                 draw_rectangle(r.x, r.y, r.w, r.h, col(1));
-                self.tip = Some(tr(es, "Click: show it on the level", "Clic: verlo en el nivel").into());
+                self.tip = Some(tr(lang, "Click: show it on the level").into());
                 if is_mouse_button_pressed(MouseButton::Left) {
                     let (x, py) = place.unwrap_or_default();
                     let p = vec2(x as f32, py as f32);
@@ -504,7 +505,7 @@ impl Editor {
                 }
             }
             draw_circle(PAD + 6.0, y + 10.0, 4.0, warn_col());
-            draw_text(&fit(&self.warning_text(wa), w - 18.0, 15.0), PAD + 16.0, y + 15.0, 15.0, col(3));
+            put_text(&fit(&self.warning_text(wa), w - 18.0, 15.0), PAD + 16.0, y + 15.0, 15.0, col(3));
         }
         self.side_content = rows.y + self.side_scroll - top;
         if self.side_content > bottom - top {
@@ -520,8 +521,8 @@ impl Editor {
     fn goal_text(&self, g: Goal) -> String {
         match self.doc.goal_cells(self.cur, g).first() {
             Some(&(c, r)) => format!("{c}, {r}"),
-            None if g == Goal::Finish && self.doc.ends_with_boss(self.cur) => tr(self.es, "ends with its boss", "termina con su jefe").to_string(),
-            None => tr(self.es, "none", "ninguna").to_string(),
+            None if g == Goal::Finish && self.doc.ends_with_boss(self.cur) => tr(self.lang, "ends with its boss").to_string(),
+            None => tr(self.lang, "none").to_string(),
         }
     }
 }

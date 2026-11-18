@@ -16,6 +16,7 @@ mod palette;
 mod projects_view;
 mod shortcuts;
 mod goal_view;
+pub mod language_menu;
 mod start_view;
 mod status_bar;
 mod target_picker;
@@ -25,7 +26,7 @@ mod widgets;
 mod world_view;
 
 pub use projects_view::{BaseScreen, ProjectsChoice, ProjectsScreen};
-pub use widgets::col;
+pub use widgets::{col, set_text_language};
 
 use crate::application::art_service::{ArtService, Capture};
 use crate::application::look_loader::LookLoader;
@@ -60,7 +61,7 @@ pub const TAB_PICTURE: usize = 0;
 pub const TAB_POINTS: usize = 1;
 
 pub struct Editor {
-    es: bool,
+    lang: Lang,
     pub(crate) doc: EditorDocument,
     store: Box<dyn EditedCopyStore>,
     launcher: Box<dyn GameLauncher>,
@@ -233,6 +234,7 @@ impl MenuBar for NoMenu {
         Vec::new()
     }
     fn enable(&mut self, _: u16, _: bool) {}
+    fn check(&mut self, _: u16, _: bool) {}
     fn clear(&mut self) {}
 }
 
@@ -263,17 +265,17 @@ fn left_button() -> Pointer {
 }
 
 impl Editor {
-    pub fn new(doc: EditorDocument, ports: Ports, project: String, es: bool) -> Editor {
+    pub fn new(doc: EditorDocument, ports: Ports, project: String, lang: Lang) -> Editor {
         let Ports { store, launcher, prefs: prefs_store, dialogs, text_files, menu, sound, looks: look_store } = ports;
         let (cached, cached_tiles) = look_store.load().map(|t| look_cache::from_text(&t)).unwrap_or_default();
         let known = cached.iter().map(|e| (e.0, e.1)).collect();
         let known_tiles = cached_tiles.iter().map(|e| (e.0, e.1)).collect();
         let look_loader = LookLoader::start(doc.rom.clone(), doc.original.clone(), &known, &known_tiles);
-        let status = format!("{} {project}", tr(es, "Project", "Proyecto"));
+        let status = format!("{} {project}", tr(lang, "Project"));
         let saved_project = crate::domain::files::project_text(&doc.project_file());
 
         let mut ed = Editor {
-            es,
+            lang,
             doc,
             store,
             launcher,
@@ -383,37 +385,43 @@ impl Editor {
     /// Take the other object catalogue's objects out of the levels' sets (a copy saved when a
     /// level could take them), and say so.
     pub fn drop_other_catalogue(&mut self) {
-        let es = self.es;
+        let lang = self.lang;
         let (dropped, objects) = self.doc.drop_other_catalogue();
         if dropped.is_empty() {
             return;
         }
         let levels: Vec<String> = dropped.iter().map(|l| format!("{l:02}")).collect();
-        self.status = format!("{} {} ({objects} {}). {}", tr(es, "Objects of the other object catalogue taken out of the enemies of levels", "Objetos del otro catalogo quitados de los enemigos de los niveles"), levels.join(", "), tr(es, "placed", "colocados"), tr(es, "A level plays its own catalogue's objects only; Ctrl+Z brings them back.", "Un nivel solo juega los objetos de su catalogo; Ctrl+Z los recupera."));
+        self.status = format!("{} {} ({objects} {}). {}", tr(lang, "Objects of the other object catalogue taken out of the enemies of levels"), levels.join(", "), tr(lang, "placed"), tr(lang, "A level plays its own catalogue's objects only; Ctrl+Z brings them back."));
         self.mark(Severity::Warning);
     }
 
     /// One frame: the menu, shortcuts, input, then drawing.
     pub fn frame(&mut self) {
+        new_frame_texts();
         if self.asking.is_some() {
             self.unsaved_frame();
+            self.draw_tip();
             return;
         }
         if self.start_offer.is_some() {
             self.start_offer_frame();
+            self.draw_tip();
             return;
         }
         self.update_menu();
         if self.blank_choice.is_some() && !self.in_world {
             self.blank_frame();
+            self.draw_tip();
             return;
         }
         if self.blank_zone_choice.is_some() && self.in_world {
             self.blank_zone_frame();
+            self.draw_tip();
             return;
         }
         if self.catalogue.is_some() && !self.in_world {
             self.catalogue_frame();
+            self.draw_tip();
             return;
         }
         if !self.update_naming() {
@@ -468,7 +476,7 @@ impl Editor {
             return;
         }
         if let Err(e) = self.music.play(&self.doc.rom, music, self.sound.sample_rate()) {
-            self.status = format!("{} {e}", tr(self.es, "Could not play the music:", "No se pudo tocar la musica:"));
+            self.status = format!("{} {e}", tr(self.lang, "Could not play the music:"));
             self.mark(Severity::Error);
         }
     }
@@ -542,7 +550,7 @@ impl Editor {
             Action::PlaceSecret => self.toggle_placing(start_view::Placing::Secret),
             Action::PlaceCheckpoint => match self.doc.checkpoint_refused(self.cur) {
                 Some(crate::domain::document::CheckpointRefused::NoRoom) => {
-                    self.status = tr(self.es, "The game keeps no restart place for this level: it cannot have checkpoints.", "El juego no guarda punto de reaparicion para este nivel: no puede tener puntos de control.").into();
+                    self.status = tr(self.lang, "The game keeps no restart place for this level: it cannot have checkpoints.").into();
                     self.mark(Severity::Warning);
                 }
                 _ => self.toggle_placing(start_view::Placing::Checkpoint),
@@ -646,7 +654,7 @@ impl Editor {
                 return;
             }
             Capture::NotLoaded => {
-                self.status = tr(self.es, "The game didn't load this level; its graphics may be wrong.", "El juego no cargo este nivel; sus graficos pueden no ser correctos.").into();
+                self.status = tr(self.lang, "The game didn't load this level; its graphics may be wrong.").into();
                 self.mark(Severity::Warning);
             }
             Capture::Captured => {}
@@ -718,9 +726,9 @@ impl Editor {
         self.overview_stale = true;
         let shared = self.doc.sharing(l);
         self.status = if shared.is_empty() {
-            format!("{} {:02} {}", tr(self.es, "Level", "Nivel"), l, self.doc.level_name(l))
+            format!("{} {:02} {}", tr(self.lang, "Level"), l, self.doc.level_name(l))
         } else {
-            format!("{} {:02}: {} {:?}", tr(self.es, "Level", "Nivel"), l, tr(self.es, "its map is also used by level(s)", "su mapa tambien lo usa(n) el/los nivel(es)"), shared)
+            format!("{} {:02}: {} {:?}", tr(self.lang, "Level"), l, tr(self.lang, "its map is also used by level(s)"), shared)
         };
     }
 
@@ -733,7 +741,7 @@ impl Editor {
             self.level_cam = self.cam;
             self.ensure_world_art();
             self.cam = self.world_cam;
-            self.status = tr(self.es, "World map: paint its tiles, or choose which level each point opens.", "Mapa de mundos: pinta sus tiles o elige que nivel abre cada punto.").into();
+            self.status = tr(self.lang, "World map: paint its tiles, or choose which level each point opens.").into();
         } else {
             self.world_cam = self.cam;
             self.cam = self.level_cam;
@@ -767,6 +775,11 @@ impl Editor {
         self.doc.levels.len()
     }
 
+    /// A copy of the level shown, shown (for the check pictures).
+    pub fn copy_level(&mut self) {
+        self.new_level();
+    }
+
     /// A new level, a copy of the one shown, and show it.
     fn new_level(&mut self) {
         match self.doc.add_level(self.cur) {
@@ -775,14 +788,14 @@ impl Editor {
                 self.select_level(n);
                 self.status = format!(
                     "{} {n:02}: {} {base:02} ({}). {}",
-                    tr(self.es, "New level", "Nivel nuevo"),
-                    tr(self.es, "plays as level", "se juega como el nivel"),
-                    tr(self.es, "its graphics, music and time", "sus graficos, musica y tiempo"),
-                    tr(self.es, "Give it to a map point to reach it in the game.", "Asignalo a un punto del mapa para llegar a el en el juego.")
+                    tr(self.lang, "New level"),
+                    tr(self.lang, "plays as level"),
+                    tr(self.lang, "its graphics, music and time"),
+                    tr(self.lang, "Give it to a map point to reach it in the game.")
                 );
             }
             None => {
-                self.status = tr(self.es, "There can't be more levels.", "No caben mas niveles.").into();
+                self.status = tr(self.lang, "There can't be more levels.").into();
                 self.mark(Severity::Warning);
             }
         }
@@ -796,7 +809,7 @@ impl Editor {
         }
         if self.doc.remove_level(l) {
             self.select_level(l.min(self.doc.levels.len() - 1));
-            self.status = format!("{} {l:02} {}", tr(self.es, "Level", "Nivel"), tr(self.es, "deleted (save to keep it); the ones after it moved down a number.", "borrado (guarda para conservarlo); los siguientes bajan un numero."));
+            self.status = format!("{} {l:02} {}", tr(self.lang, "Level"), tr(self.lang, "deleted (save to keep it); the ones after it moved down a number."));
             self.mark(Severity::Done);
         }
     }
@@ -833,16 +846,16 @@ impl Editor {
         self.overview_stale = true;
         let l = self.cur;
         self.status = if l >= LEVELS {
-            format!("{} {l:02} {} {:02} {}", tr(self.es, "Level", "Nivel"), tr(self.es, "restored as its base level", "restaurado como su nivel base"), self.doc.base_of(l), tr(self.es, "is in the game (save to keep it; undo brings it back).", "esta en el juego (guarda para conservarlo; deshacer lo recupera)."))
+            format!("{} {l:02} {} {:02} {}", tr(self.lang, "Level"), tr(self.lang, "restored as its base level"), self.doc.base_of(l), tr(self.lang, "is in the game (save to keep it; undo brings it back)."))
         } else {
-            format!("{} {l:02} {}", tr(self.es, "Level", "Nivel"), tr(self.es, "restored as it is in the game (save to keep it; undo brings it back).", "restaurado como esta en el juego (guarda para conservarlo; deshacer lo recupera)."))
+            format!("{} {l:02} {}", tr(self.lang, "Level"), tr(self.lang, "restored as it is in the game (save to keep it; undo brings it back)."))
         };
     }
 
     /// Save the edited copy; the status bar says what happened.
     fn save(&mut self) -> bool {
         self.music.stop();
-        let es = self.es;
+        let lang = self.lang;
         match save::save(&mut self.doc, &*self.store) {
             Ok(parts) => {
                 if parts.iter().any(|p| matches!(p, Saved::Objects(_))) {
@@ -853,19 +866,19 @@ impl Editor {
                     .map(|p| match p {
                         Saved::Bank(n) => n.to_string(),
                         Saved::Objects(n) => n.to_string(),
-                        Saved::WorldMap => tr(es, "world map", "mapa de mundos").to_string(),
-                        Saved::LevelPoints => tr(es, "level points", "puntos de nivel").to_string(),
-                        Saved::Doors => tr(es, "doors", "puertas").to_string(),
-                        Saved::Routes(n) => format!("{} ({n} bytes)", tr(es, "map paths", "caminos del mapa")),
-                        Saved::NewLevels(n, used) => format!("{n} {} {used} bytes", tr(es, "new levels", "niveles nuevos")),
-                        Saved::NewZones(n, used) => format!("{n} {} {used} bytes", tr(es, "new zones", "zonas nuevas")),
-                        Saved::Starts(n) => format!("{n} {}", tr(es, "level starts and settings", "inicios y ajustes de nivel")),
-                        Saved::SecretExits(n) => format!("{n} {}", tr(es, "secret exits", "salidas secretas")),
+                        Saved::WorldMap => tr(lang, "world map").to_string(),
+                        Saved::LevelPoints => tr(lang, "level points").to_string(),
+                        Saved::Doors => tr(lang, "doors").to_string(),
+                        Saved::Routes(n) => format!("{} ({n} bytes)", tr(lang, "map paths")),
+                        Saved::NewLevels(n, used) => format!("{n} {} {used} bytes", tr(lang, "new levels")),
+                        Saved::NewZones(n, used) => format!("{n} {} {used} bytes", tr(lang, "new zones")),
+                        Saved::Starts(n) => format!("{n} {}", tr(lang, "level starts and settings")),
+                        Saved::SecretExits(n) => format!("{n} {}", tr(lang, "secret exits")),
                     })
                     .collect();
                 self.status = format!(
                     "{} {} {}",
-                    tr(es, "Saved", "Guardado en"),
+                    tr(lang, "Saved"),
                     self.store.path().display(),
                     if notes.is_empty() { String::new() } else { format!("({})", notes.join(", ")) }
                 );
@@ -875,12 +888,12 @@ impl Editor {
                 true
             }
             Err(SaveError::Layout(e)) => {
-                self.status = format!("{}: {e}", tr(es, "Not saved", "No guardado"));
+                self.status = format!("{}: {e}", tr(lang, "Not saved"));
                 self.mark(Severity::Error);
                 false
             }
             Err(SaveError::Write(e)) => {
-                self.status = format!("{}: {e}", tr(es, "Could not save", "No se pudo guardar"));
+                self.status = format!("{}: {e}", tr(lang, "Could not save"));
                 self.mark(Severity::Error);
                 false
             }
@@ -915,24 +928,24 @@ impl Editor {
 
     /// Save, Discard or Cancel before leaving with unsaved changes.
     fn unsaved_frame(&mut self) {
-        let es = self.es;
+        let lang = self.lang;
         clear_background(col(3));
         let (w, h) = (520.0, 150.0);
         let r = Rect::new((screen_width() - w) / 2.0, (screen_height() - h) / 2.0, w, h);
         draw_rectangle(r.x, r.y, r.w, r.h, col(0));
         draw_rectangle_lines(r.x, r.y, r.w, r.h, 3.0, col(3));
-        draw_text(&format!("{} {}", tr(es, "Unsaved changes in", "Cambios sin guardar en"), self.project), r.x + 20.0, r.y + 36.0, 22.0, col(3));
-        draw_text(tr(es, "Save them before leaving?", "Guardarlos antes de salir?"), r.x + 20.0, r.y + 64.0, 18.0, col(2));
+        put_text(&format!("{} {}", tr(lang, "Unsaved changes in"), self.project), r.x + 20.0, r.y + 36.0, 22.0, col(3));
+        put_text(tr(lang, "Save them before leaving?"), r.x + 20.0, r.y + 64.0, 18.0, col(2));
         let bw = (w - 40.0 - 2.0 * 12.0) / 3.0;
         let at = |i: f32| Rect::new(r.x + 20.0 + i * (bw + 12.0), r.y + h - 56.0, bw, 36.0);
-        if button(at(0.0), tr(es, "Save", "Guardar"), true, 17.0) || is_key_pressed(KeyCode::Enter) {
+        if button(at(0.0), tr(lang, "Save"), true, 17.0) || is_key_pressed(KeyCode::Enter) {
             let to = self.asking.take();
             if self.save() {
                 self.leaving = to;
             }
-        } else if button(at(1.0), tr(es, "Discard", "Descartar"), false, 17.0) {
+        } else if button(at(1.0), tr(lang, "Discard"), false, 17.0) {
             self.leaving = self.asking.take();
-        } else if button(at(2.0), tr(es, "Cancel", "Cancelar"), false, 17.0) || is_key_pressed(KeyCode::Escape) {
+        } else if button(at(2.0), tr(lang, "Cancel"), false, 17.0) || is_key_pressed(KeyCode::Escape) {
             self.asking = None;
         }
     }
@@ -949,28 +962,28 @@ impl Editor {
             return;
         }
         let other = self.doc.start_map().map(|m| self.map_name(m)).unwrap_or_default();
-        self.start_offer = Some((s, format!("{} {:02X} ({} {other})", self.map_name(map), s.point, tr(self.es, "the project's is on", "el del proyecto esta en"))));
+        self.start_offer = Some((s, format!("{} {:02X} ({} {other})", self.map_name(map), s.point, tr(self.lang, "the project's is on"))));
     }
 
     /// Which of two starts for Mario to keep.
     fn start_offer_frame(&mut self) {
-        let es = self.es;
+        let lang = self.lang;
         let Some((s, what)) = self.start_offer.clone() else { return };
         clear_background(col(3));
         let (w, h) = (560.0, 170.0);
         let r = Rect::new((screen_width() - w) / 2.0, (screen_height() - h) / 2.0, w, h);
         draw_rectangle(r.x, r.y, r.w, r.h, col(0));
         draw_rectangle_lines(r.x, r.y, r.w, r.h, 3.0, col(3));
-        draw_text(tr(es, "Two starts for Mario", "Dos inicios de Mario"), r.x + 20.0, r.y + 34.0, 22.0, col(3));
+        put_text(tr(lang, "Two starts for Mario"), r.x + 20.0, r.y + 34.0, 22.0, col(3));
         let mut y = r.y + 60.0;
-        for line in wrap_px(&format!("{} {what}. {}", tr(es, "The map brought in has Mario's start at", "El mapa que entra tiene el inicio de Mario en"), tr(es, "A project has one start: which do you keep?", "Un proyecto tiene un solo inicio: cual conservas?")), w - 40.0, 16.0) {
-            draw_text(&line, r.x + 20.0, y, 16.0, col(2));
+        for line in wrap_px(&format!("{} {what}. {}", tr(lang, "The map brought in has Mario's start at"), tr(lang, "A project has one start: which do you keep?")), w - 40.0, 16.0) {
+            put_text(&line, r.x + 20.0, y, 16.0, col(2));
             y += 20.0;
         }
         let bw = (w - 40.0 - 12.0) / 2.0;
-        if button(Rect::new(r.x + 20.0, r.y + h - 52.0, bw, 34.0), tr(es, "The project's", "El del proyecto"), true, 16.0) || is_key_pressed(KeyCode::Escape) {
+        if button(Rect::new(r.x + 20.0, r.y + h - 52.0, bw, 34.0), tr(lang, "The project's"), true, 16.0) || is_key_pressed(KeyCode::Escape) {
             self.start_offer = None;
-        } else if button(Rect::new(r.x + 32.0 + bw, r.y + h - 52.0, bw, 34.0), tr(es, "The map's", "El del mapa"), false, 16.0) {
+        } else if button(Rect::new(r.x + 32.0 + bw, r.y + h - 52.0, bw, 34.0), tr(lang, "The map's"), false, 16.0) {
             self.doc.set_start(s);
             self.start_offer = None;
         }
@@ -986,7 +999,7 @@ impl Editor {
     fn play_from_here(&mut self, w: Vec2) {
         let start = Self::start_at(w);
         if start.blocked(&self.doc.levels[self.cur].content.map) {
-            self.status = tr(self.es, "Mario cannot stand there (solid blocks or outside the level).", "Mario no cabe ahi (bloques solidos o fuera del nivel).").into();
+            self.status = tr(self.lang, "Mario cannot stand there (solid blocks or outside the level).").into();
             self.mark(Severity::Warning);
             return;
         }
@@ -1000,9 +1013,9 @@ impl Editor {
         }
         let started = self.launcher.launch(self.store.path(), Some(self.cur), start, self.prefs.test_lives, self.prefs.test_coins);
         self.status = match &started {
-            Ok(()) if self.cur >= LEVELS => format!("{} {:02} ({} {:02})", tr(self.es, "Playing level", "Jugando el nivel"), self.cur, tr(self.es, "as", "como"), self.doc.base_of(self.cur)),
-            Ok(()) => format!("{} {:02}", tr(self.es, "Playing level", "Jugando el nivel"), self.cur),
-            Err(e) => format!("{} {e}", tr(self.es, "Could not start", "No se pudo abrir")),
+            Ok(()) if self.cur >= LEVELS => format!("{} {:02} ({} {:02})", tr(self.lang, "Playing level"), self.cur, tr(self.lang, "as"), self.doc.base_of(self.cur)),
+            Ok(()) => format!("{} {:02}", tr(self.lang, "Playing level"), self.cur),
+            Err(e) => format!("{} {e}", tr(self.lang, "Could not start")),
         };
         if started.is_err() {
             self.mark(Severity::Error);
@@ -1016,7 +1029,7 @@ impl Editor {
         }
         let started = self.launcher.launch(self.store.path(), None, None, self.prefs.test_lives, self.prefs.test_coins);
         self.status = match &started {
-            Ok(()) => tr(self.es, "Game started with the edited copy.", "Juego abierto con la copia editada.").into(),
+            Ok(()) => tr(self.lang, "Game started with the edited copy.").into(),
             Err(e) => e.clone(),
         };
         if started.is_err() {

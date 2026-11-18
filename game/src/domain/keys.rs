@@ -9,8 +9,6 @@ macro_rules! keys {
         #[derive(Clone, Copy, PartialEq, Eq, Debug)]
         pub enum Key {
             $($k,)*
-            /// Not bindable: opens and leaves the menu.
-            Escape,
             /// Not bindable: full screen on/off.
             F11,
         }
@@ -95,10 +93,12 @@ keys! {
     F8 "F8" "F8" "F8";
     F9 "F9" "F9" "F9";
     F10 "F10" "F10" "F10";
+    Escape "Escape" "ESC" "ESC";
 }
 
 /// The bindings in order: the Game Boy buttons (Up, Down, Left, Right, A, B, Start, Select),
-/// then the port's own save state, load state and rewind (cheats mode), and fast-forward.
+/// then the port's own save state, load state and rewind (cheats mode), fast-forward and the
+/// pause menu.
 pub const UP: usize = 0;
 pub const DOWN: usize = 1;
 pub const LEFT: usize = 2;
@@ -113,11 +113,13 @@ pub const LOAD_STATE: usize = 9;
 pub const REWIND: usize = 10;
 /// Held: the game runs faster.
 pub const FAST_FORWARD: usize = 11;
+/// Opens the pause menu anywhere and goes back in it.
+pub const MENU: usize = 12;
 /// Game Boy buttons, then all bindings.
 pub const PAD_KEYS: usize = 8;
-pub const KEYS: usize = 12;
+pub const KEYS: usize = 13;
 
-pub const DEFAULT_KEYS: [Key; KEYS] = [Key::Up, Key::Down, Key::Left, Key::Right, Key::X, Key::Z, Key::Enter, Key::Backspace, Key::F6, Key::F7, Key::R, Key::LeftControl];
+pub const DEFAULT_KEYS: [Key; KEYS] = [Key::Up, Key::Down, Key::Left, Key::Right, Key::X, Key::Z, Key::Enter, Key::Backspace, Key::F6, Key::F7, Key::R, Key::LeftControl, Key::Escape];
 
 impl Key {
     pub fn bindable(self) -> bool {
@@ -143,16 +145,22 @@ impl Key {
     }
 }
 
+/// The Game Boy buttons of the first `PAD_KEYS` bindings, in order.
+pub const PAD_BUTTONS: [Buttons; PAD_KEYS] = [Buttons::UP, Buttons::DOWN, Buttons::LEFT, Buttons::RIGHT, Buttons::A, Buttons::B, Buttons::START, Buttons::SELECT];
+
 /// The Game Boy buttons held now, through the player's bindings.
 pub fn buttons(keys: &dyn Keyboard, bindings: &[Key; KEYS]) -> Buttons {
-    const BITS: [Buttons; PAD_KEYS] = [Buttons::UP, Buttons::DOWN, Buttons::LEFT, Buttons::RIGHT, Buttons::A, Buttons::B, Buttons::START, Buttons::SELECT];
     let mut b = Buttons::NONE;
-    for (&k, bit) in bindings.iter().zip(BITS) {
+    for (&k, bit) in bindings.iter().zip(PAD_BUTTONS) {
         if keys.held(k) {
             b |= bit;
         }
     }
-    // A cartridge never sees opposite directions held together.
+    no_opposites(b)
+}
+
+/// A cartridge never sees opposite directions held together.
+pub fn no_opposites(mut b: Buttons) -> Buttons {
     if b & (Buttons::LEFT | Buttons::RIGHT) == Buttons::LEFT | Buttons::RIGHT {
         b &= !(Buttons::LEFT | Buttons::RIGHT);
     }
@@ -191,7 +199,7 @@ mod tests {
             assert_eq!(Key::from_id(id), Some(k));
             assert_eq!(k.id(), Some(id));
         }
-        assert!(!Key::Escape.bindable());
+        assert!(Key::Escape.bindable() && !Key::F11.bindable());
         assert_eq!(Key::LeftShift.label(super::super::i18n::LANG_ES), "MAYUS IZQ");
     }
 }

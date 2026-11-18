@@ -28,17 +28,17 @@ impl Editor {
 
     /// The name field of `what` at `r`: its name, or a click to start typing one.
     pub(super) fn name_field(&mut self, r: Rect, what: Named) {
-        draw_text(tr(self.es, "Name", "Nombre"), r.x, r.y + 17.0, 16.0, col(3));
+        put_text(tr(self.lang, "Name"), r.x, r.y + 17.0, 16.0, col(3));
         let field = Rect::new(r.x + 54.0, r.y, r.w - 54.0, r.h);
         if let Some(n) = self.naming.as_mut().filter(|n| n.what == what) {
             n.field = field;
             draw_rectangle(field.x, field.y, field.w, field.h, col(3));
             let caret = if (get_time() * 2.0) as i64 % 2 == 0 { "_" } else { "" };
-            draw_text(&format!("{}{caret}", n.text), field.x + 6.0, field.y + 17.0, 16.0, col(0));
+            put_text(&format!("{}{caret}", n.text), field.x + 6.0, field.y + 17.0, 16.0, col(0));
             return;
         }
         let name = self.name_of(what).to_string();
-        let label = if name.is_empty() { tr(self.es, "(none: click to name it)", "(ninguno: clic para nombrar)").to_string() } else { name.clone() };
+        let label = if name.is_empty() { tr(self.lang, "(none: click to name it)").to_string() } else { name.clone() };
         if button(field, &label, false, 15.0) {
             self.finish_naming(true);
             while get_char_pressed().is_some() {}

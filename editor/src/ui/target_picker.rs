@@ -71,7 +71,7 @@ impl Editor {
         let maps = self.picker_maps(what);
         let first = now.map(|l| self.map_of(l)).filter(|m| maps.contains(m)).unwrap_or(maps[0]);
         self.show_picking(first);
-        self.status = tr(self.es, "Click where it leads: a world map point, or the point of a zone Mario enters on (it becomes the zone's entry). Tabs: the maps. Esc: cancel.", "Haz clic adonde lleva: un punto del mapa del mundo, o el punto de una zona por el que entra Mario (pasa a ser la entrada de la zona). Pestanas: los mapas. Esc: cancelar.").into();
+        self.status = tr(self.lang, "Click where it leads: a world map point, or the point of a zone Mario enters on (it becomes the zone's entry). Tabs: the maps. Esc: cancel.").into();
     }
 
     /// Start choosing where the shown level's secret exit leads (from the level editor).
@@ -87,7 +87,7 @@ impl Editor {
             None => OnMap::World,
         };
         self.show_picking(first);
-        self.status = tr(self.es, "Click where the secret exit leads: a world map point, a zone's point (or the world point shown in it) or a new zone's (it becomes its entry). Boss points cannot be chosen. Esc: cancel.", "Haz clic adonde lleva la salida secreta: un punto del mapa del mundo, uno de una zona (o el punto del mundo que se ve en ella) o uno de una zona nueva (pasa a ser su entrada). Los puntos de jefe no se pueden elegir. Esc: cancelar.").into();
+        self.status = tr(self.lang, "Click where the secret exit leads: a world map point, a zone's point (or the world point shown in it) or a new zone's (it becomes its entry). Boss points cannot be chosen. Esc: cancel.").into();
     }
 
     /// Back to the map that was shown; `to`: the target chosen.
@@ -99,7 +99,7 @@ impl Editor {
             self.enter_world(false);
             let secret = match to {
                 None => {
-                    self.status = tr(self.es, "Nothing changed.", "No se ha cambiado nada.").into();
+                    self.status = tr(self.lang, "Nothing changed.").into();
                     return;
                 }
                 Some(None) => None,
@@ -111,11 +111,11 @@ impl Editor {
                 Some(Some(_)) => return,
             };
             self.doc.set_level_secret(l, secret);
-            self.status = format!("{} {}", tr(self.es, "The secret exit now leads to", "La salida secreta lleva ahora a"), self.secret_leads());
+            self.status = format!("{} {}", tr(self.lang, "The secret exit now leads to"), self.secret_leads());
             return;
         }
         let Some(to) = to else {
-            self.status = tr(self.es, "Nothing changed.", "No se ha cambiado nada.").into();
+            self.status = tr(self.lang, "Nothing changed.").into();
             return;
         };
         match to {
@@ -133,8 +133,8 @@ impl Editor {
             (Picking::Door(p), Some(Leads::NewZone(k))) => self.doc.set_zone_door(p, Some(k)),
             _ => return,
         }
-        let name = to.map_or(tr(self.es, "nowhere", "ningun sitio").to_string(), |t| self.target_name(t));
-        self.status = format!("{:02X} {} {name}", pk.point, tr(self.es, "now leads to", "ahora lleva a"));
+        let name = to.map_or(tr(self.lang, "nowhere").to_string(), |t| self.target_name(t));
+        self.status = format!("{:02X} {} {name}", pk.point, tr(self.lang, "now leads to"));
     }
 
     /// The target on the shown map under the mouse: a world point, or a point of the zone
@@ -162,7 +162,7 @@ impl Editor {
 
     fn target_name(&self, (l, entry): (Leads, Option<u8>)) -> String {
         match entry {
-            Some(p) => format!("{}, {} {p:02X}", self.leads_name(l), tr(self.es, "entering on", "entrando por")),
+            Some(p) => format!("{}, {} {p:02X}", self.leads_name(l), tr(self.lang, "entering on")),
             None => self.leads_name(l),
         }
     }
@@ -187,7 +187,7 @@ impl Editor {
         let mut v = Vec::new();
         for map in self.picker_maps(pk.what) {
             let name = self.map_name(map);
-            let w = measure_text(&name, None, 15, 1.0).width + 16.0;
+            let w = text_size(&name, 15).width + 16.0;
             if x + w > screen_width() - 6.0 {
                 (x, y) = (self.panel + 6.0, y + TAB_H + 4.0);
             }
@@ -215,15 +215,15 @@ impl Editor {
         if let Some((_, x, y, _)) = entry.and_then(|e| self.map_points().into_iter().find(|s| s.0 == e)) {
             let c = self.on_screen(x, y);
             draw_circle_lines(c.x, c.y, r + 8.0, 3.0, Color::new(1.0, 0.85, 0.1, 1.0));
-            let t = tr(self.es, "enters here", "entra aqui");
-            draw_text(t, c.x + r + 10.0, c.y + 5.0, 18.0, BLACK);
-            draw_text(t, c.x + r + 9.0, c.y + 4.0, 18.0, Color::new(1.0, 0.95, 0.5, 1.0));
+            let t = tr(self.lang, "enters here");
+            put_text(t, c.x + r + 10.0, c.y + 5.0, 18.0, BLACK);
+            put_text(t, c.x + r + 9.0, c.y + 4.0, 18.0, Color::new(1.0, 0.95, 0.5, 1.0));
         }
         if let Some(l) = self.target_at(mouse_position().into()) {
             let t = self.target_name(l);
             let m: Vec2 = mouse_position().into();
-            draw_text(&t, m.x + 15.0, m.y + 21.0, 18.0, BLACK);
-            draw_text(&t, m.x + 14.0, m.y + 20.0, 18.0, WHITE);
+            put_text(&t, m.x + 15.0, m.y + 21.0, 18.0, BLACK);
+            put_text(&t, m.x + 14.0, m.y + 20.0, 18.0, WHITE);
         }
         let tabs = self.tab_rects();
         if let Some(t) = tabs.last() {
@@ -256,32 +256,32 @@ impl Editor {
         let Some(pk) = &self.picker else { return None };
         let (what, from) = (pk.what, pk.point);
         let title = match what {
-            Picking::Door(_) => format!("{} {from:02X} {}", tr(self.es, "Door of", "Puerta de"), tr(self.es, "leads into:", "entra en:")),
-            Picking::Exit(_) => format!("{} {from:02X} {}", tr(self.es, "Exit on", "Salida en"), tr(self.es, "leads to:", "lleva a:")),
-            Picking::Secret(l) => format!("{} {l:02} {}", tr(self.es, "Secret exit of level", "Salida secreta del nivel"), tr(self.es, "leads to:", "lleva a:")),
+            Picking::Door(_) => format!("{} {from:02X} {}", tr(self.lang, "Door of"), tr(self.lang, "leads into:")),
+            Picking::Exit(_) => format!("{} {from:02X} {}", tr(self.lang, "Exit on"), tr(self.lang, "leads to:")),
+            Picking::Secret(l) => format!("{} {l:02} {}", tr(self.lang, "Secret exit of level"), tr(self.lang, "leads to:")),
         };
-        draw_text(&title, 10.0, y + 16.0, 18.0, col(3));
+        put_text(&title, 10.0, y + 16.0, 18.0, col(3));
         y += 28.0;
         let note = match what {
-            Picking::Door(_) => tr(self.es, "Choose a zone with the tabs over the map and click the point Mario enters on: it becomes the zone's entry, for every door and exit into it.", "Elige una zona con las pestanas sobre el mapa y haz clic en el punto por el que entra Mario: pasa a ser la entrada de la zona, para todas las puertas y salidas a ella."),
-            Picking::Exit(_) => tr(self.es, "World map: click the point Mario comes out on. A zone: click the point Mario enters on (it becomes the zone's entry).", "Mapa del mundo: haz clic en el punto donde sale Mario. Una zona: haz clic en el punto por el que entra Mario (pasa a ser la entrada de la zona)."),
-            Picking::Secret(_) => tr(self.es, "Click the point Mario is taken to; he stays there. A new zone's point becomes its entry.", "Haz clic en el punto al que va Mario; se queda alli. El punto de una zona nueva pasa a ser su entrada."),
+            Picking::Door(_) => tr(self.lang, "Choose a zone with the tabs over the map and click the point Mario enters on: it becomes the zone's entry, for every door and exit into it."),
+            Picking::Exit(_) => tr(self.lang, "World map: click the point Mario comes out on. A zone: click the point Mario enters on (it becomes the zone's entry)."),
+            Picking::Secret(_) => tr(self.lang, "Click the point Mario is taken to; he stays there. A new zone's point becomes its entry."),
         };
         for line in wrap(note, 36) {
-            draw_text(&line, 10.0, y + 12.0, 15.0, col(2));
+            put_text(&line, 10.0, y + 12.0, 15.0, col(2));
             y += 16.0;
         }
         y += 8.0;
-        if matches!(what, Picking::Door(_)) && button(Rect::new(10.0, y, 276.0, 26.0), tr(self.es, "No door", "Sin puerta"), false, 15.0) {
+        if matches!(what, Picking::Door(_)) && button(Rect::new(10.0, y, 276.0, 26.0), tr(self.lang, "No door"), false, 15.0) {
             self.finish_picking(Some(None));
             return None;
         }
-        if matches!(what, Picking::Secret(_)) && button(Rect::new(10.0, y, 276.0, 26.0), tr(self.es, "The game's way", "Como en el juego"), false, 15.0) {
+        if matches!(what, Picking::Secret(_)) && button(Rect::new(10.0, y, 276.0, 26.0), tr(self.lang, "The game's way"), false, 15.0) {
             self.finish_picking(Some(None));
             return None;
         }
         y += 30.0;
-        if self.tool_button(Rect::new(10.0, y, 276.0, 26.0), tr(self.es, "Cancel", "Cancelar"), Action::Escape, false) {
+        if self.tool_button(Rect::new(10.0, y, 276.0, 26.0), tr(self.lang, "Cancel"), Action::Escape, false) {
             self.finish_picking(None);
         }
         None

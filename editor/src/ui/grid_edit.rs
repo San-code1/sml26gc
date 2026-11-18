@@ -63,7 +63,7 @@ impl Editor {
 
     fn grid_name(&self, g: Grid) -> String {
         match g {
-            Grid::Level(l) => format!("{} {l:02}", tr(self.es, "level", "el nivel")),
+            Grid::Level(l) => format!("{} {l:02}", tr(self.lang, "the level")),
             Grid::Map(m) => self.map_name(m).to_string(),
         }
     }
@@ -115,12 +115,12 @@ impl Editor {
     pub(super) fn copy_selection(&mut self, cut: bool) {
         let g = self.grid();
         let Some(a) = self.tool.selection() else {
-            self.status = tr(self.es, "Nothing selected (Select tool, E).", "No hay nada seleccionado (herramienta Seleccionar, E).").into();
+            self.status = tr(self.lang, "Nothing selected (Select tool, E).").into();
             self.mark(Severity::Warning);
             return;
         };
         if let Some(s) = self.doc.copy_rect(g, a) {
-            self.status = format!("{} {}x{}", if cut { tr(self.es, "Cut", "Cortado") } else { tr(self.es, "Copied", "Copiado") }, s.w, s.h);
+            self.status = format!("{} {}x{}", if cut { tr(self.lang, "Cut") } else { tr(self.lang, "Copied") }, s.w, s.h);
             self.clipboard = Some((g, s));
             if cut {
                 self.doc.clear_rect(g, a);
@@ -139,11 +139,11 @@ impl Editor {
     pub(super) fn start_paste(&mut self) {
         match &self.clipboard {
             None => {
-                self.status = tr(self.es, "The clipboard is empty.", "El portapapeles esta vacio.").into();
+                self.status = tr(self.lang, "The clipboard is empty.").into();
                 self.mark(Severity::Warning);
             }
             Some((g, _)) if *g != self.grid() => {
-                self.status = format!("{} {}.", tr(self.es, "The clipboard belongs to", "Lo copiado es de"), self.grid_name(*g));
+                self.status = format!("{} {}.", tr(self.lang, "The clipboard belongs to"), self.grid_name(*g));
                 self.mark(Severity::Warning);
             }
             Some(_) => {
@@ -151,7 +151,7 @@ impl Editor {
                     self.prev_tool = self.tool.kind();
                 }
                 self.set_tool(ToolKind::Paste);
-                self.status = tr(self.es, "Click to paste; Esc to stop.", "Clic para pegar; Esc para terminar.").into();
+                self.status = tr(self.lang, "Click to paste; Esc to stop.").into();
             }
         }
     }

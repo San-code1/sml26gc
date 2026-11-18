@@ -55,7 +55,7 @@ impl Editor {
     /// The finish and the secret exit over the blocks and objects, outlined and named.
     pub(super) fn draw_goals(&self) {
         let k = self.scale();
-        for (g, name, idle) in [(Goal::Finish, tr(self.es, "FINISH", "META"), Color::new(0.3, 1.0, 0.4, 0.8)), (Goal::Secret, tr(self.es, "SECRET EXIT", "SALIDA SECRETA"), Color::new(0.4, 0.8, 1.0, 0.85))] {
+        for (g, name, idle) in [(Goal::Finish, tr(self.lang, "FINISH"), Color::new(0.3, 1.0, 0.4, 0.8)), (Goal::Secret, tr(self.lang, "SECRET EXIT"), Color::new(0.4, 0.8, 1.0, 0.85))] {
             let on = self.placing.and_then(Self::goal_of) == Some(g);
             let c = if on { Color::new(1.0, 0.85, 0.1, 1.0) } else { idle };
             let cells = self.doc.goal_cells(self.cur, g);
@@ -65,8 +65,8 @@ impl Editor {
             }
             if let Some(&(cx, cy)) = cells.first() {
                 let (x, y) = (self.panel + (cx as f32 * BLOCK - self.cam.x) * k, (cy as f32 * BLOCK - self.cam.y) * k);
-                draw_text(name, x + 1.0, y - 5.0, 16.0, BLACK);
-                draw_text(name, x, y - 6.0, 16.0, c);
+                put_text(name, x + 1.0, y - 5.0, 16.0, BLACK);
+                put_text(name, x, y - 6.0, 16.0, c);
             }
         }
     }
@@ -78,12 +78,12 @@ impl Editor {
             Some(SecretTo::Point(p)) => self.point_name(p),
             Some(SecretTo::NewZone(k)) => {
                 let entry = self.doc.new_zones.get(k).map_or(0, |z| z.entry);
-                format!("{}, {} {entry:02X}", self.map_name(OnMap::NewZone(k)), tr(self.es, "entering on", "entrando por"))
+                format!("{}, {} {entry:02X}", self.map_name(OnMap::NewZone(k)), tr(self.lang, "entering on"))
             }
             None => match secret_exits::GAME.iter().find(|g| g.0 == self.doc.base_of(l)) {
-                Some(&(_, p)) => format!("{} ({})", self.point_name(p), tr(self.es, "the game's", "la del juego")),
+                Some(&(_, p)) => format!("{} ({})", self.point_name(p), tr(self.lang, "the game's")),
                 None if self.doc.goal_cells(l, Goal::Secret).is_empty() => "-".to_string(),
-                None => tr(self.es, "choose where (U)", "elige adonde (U)").to_string(),
+                None => tr(self.lang, "choose where (U)").to_string(),
             },
         }
     }

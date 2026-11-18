@@ -14,7 +14,11 @@ cart-model.workspace = true
 host.workspace = true
 project-model.workspace = true
 macroquad.workspace = true
+i18n.workspace = true
 cpal.workspace = true
 
 [target.'cfg(windows)'.dependencies]
 windows-sys.workspace = true
+
+[dev-dependencies]
+ttf-parser = "0.25"

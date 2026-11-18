@@ -128,14 +128,14 @@ impl Editor {
 
     /// The palette's title, then its zoom row; returns where the palette starts.
     fn palette_title(&mut self, y: f32, title: &str) -> f32 {
-        draw_text(title, 10.0, y + 14.0, 18.0, col(3));
+        put_text(title, 10.0, y + 14.0, 18.0, col(3));
         self.zoom_row(y + 20.0)
     }
 
     /// The palette's zoom keys and - + buttons; returns where the palette starts.
     fn zoom_row(&mut self, y: f32) -> f32 {
         let keys = format!("Zoom  Ctrl {}/{}", shortcuts::keys(Action::ZoomOut).trim_start_matches("Ctrl+"), shortcuts::keys(Action::ZoomIn).trim_start_matches("Ctrl+"));
-        draw_text(&keys, 10.0, y + 15.0, 15.0, col(2));
+        put_text(&keys, 10.0, y + 15.0, 15.0, col(2));
         let right = self.panel - 10.0;
         if button(Rect::new(right - 54.0, y, 26.0, 20.0), "-", false, 18.0) {
             self.run(Action::ZoomOut);
@@ -152,7 +152,7 @@ impl Editor {
     }
 
     fn tip(text: &str, area: Rect) {
-        draw_text(text, 10.0, area.y + area.h + 22.0, 15.0, col(2));
+        put_text(text, 10.0, area.y + area.h + 22.0, 15.0, col(2));
     }
 
     fn brush_title(&self, what: &str) -> String {
@@ -185,13 +185,13 @@ impl Editor {
     /// The object palette: its header (title and catalogue, the chosen object, the category
     /// filter and Show all, the zoom), then the types.
     pub(super) fn object_palette(&mut self, y: f32) {
-        let es = self.es;
+        let lang = self.lang;
         let right = self.panel - 10.0;
         let width = right - 10.0;
         // title and the catalogue
-        draw_text(tr(es, "OBJECTS", "OBJETOS"), 10.0, y + 15.0, 18.0, col(3));
-        let cat_label = format!("{} ({})", tr(es, "Catalogue", "Catalogo"), shortcuts::keys(Action::ObjectCatalogue));
-        let cw = measure_text(&cat_label, None, 14, 1.0).width + 16.0;
+        put_text(tr(lang, "OBJECTS"), 10.0, y + 15.0, 18.0, col(3));
+        let cat_label = format!("{} ({})", tr(lang, "Catalogue"), shortcuts::keys(Action::ObjectCatalogue));
+        let cw = text_size(&cat_label, 14).width + 16.0;
         if button(Rect::new(right - cw, y, cw, 20.0), &cat_label, false, 14.0) {
             self.run(Action::ObjectCatalogue);
         }
@@ -199,19 +199,19 @@ impl Editor {
         // the object chosen
         let chosen = match self.kind {
             Some(k) => match self.object_label(self.look_key(k)) {
-                Some((n, c)) => format!("#{k:02X}  {n}  ({})", super::catalogue_view::category_name(es, c)),
+                Some((n, c)) => format!("#{k:02X}  {n}  ({})", super::catalogue_view::category_name(lang, c)),
                 None => format!("#{k:02X}"),
             },
-            None => tr(es, "No object chosen: pick one below", "Ningun objeto elegido: elige uno abajo").to_string(),
+            None => tr(lang, "No object chosen: pick one below").to_string(),
         };
         // an enemy brought from the catalogue can be taken out from here
         let imported = self.kind.and_then(|k| self.imported_enemy(k));
-        let remove_label = tr(es, "Remove", "Quitar");
-        let rw = if imported.is_some() { measure_text(remove_label, None, 14, 1.0).width + 16.0 } else { 0.0 };
+        let remove_label = tr(lang, "Remove");
+        let rw = if imported.is_some() { text_size(remove_label, 14).width + 16.0 } else { 0.0 };
         let bw = width - if rw > 0.0 { rw + 6.0 } else { 0.0 };
         draw_rectangle(10.0, y, bw, 22.0, col(0));
         draw_rectangle_lines(10.0, y, bw, 22.0, 1.0, col(2));
-        draw_text(&super::level_panel::fit(&chosen, bw - 12.0, 15.0), 16.0, y + 16.0, 15.0, if self.kind.is_some() { col(3) } else { col(2) });
+        put_text(&super::level_panel::fit(&chosen, bw - 12.0, 15.0), 16.0, y + 16.0, 15.0, if self.kind.is_some() { col(3) } else { col(2) });
         if let Some(e) = imported {
             if button(Rect::new(right - rw, y, rw, 22.0), remove_label, false, 14.0) {
                 self.remove_enemy(e);
@@ -219,8 +219,8 @@ impl Editor {
         }
         let y = y + 28.0;
         // the category filter and Show all
-        let all_label = tr(es, "Show all", "Mostrar todos");
-        let aw = measure_text(all_label, None, 14, 1.0).width + 16.0;
+        let all_label = tr(lang, "Show all");
+        let aw = text_size(all_label, 14).width + 16.0;
         let fw = width - aw - 6.0;
         let filters: Vec<Option<Category>> = std::iter::once(None).chain(CATEGORIES.iter().copied().map(Some)).collect();
         let at = filters.iter().position(|f| *f == self.palette_filter).unwrap_or(0);
@@ -231,9 +231,9 @@ impl Editor {
         if button(Rect::new(10.0 + fw - 22.0, y, 22.0, 22.0), ">", false, 15.0) {
             step = 1;
         }
-        let label = super::catalogue_view::category_plural(es, self.palette_filter);
-        let lw = measure_text(label, None, 15, 1.0).width;
-        draw_text(label, 10.0 + (fw - lw) / 2.0, y + 16.0, 15.0, col(3));
+        let label = super::catalogue_view::category_plural(lang, self.palette_filter);
+        let lw = text_size(label, 15).width;
+        put_text(label, 10.0 + (fw - lw) / 2.0, y + 16.0, 15.0, col(3));
         if step != 0 {
             self.palette_filter = filters[(at as i32 + step).rem_euclid(filters.len() as i32) as usize];
         }
@@ -269,12 +269,12 @@ impl Editor {
                 let f = ((r.w - 4.0) / tex.width()).min((r.h - 4.0) / tex.height()).min(zoom as f32);
                 let (tw, th) = (tex.width() * f, tex.height() * f);
                 draw_texture_ex(tex, r.x + (r.w - tw) / 2.0, r.y + (r.h - th) / 2.0, WHITE, DrawTextureParams { dest_size: Some(vec2(tw, th)), ..Default::default() });
-                draw_text(&format!("{k:02X}"), r.x + 1.0, r.y + fs * 0.7, fs * 0.7, fg);
+                put_text(&format!("{k:02X}"), r.x + 1.0, r.y + fs * 0.7, fs * 0.7, fg);
             } else {
                 let t = format!("{k:02X}");
-                let dim = measure_text(&t, None, fs as u16, 1.0);
+                let dim = text_size(&t, fs as u16);
                 let known = self.looks.contains_key(&self.look_key(k));
-                draw_text(&t, r.x + (r.w - dim.width) / 2.0, r.y + (r.h + dim.offset_y) / 2.0, fs, if known { fg } else { Color::new(fg.r, fg.g, fg.b, 0.5) });
+                put_text(&t, r.x + (r.w - dim.width) / 2.0, r.y + (r.h + dim.offset_y) / 2.0, fs, if known { fg } else { Color::new(fg.r, fg.g, fg.b, 0.5) });
             }
         });
         self.level_palette = view;
@@ -288,26 +288,26 @@ impl Editor {
         let base = self.doc.base_of(self.cur);
         let named = hover.and_then(|(c, r)| shown.get((r * 8 + c) as usize)).copied().map(|k| {
             let name = match self.object_label(self.look_key(k)) {
-                Some((n, cat)) => format!("#{k:02X} {n} ({})", super::catalogue_view::category_name(self.es, cat)),
+                Some((n, cat)) => format!("#{k:02X} {n} ({})", super::catalogue_view::category_name(self.lang, cat)),
                 None => format!("#{k:02X}"),
             };
             match self.imported_enemy(k) {
                 Some(e) => {
                     let n = self.doc.levels[self.cur].content.objs.iter().filter(|o| o.kind == k).count();
-                    format!("{name}, {} {:02}. {} {n} {}", tr(self.es, "from level", "del nivel"), e.level, tr(self.es, "Right click: remove it and its", "Clic derecho: quitarlo con sus"), tr(self.es, "objects", "objetos"))
+                    format!("{name}, {} {:02}. {} {n} {}", tr(self.lang, "from level"), e.level, tr(self.lang, "Right click: remove it and its"), tr(self.lang, "objects"))
                 }
-                None if self.sel_obj.is_some() => format!("{name}. {}", tr(self.es, "Shift+click: the selected object becomes it", "Mayus+clic: el objeto seleccionado pasa a serlo")),
+                None if self.sel_obj.is_some() => format!("{name}. {}", tr(self.lang, "Shift+click: the selected object becomes it")),
                 None => name,
             }
         });
         let tip = if let Some(t) = named {
             t
         } else if self.pictures_pending(base) {
-            tr(self.es, "Still capturing pictures: more types will be offered.", "Aun capturando dibujos: se ofreceran mas tipos.").to_string()
+            tr(self.lang, "Still capturing pictures: more types will be offered.").to_string()
         } else if self.show_all_objects {
-            tr(self.es, "Framed: may look broken in this level.", "Con marco: pueden verse rotos en este nivel.").to_string()
+            tr(self.lang, "Framed: may look broken in this level.").to_string()
         } else {
-            format!("{} {}", tr(self.es, "Dark: used here. Delete chosen:", "Oscuros: usados aqui. Borrar elegido:"), shortcuts::keys(Action::DeleteObject))
+            format!("{} {}", tr(self.lang, "Dark: used here. Delete chosen:"), shortcuts::keys(Action::DeleteObject))
         };
         Self::tip(&tip, area);
     }
@@ -356,7 +356,7 @@ impl Editor {
 
     /// The level's blocks as the game draws them, 8 per row.
     pub(super) fn block_palette(&mut self, y: f32) {
-        let title = self.brush_title(tr(self.es, "BLOCKS", "BLOQUES"));
+        let title = self.brush_title(tr(self.lang, "BLOCKS"));
         let y = self.palette_title(y, &title);
         let area = self.palette_area(y);
         let Some(atlas) = self.atlases[self.doc.base_of(self.cur)].clone() else { return };
@@ -367,7 +367,7 @@ impl Editor {
         });
         self.level_palette = view;
         self.palette_select(hover, Layout::BLOCKS);
-        Self::tip(tr(self.es, "Drag: several. Right drag: move it", "Arrastra: varios. Boton derecho: moverla"), area);
+        Self::tip(tr(self.lang, "Drag: several. Right drag: move it"), area);
     }
 
     /// The shown map's 256 tiles, 16 per row.
@@ -383,7 +383,7 @@ impl Editor {
         });
         self.map_palette = view;
         self.palette_select(hover, Layout::TILES);
-        Self::tip(tr(self.es, "Drag: several. Right drag: move it", "Arrastra: varios. Boton derecho: moverla"), area);
+        Self::tip(tr(self.lang, "Drag: several. Right drag: move it"), area);
     }
 }
 

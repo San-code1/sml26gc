@@ -1,5 +1,6 @@
 //! Checks of the game's own additions, run from the command line without a window:
-//!   game --research menushots DIR         the pause menu's screens in every language
+//!   game --research menushots DIR         the pause menu's screens in every language (Controls
+//!                                         with the keyboard and with the controller)
 use crate::domain::menu::Menu;
 use crate::domain::settings::Settings;
 use gb_core::palette::PALETTES;
@@ -28,6 +29,13 @@ pub fn menu_shots(rom: &Path, dir: &Path) {
             if let Err(e) = write_screen(&dir.join(format!("{tag}-{name}.png")), &screen, &PALETTES[0]) {
                 eprintln!("{e}");
             }
+        }
+        // Controls with the controller chosen
+        let pad = Settings { input: crate::domain::pad::Input::Controller, ..st.clone() };
+        let mut screen = *gb.screen();
+        Menu::preview("controls", Some(icons)).draw(&mut screen, &pad);
+        if let Err(e) = write_screen(&dir.join(format!("{tag}-controls-pad.png")), &screen, &PALETTES[0]) {
+            eprintln!("{e}");
         }
     }
 }

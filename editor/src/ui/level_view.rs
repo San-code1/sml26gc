@@ -120,11 +120,11 @@ impl Editor {
                 self.draw_grid_overlay(atlas, cell);
                 if let Some((c, r)) = cell {
                     let id = self.doc.block(self.cur, c, r);
-                    draw_text(&format!("{c},{r}  #{id:02X}"), self.panel + 8.0, ch - 8.0, 20.0, WHITE);
+                    put_text(&format!("{c},{r}  #{id:02X}"), self.panel + 8.0, ch - 8.0, 20.0, WHITE);
                 }
             }
         } else {
-            draw_text(tr(self.es, "Loading the level from the game...", "Cargando el nivel desde el juego..."), self.panel + 30.0, 60.0, 26.0, col(0));
+            put_text(tr(self.lang, "Loading the level from the game..."), self.panel + 30.0, 60.0, 26.0, col(0));
         }
         self.finish_level_frame(cw, ch);
     }
@@ -171,7 +171,7 @@ impl Editor {
             let v = vec2(cw, ch) / self.scale() / BLOCK * k;
             let p = self.cam / BLOCK * k;
             draw_rectangle_lines(r.x + p.x, r.y + p.y, v.x.min(r.w), v.y.min(r.h), 2.0, Color::from_rgba(255, 255, 255, 230));
-            draw_text(tr(self.es, "MAP (M)", "MAPA (M)"), r.x + 4.0, r.y + r.h + 16.0, 16.0, col(0));
+            put_text(tr(self.lang, "MAP (M)"), r.x + 4.0, r.y + r.h + 16.0, 16.0, col(0));
         }
     }
 }

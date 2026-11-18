@@ -1,0 +1,2213 @@
+# The editor's texts: each entry's English (the text in the code) and its Spanish and
+# Japanese. See crates/i18n for the format.
+
+en: New blank level: choose the level it plays as. Esc: cancel.
+es: Nivel en blanco: elige el nivel como el que se juega. Esc: cancelar.
+ja: 空のコース：元になるコースを選んでください。Esc：キャンセル
+
+en: NEW BLANK LEVEL
+es: NIVEL EN BLANCO
+ja: 空のコース
+
+en: Plays as:
+es: Se juega como:
+ja: 元のコース:
+
+en: Some object pictures are still being captured; they show as numbers until then.
+es: Algunos dibujos de objetos aun se estan capturando; hasta entonces salen como numeros.
+ja: オブジェクトの画像をまだ取り込み中です。終わるまでは番号で表示されます。
+
+en: Create
+es: Crear
+ja: 作成
+
+en: Cancel (Esc)
+es: Cancelar (Esc)
+ja: キャンセル (Esc)
+
+en: BLOCKS OF LEVEL
+es: BLOQUES DEL NIVEL
+ja: ブロック・コース
+
+en: OBJECTS OF LEVEL
+es: OBJETOS DEL NIVEL
+ja: オブジェクト・コース
+
+en: No level made.
+es: No se ha creado ningun nivel.
+ja: コースは作成されませんでした。
+
+en: Its tiles, objects, music and time are level
+es: Sus tiles, objetos, musica y tiempo son los del nivel
+ja: タイル・オブジェクト・音楽・時間はコース
+
+en: an empty sky, a floor and Mario's start.
+es: un cielo vacio, un suelo y el inicio de Mario.
+ja: 空と床とマリオのスタートだけです。
+
+en: It has space gravity (its settings can change it).
+es: Tiene gravedad de espacio (sus ajustes la cambian).
+ja: 宇宙の重力です（設定で変更できます）。
+
+en: Its camera has the wide margin (its settings can change it).
+es: Su camara tiene el margen amplio (sus ajustes lo cambian).
+ja: カメラは広めのマージンです（設定で変更できます）。
+
+en: Some of its tiles are animated (its settings can stop them).
+es: Algunos de sus tiles se animan (sus ajustes los paran).
+ja: アニメーションするタイルがあります（設定で止められます）。
+
+en: Level 24 is Wario's final room: no map point opens it.
+es: El nivel 24 es la sala final de Wario: ningun punto del mapa lo abre.
+ja: コース24はワリオの最後の部屋です。マップのどのポイントからも入れません。
+
+en: Key
+es: Tecla
+ja: キー
+
+en: New blank level
+es: Nivel en blanco nuevo
+ja: 空のコース
+
+en: plays as level
+es: se juega como el nivel
+ja: 元のコース
+
+en: Give it to a map point to reach it in the game.
+es: Asignalo a un punto del mapa para llegar a el en el juego.
+ja: ゲームで遊ぶにはマップのポイントに割り当ててください。
+
+en: There can't be more levels.
+es: No caben mas niveles.
+ja: これ以上コースは作れません。
+
+en: New blank zone: choose the zone whose graphics and music it has. Esc: cancel.
+es: Zona en blanco: elige la zona de la que toma graficos y musica. Esc: cancelar.
+ja: 空のゾーン：グラフィックと音楽を使うゾーンを選んでください。Esc：キャンセル
+
+en: NEW BLANK ZONE
+es: ZONA EN BLANCO
+ja: 空のゾーン
+
+en: Graphics and music of:
+es: Graficos y musica de:
+ja: グラフィックと音楽:
+
+en: It plays with the tiles, map animations and music of the
+es: Se juega con los tiles, animaciones del mapa y musica de la
+ja: タイル・マップのアニメーション・音楽を使うゾーン:
+
+en: It starts as a plain picture and one point, its entry: no paths, levels, exits or door.
+es: Empieza con el dibujo liso y un solo punto, su entrada: sin caminos, niveles, salidas ni puerta.
+ja: 無地の絵と入口のポイント1つから始まります。道・コース・出口・扉はありません。
+
+en: MAP OF
+es: MAPA DE
+ja: マップ:
+
+en: ITS TILES
+es: SUS TILES
+ja: タイル
+
+en: Capturing the zone's tiles...
+es: Capturando los tiles de la zona...
+ja: ゾーンのタイルを取り込み中...
+
+en: No zone made.
+es: No se ha creado ninguna zona.
+ja: ゾーンは作成されませんでした。
+
+en: made blank: draw it in Picture, add points in Points; it has no door yet.
+es: creada en blanco: dibujala en Dibujo y anade puntos en Puntos; aun no tiene puerta.
+ja: を空で作成しました。絵タブで描き、ポイントタブでポイントを追加してください。まだ扉はありません。
+
+en: No more new zones: there can be
+es: No caben mas zonas nuevas: puede haber
+ja: これ以上新しいゾーンは作れません。最大数:
+
+en: All objects
+es: Todos los objetos
+ja: すべてのオブジェクト
+
+en: Power-ups
+es: Power-ups
+ja: パワーアップ
+
+en: Enemies
+es: Enemigos
+ja: 敵
+
+en: Traps
+es: Trampas
+ja: ワナ
+
+en: Platforms
+es: Plataformas
+ja: 足場
+
+en: Goals
+es: Metas
+ja: ゴール
+
+en: Invisible markers
+es: Marcadores invisibles
+ja: 見えないマーカー
+
+en: Boss and scripted
+es: Jefes y guiones
+ja: ボス・演出
+
+en: power-up
+es: power-up
+ja: パワーアップ
+
+en: enemy
+es: enemigo
+ja: 敵
+
+en: trap
+es: trampa
+ja: ワナ
+
+en: platform
+es: plataforma
+ja: 足場
+
+en: goal
+es: meta
+ja: ゴール
+
+en: invisible marker
+es: marcador invisible
+ja: 見えないマーカー
+
+en: boss or scripted
+es: jefe o guion
+ja: ボス・演出
+
+en: Object catalogue: the game's objects. Esc: close.
+es: Catalogo de objetos: los objetos del juego. Esc: cerrar.
+ja: オブジェクトカタログ：ゲームのオブジェクト一覧。Esc：閉じる
+
+en: OBJECT CATALOGUE
+es: CATALOGO DE OBJETOS
+ja: オブジェクトカタログ
+
+en: SHOW
+es: MOSTRAR
+ja: 表示
+
+en: All
+es: Todos
+ja: すべて
+
+en: Compatible
+es: Compatibles
+ja: 対応
+
+en: Usable here
+es: Usables aqui
+ja: ここで使える
+
+en: Can be added
+es: Se pueden anadir
+ja: 追加できる
+
+en: CATEGORY
+es: CATEGORIA
+ja: 種類
+
+en: All kinds
+es: Todas
+ja: すべての種類
+
+en: objects
+es: objetos
+ja: 個のオブジェクト
+
+en: Remove from this level
+es: Quitar de este nivel
+ja: このコースから外す
+
+en: placed
+es: colocados
+ja: 個配置
+
+en: Use in this level
+es: Usar en este nivel
+ja: このコースで使う
+
+en: Add to this level's enemies
+es: Anadir a los enemigos del nivel
+ja: このコースの敵に追加
+
+en: Fits: its tiles are free in this level.
+es: Cabe: sus tiles estan libres en este nivel.
+ja: 追加可能：このコースにタイルの空きがあります。
+
+en: Not usable here: it also draws with common sprite tiles, which this level loads with other graphics (it would look broken).
+es: No se usa aqui: tambien se dibuja con tiles de sprites comunes, que este nivel carga con otros graficos (se veria roto).
+ja: ここでは使えません：共通のスプライトタイルも使いますが、このコースでは別のグラフィックが入っています（表示が崩れます）。
+
+en: Does not fit: it needs the tiles of
+es: No cabe: necesita los tiles de
+ja: 入りません：次のタイルが必要です:
+
+en: (remove it first).
+es: (quitalo antes).
+ja: （先に外してください）。
+
+en: Does not fit: the set has
+es: No cabe: el juego ya tiene
+ja: 入りません：セットの数:
+
+en: enemies
+es: enemigos
+ja: 体の敵
+
+en: Known once the enemies' tiles are captured
+es: Se sabra cuando se capturen los tiles de los enemigos
+ja: 敵のタイルを取り込むと分かります
+
+en: left
+es: por capturar
+ja: 残り
+
+en: Not usable here: it belongs to the object catalogue of levels
+es: No se usa aqui: es del catalogo de objetos de los niveles
+ja: ここでは使えません：このオブジェクトのカタログはコース
+
+en: and this level plays as one of levels
+es: y este nivel se juega como uno de los niveles
+ja: で、このコースの元はコース
+
+en: (a level uses one catalogue, and a type number is another object in the other). It can be used in a level, or a blank level, made from levels
+es: (un nivel usa un solo catalogo, y el mismo numero es otro objeto en el otro). Se puede usar en un nivel, o un nivel en blanco, hecho de los niveles
+ja: です（コースが使うカタログは1つで、同じ番号でも別のカタログでは別のオブジェクトです）。次のコースから作ったコースや空のコースで使えます: コース
+
+en: New blank level from levels
+es: Nivel en blanco de los niveles
+ja: 空のコースを作成: コース
+
+en: This level does not draw it right (its graphics are not loaded here).
+es: Este nivel no lo dibuja bien (sus graficos no se cargan aqui).
+ja: このコースでは正しく表示されません（グラフィックが読み込まれていません）。
+
+en: Close
+es: Cerrar
+ja: 閉じる
+
+en: ADDED
+es: ANADIDO
+ja: 追加済み
+
+en: FITS
+es: CABE
+ja: 追加可能
+
+en: NO ROOM
+es: NO CABE
+ja: 空きなし
+
+en: NOT HERE
+es: AQUI NO
+ja: 使用不可
+
+en: OTHER CATALOGUE
+es: OTRO CATALOGO
+ja: 別のカタログ
+
+en: Still capturing the objects' pictures: until it ends some objects are missing or show twice, and Usable here may leave some out.
+es: Aun capturando los dibujos de los objetos: hasta que acabe faltan algunos o salen repetidos, y Usables aqui puede dejar fuera alguno.
+ja: オブジェクトの画像を取り込み中です。終わるまでは欠けたり二重に表示されたりし、「ここで使える」に出ないものもあります。
+
+en: Type
+es: Tipo
+ja: 番号
+
+en: Levels
+es: Niveles
+ja: コース
+
+en: Uses
+es: Usa
+ja: 使用
+
+en: of the 56 enemy tiles
+es: de los 56 tiles de enemigos
+ja: / 敵タイル56
+
+en: Not added: the enemies' tiles are still being captured; try again in a moment
+es: No anadido: los tiles de los enemigos aun se estan capturando; prueba en un momento
+ja: 追加できません：敵のタイルを取り込み中です。少し待ってからもう一度どうぞ
+
+en: not added: it also draws with common sprite tiles this level loads with other graphics.
+es: no anadido: tambien se dibuja con tiles comunes que este nivel carga con otros graficos.
+ja: は追加できません：このコースでは別のグラフィックが入っている共通スプライトタイルも使います。
+
+en: Not added: a level's set has at most
+es: No anadido: el juego de un nivel tiene como mucho
+ja: 追加できません：コースのセットの最大数は
+
+en: does not fit: it needs the tiles of
+es: no cabe: necesita los tiles de
+ja: は入りません：次のタイルが必要です:
+
+en: (remove it first: choose it in the catalogue)
+es: (quitalo antes: eligelo en el catalogo)
+ja: （先に外してください：カタログで選びます）
+
+en: added to this level's enemies
+es: anadido a los enemigos del nivel
+ja: をこのコースの敵に追加しました
+
+en: Not removed: the enemies' tiles are still being captured.
+es: No quitado: los tiles de los enemigos aun se estan capturando.
+ja: 外せません：敵のタイルを取り込み中です。
+
+en: removed from this level's enemies
+es: quitado de los enemigos del nivel
+ja: をこのコースの敵から外しました
+
+en: of its objects removed from the level
+es: de sus objetos quitados del nivel
+ja: 個のオブジェクトをコースから削除しました
+
+en: (Ctrl+Z brings them back).
+es: (Ctrl+Z los recupera).
+ja: （Ctrl+Zで元に戻せます）。
+
+en: Only new levels (32 and up) can be replaced from a file; the game's 32 are only edited.
+es: Solo los niveles nuevos (32 en adelante) se pueden reemplazar con un fichero; los 32 del juego solo se editan.
+ja: ファイルで置き換えられるのは新しいコース（32以降）だけです。ゲームの32コースは編集のみです。
+
+en: Only new zones and the world map can be replaced from a file; the game's zones are only edited.
+es: Solo las zonas nuevas y el mapa de mundos se pueden reemplazar con un fichero; las zonas del juego solo se editan.
+ja: ファイルで置き換えられるのは新しいゾーンとワールドマップだけです。ゲームのゾーンは編集のみです。
+
+en: Show the world map, a new zone, or the Tree, Pumpkin, Macro, Space or Mario zone, to export it.
+es: Muestra el mapa de mundos, una zona nueva, o la Zona Arbol, Calabaza, Macro, Espacial o Mario, para exportarlo.
+ja: 書き出すには、ワールドマップ、新しいゾーン、またはツリー・パンプキン・マクロ・スペース・マリオゾーンを表示してください。
+
+en: level
+es: nivel
+ja: コース
+
+en: Level
+es: Nivel
+ja: コース
+
+en: exported to
+es: exportado a
+ja: の書き出し先:
+
+en: New level
+es: Nivel nuevo
+ja: 新しいコース
+
+en: from the file; plays as level
+es: desde el fichero; se juega como el nivel
+ja: をファイルから作成。元のコース:
+
+en: Save to keep it.
+es: Guarda para conservarlo.
+ja: 残すには保存してください。
+
+en: replaced from the file; plays as level
+es: reemplazado con el fichero; se juega como el nivel
+ja: をファイルで置き換えました。元のコース:
+
+en: Undo brings it back.
+es: Deshacer lo recupera.
+ja: 元に戻すで戻せます。
+
+en: world map
+es: mapa de mundos
+ja: ワールドマップ
+
+en: World map exported to
+es: Mapa de mundos exportado a
+ja: ワールドマップの書き出し先:
+
+en: Zone exported to
+es: Zona exportada a
+ja: ゾーンの書き出し先:
+
+en: from the file; it has no door yet
+es: desde el fichero; aun no tiene puerta
+ja: をファイルから作成。まだ扉はありません
+
+en: Save to keep the zone.
+es: Guarda para conservarla.
+ja: ゾーンを残すには保存してください。
+
+en: replaced from the file; it keeps its door. Save to keep it.
+es: reemplazada con el fichero; conserva su puerta. Guarda para conservarla.
+ja: をファイルで置き換えました。扉はそのままです。残すには保存してください。
+
+en: Project exported to
+es: Proyecto exportado a
+ja: プロジェクトの書き出し先:
+
+en: points opened new levels this project does not have, and
+es: puntos abrian niveles nuevos que este proyecto no tiene, y
+ja: 個のポイントがこのプロジェクトにない新しいコースを開いていました。また
+
+en: exits led to missing new zones: they lead nowhere now.
+es: salidas llevaban a zonas nuevas que faltan: ahora no llevan a ningun sitio.
+ja: 個の出口がない新しいゾーンにつながっていました。今はどこにもつながりません。
+
+en: World map imported. Save to keep it.
+es: Mapa de mundos importado. Guarda para conservarlo.
+ja: ワールドマップを読み込みました。残すには保存してください。
+
+en: The file could not be read or written
+es: No se pudo leer o escribir el fichero
+ja: ファイルを読み書きできませんでした
+
+en: New zones are made from the Tree, Pumpkin, Macro, Space or Mario zone.
+es: Las zonas nuevas se hacen de la Zona Arbol, Calabaza, Macro, Espacial o Mario.
+ja: 新しいゾーンはツリー・パンプキン・マクロ・スペース・マリオゾーンから作ります。
+
+en: This is a world map file: the game has one world map, so it replaces it (Replace zone on the world map) and is not a new zone.
+es: Este es un fichero de mapa de mundos: el juego tiene un solo mapa de mundos, asi que lo reemplaza (Reemplazar zona en el mapa de mundos) y no es una zona nueva.
+ja: これはワールドマップのファイルです。ワールドマップは1つだけなので、新しいゾーンにはならず置き換えになります（ワールドマップで「ゾーンを置き換え」）。
+
+en: Only new zones can be replaced from a file.
+es: Solo las zonas nuevas se pueden reemplazar con un fichero.
+ja: ファイルで置き換えられるのは新しいゾーンだけです。
+
+en: Only new levels (32 and up) can be replaced from a file.
+es: Solo los niveles nuevos (32 en adelante) se pueden reemplazar con un fichero.
+ja: ファイルで置き換えられるのは新しいコース（32以降）だけです。
+
+en: This is not a level file.
+es: Este no es un fichero de nivel.
+ja: これはコースのファイルではありません。
+
+en: This is not a zone file.
+es: Este no es un fichero de zona.
+ja: これはゾーンのファイルではありません。
+
+en: This is not a world map file.
+es: Este no es un fichero de mapa de mundos.
+ja: これはワールドマップのファイルではありません。
+
+en: The file's zone is made from a zone no door enters:
+es: La zona del fichero se hace de una zona en la que no entra ninguna puerta:
+ja: このファイルのゾーンは扉から入れないゾーンが元になっています:
+
+en: This is not a project file.
+es: Este no es un fichero de proyecto.
+ja: これはプロジェクトファイルではありません。
+
+en: This file was made by a newer editor.
+es: Este fichero lo hizo un editor mas nuevo.
+ja: このファイルは新しいバージョンのエディタで作られています。
+
+en: The file is damaged or incomplete (line
+es: El fichero esta danado o incompleto (linea
+ja: ファイルが壊れているか不完全です（行
+
+en: The file's level plays as a level that isn't one of the 32:
+es: El nivel del fichero se juega como un nivel que no es de los 32:
+ja: このファイルのコースの元が32コースのどれでもありません:
+
+en: This project belongs to another cartridge; nothing was changed.
+es: Este proyecto es de otro cartucho; no se ha cambiado nada.
+ja: このプロジェクトは別のカートリッジのものです。何も変更していません。
+
+en: FINISH
+es: META
+ja: ゴール
+
+en: SECRET EXIT
+es: SALIDA SECRETA
+ja: 隠し出口
+
+en: entering on
+es: entrando por
+ja: 入口:
+
+en: the game's
+es: la del juego
+ja: ゲームのまま
+
+en: choose where (U)
+es: elige adonde (U)
+ja: 行き先を選ぶ (U)
+
+en: the level
+es: el nivel
+ja: コース
+
+en: Nothing selected (Select tool, E).
+es: No hay nada seleccionado (herramienta Seleccionar, E).
+ja: 何も選択されていません（選択ツール、E）。
+
+en: Cut
+es: Cortado
+ja: 切り取り:
+
+en: Copied
+es: Copiado
+ja: コピー:
+
+en: The clipboard is empty.
+es: El portapapeles esta vacio.
+ja: クリップボードは空です。
+
+en: The clipboard belongs to
+es: Lo copiado es de
+ja: クリップボードの内容は次のもの:
+
+en: Click to paste; Esc to stop.
+es: Clic para pegar; Esc para terminar.
+ja: クリックで貼り付け、Escで終了。
+
+en: Undo
+es: Deshacer
+ja: 元に戻す
+
+en: Redo
+es: Rehacer
+ja: やり直す
+
+en: Restore
+es: Restaurar
+ja: 復元
+
+en: LEVEL EDITOR
+es: EDITOR DE NIVELES
+ja: コースエディタ
+
+en: Zones
+es: Zonas
+ja: ゾーン
+
+en: Delete level
+es: Borrar nivel
+ja: コースを削除
+
+en: Copy level
+es: Copiar nivel
+ja: コースをコピー
+
+en: Blank level
+es: Nivel en blanco
+ja: 空のコース
+
+en: Save
+es: Guardar
+ja: 保存
+
+en: Play
+es: Jugar
+ja: プレイ
+
+en: Here
+es: Aqui
+ja: ここから
+
+en: Blocks
+es: Bloques
+ja: ブロック
+
+en: Objects
+es: Objetos
+ja: オブジェクト
+
+en: Pencil
+es: Lapiz
+ja: ペン
+
+en: Box
+es: Caja
+ja: 四角
+
+en: Select
+es: Seleccion
+ja: 選択
+
+en: Grid
+es: Rejilla
+ja: グリッド
+
+en: Palette
+es: Paleta
+ja: パレット
+
+en: LEVEL
+es: NIVEL
+ja: コース
+
+en: Plays as
+es: Se juega como
+ja: 元のコース
+
+en: Original
+es: Original
+ja: オリジナル
+
+en: mod (saved; Restore puts it back)
+es: mod (guardado; Restaurar lo devuelve)
+ja: 変更あり（保存済み。復元で戻せます）
+
+en: GOALS
+es: METAS
+ja: スタート・ゴール
+
+en: Start
+es: Inicio
+ja: スタート
+
+en: Finish
+es: Meta
+ja: ゴール
+
+en: Secret exit
+es: Salida secreta
+ja: 隠し出口
+
+en: Place
+es: Colocar
+ja: 置く
+
+en: Leads to
+es: Lleva a
+ja: 行き先
+
+en: Choose
+es: Elegir
+ja: 選ぶ
+
+en: Checkpoints
+es: Controles
+ja: 中間地点
+
+en: Add
+es: Poner
+ja: 追加
+
+en: none in this level
+es: ninguno en este nivel
+ja: このコースでは不可
+
+en: SETTINGS
+es: AJUSTES
+ja: 設定
+
+en: Time
+es: Tiempo
+ja: 時間
+
+en: Background
+es: Fondo
+ja: 背景
+
+en: normal
+es: normal
+ja: 標準
+
+en: dark
+es: oscuro
+ja: 暗い
+
+en: darker
+es: mas oscuro
+ja: より暗い
+
+en: Music
+es: Musica
+ja: 音楽
+
+en: as level
+es: la del
+ja: コース
+
+en: Stop
+es: Parar
+ja: 停止
+
+en: Listen
+es: Escuchar
+ja: 聴く
+
+en: editor vol
+es: vol. editor
+ja: エディタ音量
+
+en: Gravity
+es: Gravedad
+ja: 重力
+
+en: space
+es: espacio
+ja: 宇宙
+
+en: Auto-scroll
+es: Auto-scroll
+ja: スクロール
+
+en: off
+es: no
+ja: なし
+
+en: on
+es: si
+ja: あり
+
+en: Camera
+es: Camara
+ja: カメラ
+
+en: wide
+es: amplia
+ja: 広い
+
+en: Wide: when Mario climbs or jumps high the camera goes up sooner, so more of what is above shows.
+es: Amplia: si Mario trepa o salta alto, la camara sube antes y se ve mas de lo que hay arriba.
+ja: 広い：マリオが登ったり高く跳んだりすると早めにカメラが上がり、上がよく見えます。
+
+en: Animation
+es: Animacion
+ja: アニメ
+
+en: none
+es: ninguna
+ja: なし
+
+en: its own
+es: la suya
+ja: あり
+
+en: Auto-scroll: the screen moves right by itself; caught against a wall Mario loses a life.
+es: Auto-scroll: la pantalla avanza sola; atrapado contra una pared Mario pierde una vida.
+ja: 強制スクロール：画面が自動で右へ進みます。壁にはさまれるとマリオはミスになります。
+
+en: WARNINGS
+es: AVISOS
+ja: 注意
+
+en: None: the level looks fine.
+es: Ninguno: el nivel parece correcto.
+ja: なし：コースに問題はなさそうです。
+
+en: Click: show it on the level
+es: Clic: verlo en el nivel
+ja: クリック：コースで表示
+
+en: ends with its boss
+es: termina con su jefe
+ja: ボスで終わる
+
+en: Loading the level from the game...
+es: Cargando el nivel desde el juego...
+ja: ゲームからコースを読み込み中...
+
+en: MAP (M)
+es: MAPA (M)
+ja: 全体図 (M)
+
+en: Object catalogue
+es: Catalogo de objetos
+ja: オブジェクトカタログ
+
+en: Projects...
+es: Proyectos...
+ja: プロジェクト...
+
+en: Capture the object pictures again
+es: Volver a capturar los dibujos de objetos
+ja: オブジェクトの画像を取り込み直す
+
+en: New blank level...
+es: Nivel en blanco...
+ja: 空のコース...
+
+en: Export level...
+es: Exportar nivel...
+ja: コースを書き出す...
+
+en: Import level as a new level...
+es: Importar nivel como nivel nuevo...
+ja: コースを新しいコースとして読み込む...
+
+en: Replace this level from a file...
+es: Reemplazar este nivel con un fichero...
+ja: このコースをファイルで置き換える...
+
+en: Export zone...
+es: Exportar zona...
+ja: ゾーンを書き出す...
+
+en: Import zone as a new zone...
+es: Importar zona como zona nueva...
+ja: ゾーンを新しいゾーンとして読み込む...
+
+en: Replace this zone from a file...
+es: Reemplazar esta zona con un fichero...
+ja: このゾーンをファイルで置き換える...
+
+en: Export project...
+es: Exportar proyecto...
+ja: プロジェクトを書き出す...
+
+en: &File
+es: &Archivo
+ja: ファイル(&F)
+
+en: &Tools
+es: &Herramientas
+ja: ツール(&T)
+
+en: Project
+es: Proyecto
+ja: プロジェクト
+
+en: Objects of the other object catalogue taken out of the enemies of levels
+es: Objetos del otro catalogo quitados de los enemigos de los niveles
+ja: 別のカタログのオブジェクトを敵から外したコース:
+
+en: A level plays its own catalogue's objects only; Ctrl+Z brings them back.
+es: Un nivel solo juega los objetos de su catalogo; Ctrl+Z los recupera.
+ja: コースで使えるのは自分のカタログのオブジェクトだけです。Ctrl+Zで戻せます。
+
+en: Could not play the music:
+es: No se pudo tocar la musica:
+ja: 音楽を再生できませんでした:
+
+en: The game keeps no restart place for this level: it cannot have checkpoints.
+es: El juego no guarda punto de reaparicion para este nivel: no puede tener puntos de control.
+ja: このコースには再開位置がないため、中間地点は置けません。
+
+en: The game didn't load this level; its graphics may be wrong.
+es: El juego no cargo este nivel; sus graficos pueden no ser correctos.
+ja: ゲームがこのコースを読み込めませんでした。グラフィックが正しくないかもしれません。
+
+en: its map is also used by level(s)
+es: su mapa tambien lo usa(n) el/los nivel(es)
+ja: このマップは次のコースでも使われています:
+
+en: World map: paint its tiles, or choose which level each point opens.
+es: Mapa de mundos: pinta sus tiles o elige que nivel abre cada punto.
+ja: ワールドマップ：タイルを塗ったり、各ポイントが開くコースを選んだりします。
+
+en: its graphics, music and time
+es: sus graficos, musica y tiempo
+ja: グラフィック・音楽・時間
+
+en: deleted (save to keep it); the ones after it moved down a number.
+es: borrado (guarda para conservarlo); los siguientes bajan un numero.
+ja: を削除しました（残すには保存）。後のコースの番号が1つずつ繰り上がりました。
+
+en: restored as its base level
+es: restaurado como su nivel base
+ja: を元のコース
+
+en: is in the game (save to keep it; undo brings it back).
+es: esta en el juego (guarda para conservarlo; deshacer lo recupera).
+ja: のゲームの状態に戻しました（残すには保存。元に戻すで戻せます）。
+
+en: restored as it is in the game (save to keep it; undo brings it back).
+es: restaurado como esta en el juego (guarda para conservarlo; deshacer lo recupera).
+ja: をゲームの状態に戻しました（残すには保存。元に戻すで戻せます）。
+
+en: level points
+es: puntos de nivel
+ja: コースのポイント
+
+en: doors
+es: puertas
+ja: 扉
+
+en: map paths
+es: caminos del mapa
+ja: マップの道
+
+en: new levels
+es: niveles nuevos
+ja: 新しいコース
+
+en: new zones
+es: zonas nuevas
+ja: 新しいゾーン
+
+en: level starts and settings
+es: inicios y ajustes de nivel
+ja: コースのスタートと設定
+
+en: secret exits
+es: salidas secretas
+ja: 隠し出口
+
+en: Saved
+es: Guardado en
+ja: 保存しました:
+
+en: Not saved
+es: No guardado
+ja: 保存していません
+
+en: Could not save
+es: No se pudo guardar
+ja: 保存できませんでした
+
+en: Unsaved changes in
+es: Cambios sin guardar en
+ja: 保存していない変更があります:
+
+en: Save them before leaving?
+es: Guardarlos antes de salir?
+ja: 閉じる前に保存しますか?
+
+en: Discard
+es: Descartar
+ja: 破棄
+
+en: Cancel
+es: Cancelar
+ja: キャンセル
+
+en: the project's is on
+es: el del proyecto esta en
+ja: プロジェクトのスタート:
+
+en: Two starts for Mario
+es: Dos inicios de Mario
+ja: マリオのスタートが2つあります
+
+en: The map brought in has Mario's start at
+es: El mapa que entra tiene el inicio de Mario en
+ja: 読み込んだマップのマリオのスタート:
+
+en: A project has one start: which do you keep?
+es: Un proyecto tiene un solo inicio: cual conservas?
+ja: プロジェクトのスタートは1つです。どちらを残しますか?
+
+en: The project's
+es: El del proyecto
+ja: プロジェクトの方
+
+en: The map's
+es: El del mapa
+ja: マップの方
+
+en: Mario cannot stand there (solid blocks or outside the level).
+es: Mario no cabe ahi (bloques solidos o fuera del nivel).
+ja: マリオはそこに立てません（ブロックの中かコースの外です）。
+
+en: Playing level
+es: Jugando el nivel
+ja: プレイ中のコース
+
+en: as
+es: como
+ja: 元:
+
+en: Could not start
+es: No se pudo abrir
+ja: 起動できませんでした
+
+en: Game started with the edited copy.
+es: Juego abierto con la copia editada.
+ja: 編集したコピーでゲームを起動しました。
+
+en: Name
+es: Nombre
+ja: 名前
+
+en: (none: click to name it)
+es: (ninguno: clic para nombrar)
+ja: （なし：クリックして名前を付ける）
+
+en: Capturing every object picture again (see the box at the bottom right).
+es: Volviendo a capturar todos los dibujos de objetos (mira el recuadro de abajo a la derecha).
+ja: すべてのオブジェクトの画像を取り込み直しています（右下の枠を参照）。
+
+en: drag: move   right click: delete
+es: arrastra: mover   clic dcho: borrar
+ja: ドラッグ：移動   右クリック：削除
+
+en: click: place object
+es: clic: poner objeto
+ja: クリック：オブジェクトを置く
+
+en: right click: none
+es: clic dcho: ninguno
+ja: 右クリック：なし
+
+en: choose an object in the palette to place it
+es: elige un objeto en la paleta para ponerlo
+ja: 置くオブジェクトをパレットで選んでください
+
+en: OBJECTS
+es: OBJETOS
+ja: オブジェクト
+
+en: Catalogue
+es: Catalogo
+ja: カタログ
+
+en: No object chosen: pick one below
+es: Ningun objeto elegido: elige uno abajo
+ja: オブジェクト未選択：下から選んでください
+
+en: Remove
+es: Quitar
+ja: 外す
+
+en: Show all
+es: Mostrar todos
+ja: すべて表示
+
+en: from level
+es: del nivel
+ja: 元のコース
+
+en: Right click: remove it and its
+es: Clic derecho: quitarlo con sus
+ja: 右クリック：外す（配置数
+
+en: Shift+click: the selected object becomes it
+es: Mayus+clic: el objeto seleccionado pasa a serlo
+ja: Shift+クリック：選択中のオブジェクトをこれに変える
+
+en: Still capturing pictures: more types will be offered.
+es: Aun capturando dibujos: se ofreceran mas tipos.
+ja: 画像を取り込み中：これから種類が増えます。
+
+en: Framed: may look broken in this level.
+es: Con marco: pueden verse rotos en este nivel.
+ja: 枠付き：このコースでは表示が崩れるかもしれません。
+
+en: Dark: used here. Delete chosen:
+es: Oscuros: usados aqui. Borrar elegido:
+ja: 濃い色：ここで使用中。選択を削除:
+
+en: BLOCKS
+es: BLOQUES
+ja: ブロック
+
+en: Drag: several. Right drag: move it
+es: Arrastra: varios. Boton derecho: moverla
+ja: ドラッグ：複数選択。右ドラッグ：移動
+
+en: BASE CARTRIDGE
+es: CARTUCHO BASE
+ja: 元のカートリッジ
+
+en: The editor and the game share it; the file may have any name.
+es: El editor y el juego lo comparten; el fichero puede llamarse como sea.
+ja: エディタとゲームで共有します。ファイル名は自由です。
+
+en: Choose the cartridge file...
+es: Elegir el fichero del cartucho...
+ja: カートリッジファイルを選ぶ...
+
+en: A project name has up to
+es: Un nombre de proyecto tiene hasta
+ja: プロジェクト名は最大
+
+en: characters (no accents, nor \\ / : * ? " < > |), does not end in a dot and is not VANILLA.
+es: caracteres (sin acentos, ni \\ / : * ? " < > |), no acaba en punto y no es VANILLA.
+ja: 文字です（アクセント記号と \\ / : * ? " < > | は使えません）。最後をドットにせず、VANILLA 以外にしてください。
+
+en: Another project has that name.
+es: Otro proyecto tiene ese nombre.
+ja: 同じ名前のプロジェクトがあります。
+
+en: That project is not there any more.
+es: Ese proyecto ya no esta.
+ja: そのプロジェクトはもうありません。
+
+en: The files could not be written:
+es: No se pudieron escribir los ficheros:
+ja: ファイルを書き込めませんでした:
+
+en: Not a usable project file:
+es: No es un fichero de proyecto valido:
+ja: 使えないプロジェクトファイルです:
+
+en: Imported as the project
+es: Importado como el proyecto
+ja: 次のプロジェクトとして読み込みました:
+
+en: PROJECTS
+es: PROYECTOS
+ja: プロジェクト
+
+en: Base cartridge:
+es: Cartucho base:
+ja: 元のカートリッジ:
+
+en: No projects yet: make a new one, or import a project file.
+es: Aun no hay proyectos: crea uno nuevo o importa un fichero de proyecto.
+ja: プロジェクトはまだありません。新しく作るか、プロジェクトファイルを読み込んでください。
+
+en: New project's name:
+es: Nombre del proyecto nuevo:
+ja: 新しいプロジェクトの名前:
+
+en: New name:
+es: Nombre nuevo:
+ja: 新しい名前:
+
+en: Name of the copy:
+es: Nombre de la copia:
+ja: コピーの名前:
+
+en: OK (Enter)
+es: Aceptar (Enter)
+ja: OK (Enter)
+
+en: New project
+es: Proyecto nuevo
+ja: 新しいプロジェクト
+
+en: is now
+es: ahora es
+ja: の新しい名前:
+
+en: copied as
+es: copiado como
+ja: のコピー:
+
+en: Delete
+es: Borrar
+ja: 削除
+
+en: Its cartridge and its saves are deleted for good.
+es: Su cartucho y sus partidas se borran para siempre.
+ja: カートリッジとセーブデータは完全に削除されます。
+
+en: Deleted
+es: Borrado
+ja: 削除しました:
+
+en: Keep it (Esc)
+es: Conservarlo (Esc)
+ja: 残す (Esc)
+
+en: Open (Enter)
+es: Abrir (Enter)
+ja: 開く (Enter)
+
+en: New
+es: Nuevo
+ja: 新規
+
+en: Import...
+es: Importar...
+ja: 読み込む...
+
+en: Quit
+es: Salir
+ja: 終了
+
+en: Rename
+es: Renombrar
+ja: 名前を変更
+
+en: Duplicate
+es: Duplicar
+ja: 複製
+
+en: saved just now
+es: guardado ahora mismo
+ja: たった今保存
+
+en: Click the block Mario should stand on when the level begins. Esc: done.
+es: Haz clic en el bloque sobre el que Mario empieza el nivel. Esc: terminar.
+ja: コース開始時にマリオが立つブロックをクリックしてください。Esc：終了
+
+en: Click the cell of the secret exit. Esc: done.
+es: Haz clic en la celda de la salida secreta. Esc: terminar.
+ja: 隠し出口のマスをクリックしてください。Esc：終了
+
+en: Click the cell where the level ends (its bell goes along). Esc: done.
+es: Haz clic en la celda donde termina el nivel (su campana va con ella). Esc: terminar.
+ja: コースが終わるマスをクリックしてください（ベルも一緒に動きます）。Esc：終了
+
+en: Click where Mario should start: the copy is saved and the game starts there. Esc: cancel.
+es: Haz clic donde debe empezar Mario: se guarda la copia y el juego empieza ahi. Esc: cancelar.
+ja: マリオが始める場所をクリックしてください。コピーを保存し、そこからゲームを始めます。Esc：キャンセル
+
+en: Click the cell for a checkpoint bell; Mario starts again just left of it, on the ground below. Esc: done.
+es: Haz clic en la celda de una campana de control; Mario vuelve a salir a su izquierda, sobre el suelo. Esc: terminar.
+ja: 中間ベルを置くマスをクリックしてください。マリオはそのすぐ左の地面から再開します。Esc：終了
+
+en: objects here do not appear at the start (only if Mario comes back)
+es: aqui los objetos no aparecen al empezar (solo si Mario vuelve)
+ja: ここのオブジェクトは開始時には出ません（マリオが戻ってきた時だけ出ます）
+
+en: START
+es: INICIO
+ja: スタート
+
+en: Capturing objects
+es: Capturando objetos
+ja: オブジェクト取り込み中
+
+en: pictures
+es: dibujos
+ja: 画像
+
+en: enemy tiles
+es: tiles de enemigos
+ja: 敵タイル
+
+en: object space
+es: espacio objetos
+ja: オブジェクト領域
+
+en: zone space
+es: espacio zona
+ja: ゾーン領域
+
+en: level space
+es: espacio nivel
+ja: コース領域
+
+en: Click where it leads: a world map point, or the point of a zone Mario enters on (it becomes the zone's entry). Tabs: the maps. Esc: cancel.
+es: Haz clic adonde lleva: un punto del mapa del mundo, o el punto de una zona por el que entra Mario (pasa a ser la entrada de la zona). Pestanas: los mapas. Esc: cancelar.
+ja: 行き先をクリックしてください：ワールドマップのポイント、またはマリオが入るゾーンのポイント（ゾーンの入口になります）。タブ：マップ。Esc：キャンセル
+
+en: Click where the secret exit leads: a world map point, a zone's point (or the world point shown in it) or a new zone's (it becomes its entry). Boss points cannot be chosen. Esc: cancel.
+es: Haz clic adonde lleva la salida secreta: un punto del mapa del mundo, uno de una zona (o el punto del mundo que se ve en ella) o uno de una zona nueva (pasa a ser su entrada). Los puntos de jefe no se pueden elegir. Esc: cancelar.
+ja: 隠し出口の行き先をクリックしてください：ワールドマップのポイント、ゾーンのポイント（またはそこに表示されたワールドのポイント）、新しいゾーンのポイント（入口になります）。ボスのポイントは選べません。Esc：キャンセル
+
+en: Nothing changed.
+es: No se ha cambiado nada.
+ja: 変更はありません。
+
+en: The secret exit now leads to
+es: La salida secreta lleva ahora a
+ja: 隠し出口の行き先:
+
+en: nowhere
+es: ningun sitio
+ja: なし
+
+en: now leads to
+es: ahora lleva a
+ja: の行き先:
+
+en: enters here
+es: entra aqui
+ja: がここに入ります
+
+en: Door of
+es: Puerta de
+ja: 扉:
+
+en: leads into:
+es: entra en:
+ja: の行き先:
+
+en: Exit on
+es: Salida en
+ja: 出口:
+
+en: leads to:
+es: lleva a:
+ja: の行き先:
+
+en: Secret exit of level
+es: Salida secreta del nivel
+ja: 隠し出口: コース
+
+en: Choose a zone with the tabs over the map and click the point Mario enters on: it becomes the zone's entry, for every door and exit into it.
+es: Elige una zona con las pestanas sobre el mapa y haz clic en el punto por el que entra Mario: pasa a ser la entrada de la zona, para todas las puertas y salidas a ella.
+ja: マップ上のタブでゾーンを選び、マリオが入るポイントをクリックしてください。そのゾーンに入るすべての扉と出口の入口になります。
+
+en: World map: click the point Mario comes out on. A zone: click the point Mario enters on (it becomes the zone's entry).
+es: Mapa del mundo: haz clic en el punto donde sale Mario. Una zona: haz clic en el punto por el que entra Mario (pasa a ser la entrada de la zona).
+ja: ワールドマップ：マリオが出てくるポイントをクリック。ゾーン：マリオが入るポイントをクリック（ゾーンの入口になります）。
+
+en: Click the point Mario is taken to; he stays there. A new zone's point becomes its entry.
+es: Haz clic en el punto al que va Mario; se queda alli. El punto de una zona nueva pasa a ser su entrada.
+ja: マリオが移動するポイントをクリックしてください。マリオはそこに留まります。新しいゾーンのポイントはその入口になります。
+
+en: No door
+es: Sin puerta
+ja: 扉なし
+
+en: The game's way
+es: Como en el juego
+ja: ゲームのまま
+
+en: PLAY HERE
+es: JUGAR AQUI
+ja: ここからプレイ
+
+en: A level can have at most
+es: Un nivel puede tener como mucho
+ja: コースに置ける最大数:
+
+en: CHECKPOINT
+es: CONTROL
+ja: 中間地点
+
+en: No finish
+es: Sin meta
+ja: ゴールがない
+
+en: Finish without its bell
+es: Meta sin su campana
+ja: ゴールにベルがない
+
+en: Bell with no finish below
+es: Campana sin meta debajo
+ja: ベルの下にゴールがない
+
+en: objects in one screen (game: 6 at most)
+es: objetos en una pantalla (el juego: 6 como mucho)
+ja: 個のオブジェクトが1画面にあります（ゲームでは最大6）
+
+en: objects (the game holds 83)
+es: objetos (el juego admite 83)
+ja: 個のオブジェクト（ゲームの上限は83）
+
+en: Start inside blocks
+es: Inicio dentro de bloques
+ja: スタートがブロックの中
+
+en: Checkpoint restart inside blocks
+es: Reaparicion dentro de bloques
+ja: 中間地点の再開位置がブロックの中
+
+en: Point
+es: Punto
+ja: ポイント
+
+en: opens missing level
+es: abre el nivel inexistente
+ja: が存在しないコースを開きます:
+
+en: objects that do not appear at the start
+es: objetos que no aparecen al empezar
+ja: 個のオブジェクトが開始時に出ません
+
+en: Test game
+es: Partida de prueba
+ja: テストプレイ
+
+en: lives
+es: vidas
+ja: 人
+
+en: coins
+es: monedas
+ja: 枚
+
+en: Play and Here start a fresh game with these and keep no saves. Shift: 10 lives or 100 coins at a time.
+es: Jugar y Aqui empiezan una partida nueva con esto y no guardan nada. Mayus: de 10 en 10 vidas o de 100 en 100 monedas.
+ja: プレイとここからは、この設定で新しいゲームを始め、セーブは残しません。Shift：残り人数は10、コインは100ずつ変わります。
+
+en: TEST GAME
+es: PARTIDA DE PRUEBA
+ja: テストプレイ
+
+en: Lives
+es: Vidas
+ja: 残り人数
+
+en: Coins
+es: Monedas
+ja: コイン
+
+en: Defaults
+es: Por defecto
+ja: 初期値
+
+en: World map
+es: Mapa del mundo
+ja: ワールドマップ
+
+en: New zone
+es: Zona nueva
+ja: 新しいゾーン
+
+en: world
+es: mundo
+ja: ワールド
+
+en: Exit to
+es: Sale a
+ja: 出口の行き先
+
+en: Door
+es: Puerta
+ja: 扉
+
+en: into
+es: entra en
+ja: 行き先:
+
+en: Choose on the map
+es: Elegir en el mapa
+ja: マップで選ぶ
+
+en: Exit
+es: Salida
+ja: 出口
+
+en: Make it the exit: move it to this point
+es: Hacer salida aqui: moverla a este punto
+ja: 出口にする：このポイントに移動
+
+en: on no point
+es: en ningun punto
+ja: ポイントなし
+
+en: now on
+es: ahora en
+ja: 現在:
+
+en: made; it has no door yet (Points tab).
+es: creada; aun no tiene puerta (pestana Puntos).
+ja: を作成しました。まだ扉はありません（ポイントタブ）。
+
+en: New zones are made from the Tree, Pumpkin, Macro, Space or Mario zone, or from a new zone.
+es: Las zonas nuevas se hacen de la Zona Arbol, Calabaza, Macro, Espacial o Mario, o de otra zona nueva.
+ja: 新しいゾーンはツリー・パンプキン・マクロ・スペース・マリオゾーン、または新しいゾーンから作ります。
+
+en: Mario's start is missing: choose a point and press Mario's start (I) in the Points tab.
+es: Falta el inicio de Mario: elige un punto y pulsa Inicio de Mario (I) en la pestana Puntos.
+ja: マリオのスタートがありません。ポイントタブでポイントを選び「マリオのスタート」(I) を押してください。
+
+en: Mario's start:
+es: Inicio de Mario:
+ja: マリオのスタート:
+
+en: World
+es: Mundo
+ja: ワールド
+
+en: MARIO STARTS HERE
+es: MARIO EMPIEZA AQUI
+ja: マリオはここから
+
+en: Only new zones can be deleted; the game's are only edited.
+es: Solo se borran las zonas nuevas; las del juego solo se editan.
+ja: 削除できるのは新しいゾーンだけです。ゲームのゾーンは編集のみです。
+
+en: deleted; doors and exits into it lead nowhere.
+es: borrada; las puertas y salidas a ella no llevan a ningun sitio.
+ja: を削除しました。そこへの扉と出口はどこにもつながりません。
+
+en: Mario's start: every new game begins on
+es: Inicio de Mario: toda partida nueva empieza en
+ja: マリオのスタート：新しいゲームはここから始まります:
+
+en: Mario's start goes on a point of the world map, a game zone or a new zone (not an added point).
+es: El inicio de Mario va en un punto del mapa de mundos, de una zona del juego o de una zona nueva (no en un punto anadido).
+ja: マリオのスタートは、ワールドマップ・ゲームのゾーン・新しいゾーンのポイントに置きます（追加したポイントは不可）。
+
+en: Only new points can shut their paths until their level is cleared.
+es: Solo los puntos nuevos pueden cerrar sus caminos hasta superar su nivel.
+ja: コースをクリアするまで道を閉じられるのは新しいポイントだけです。
+
+en: Choose a point on the map shown first.
+es: Elige antes un punto del mapa que se ve.
+ja: まず表示中のマップでポイントを選んでください。
+
+en: A new zone keeps at least one point.
+es: Una zona nueva conserva al menos un punto.
+ja: 新しいゾーンにはポイントが最低1つ必要です。
+
+en: This zone already has
+es: Esta zona ya tiene
+ja: このゾーンのポイントは既に
+
+en: points, as many as a zone can have (the game picks the map by point number). Delete one (Del) to put it somewhere else.
+es: puntos, todos los que puede tener una zona (el juego elige el mapa por el numero del punto). Borra uno (Supr) para ponerlo en otro sitio.
+ja: 個で上限です（ゲームはポイント番号でマップを選びます）。別の場所に置くには1つ削除 (Del) してください。
+
+en: Point added:
+es: Punto nuevo
+ja: ポイントを追加:
+
+en: This map has as many points as it can have.
+es: Este mapa ya tiene todos los puntos que puede tener.
+ja: このマップのポイントは上限に達しています。
+
+en: and
+es: y
+ja: と
+
+en: Path
+es: Camino
+ja: 道
+
+en: That path has no steps.
+es: Ese camino no tiene pasos.
+ja: その道には区間がありません。
+
+en: restored as the
+es: restaurada como la
+ja: を元のゾーン
+
+en: is in the game
+es: esta en el juego
+ja: のゲームの状態に戻しました
+
+en: restored as it is in the game
+es: restaurado como esta en el juego
+ja: をゲームの状態に戻しました
+
+en: picture and points (save to keep it; undo brings them back).
+es: dibujo y puntos (guarda para conservarlo; deshacer lo recupera).
+ja: ：絵とポイント（残すには保存。元に戻すで戻せます）。
+
+en: Nothing to undo.
+es: Nada que deshacer.
+ja: 元に戻す操作はありません。
+
+en: Nothing to redo.
+es: Nada que rehacer.
+ja: やり直す操作はありません。
+
+en: ZONE EDITOR
+es: EDITOR DE ZONAS
+ja: ゾーンエディタ
+
+en: Copy zone
+es: Copiar zona
+ja: ゾーンをコピー
+
+en: Delete zone
+es: Borrar zona
+ja: ゾーンを削除
+
+en: Blank zone
+es: Zona en blanco
+ja: 空のゾーン
+
+en: Mario's start is missing!
+es: Falta el inicio de Mario!
+ja: マリオのスタートがありません!
+
+en: Go to Mario's start
+es: Ir al inicio de Mario
+ja: マリオのスタートへ
+
+en: Picture
+es: Dibujo
+ja: 絵
+
+en: Points
+es: Puntos
+ja: ポイント
+
+en: (entry)
+es: (entrada)
+ja: （入口）
+
+en: (Mario's start)
+es: (inicio de Mario)
+ja: （マリオのスタート）
+
+en: (when cleared)
+es: (al superarlo)
+ja: （クリア時）
+
+en: (new)
+es: (nuevo)
+ja: （新規）
+
+en: Changed from the original game (Restore puts the map back as it was).
+es: Cambiado respecto al juego original (Restaurar devuelve el mapa como era).
+ja: オリジナルから変更されています（復元でマップを元に戻せます）。
+
+en: IN THE ORIGINAL GAME
+es: EN EL JUEGO ORIGINAL
+ja: オリジナルのゲームでは
+
+en: Where a new game starts; clearing its level walks Mario on to 13.
+es: Donde empieza una partida nueva; al superar su nivel Mario sigue andando hasta 13.
+ja: 新しいゲームの開始地点。このコースをクリアするとマリオは13まで歩きます。
+
+en: Clearing the level opened here flies Mario to the Space Zone (he lands on 3C).
+es: Al superar el nivel que abre, Mario vuela a la Zona Espacial (aterriza en 3C).
+ja: ここで開くコースをクリアすると、マリオはスペースゾーンへ飛びます（3Cに着地）。
+
+en: How Mario enters the Space Zone: he lands here flying after clearing the level of world point 05 (or 1A).
+es: Asi entra Mario en la Zona Espacial: aterriza aqui volando tras superar el nivel del punto 05 del mundo (o 1A).
+ja: スペースゾーンへの入り方：ワールドのポイント05（または1A）のコースをクリアすると、飛んできてここに着地します。
+
+en: Entrance of the
+es: Entrada de la
+ja: 入口:
+
+en: After leaving the zone Mario stands here as point
+es: Al salir de la zona Mario queda aqui como el punto
+ja: ゾーンを出たマリオはここにポイント
+
+en: (same place and paths, changed together; its level follows this one's).
+es: (mismo sitio y caminos, cambian juntos; su nivel sigue al de este).
+ja: として立ちます（同じ場所と道で一緒に変わり、コースはこちらに従います）。
+
+en: Where Mario stands after leaving the
+es: Donde queda Mario al salir de la
+ja: マリオが立つ場所（出た後）:
+
+en: the same place and paths as
+es: el mismo sitio y caminos que
+ja: 同じ場所と道:
+
+en: whose level it follows.
+es: cuyo nivel sigue.
+ja: （コースはそちらに従います）。
+
+en: The game also keeps number 12 here, with its door into the Space Zone (A on 12), but Mario stops on 13, so that door never runs: he reaches the Space Zone by clearing world point 05's level.
+es: El juego tambien guarda aqui el numero 12, con su puerta a la Zona Espacial (A sobre el 12), pero Mario para en el 13 y esa puerta nunca se usa: llega a la Zona Espacial superando el nivel del punto 05 del mundo.
+ja: ゲームはここに12番も持っていて、スペースゾーンへの扉（12でA）がありますが、マリオは13で止まるのでその扉は使われません。スペースゾーンへはワールドのポイント05のコースをクリアして行きます。
+
+en: Leads into the Turtle Zone: the game walks Mario on its own to the hidden point 0D.
+es: Lleva a la Zona Tortuga: el juego hace andar a Mario solo hasta el punto oculto 0D.
+ja: タートルゾーンへ：ゲームがマリオを隠しポイント0Dまで自動で歩かせます。
+
+en: No path leads here or out and it opens no level: Mario never stands on it.
+es: Ningun camino llega ni sale y no abre nivel: Mario nunca se para aqui.
+ja: ここへの道もここからの道もなく、コースも開きません。マリオがここに立つことはありません。
+
+en: Mario's start is missing: choose a point and press Mario's start. The project cannot be saved without it.
+es: Falta el inicio de Mario: elige un punto y pulsa Inicio de Mario. El proyecto no se puede guardar sin el.
+ja: マリオのスタートがありません。ポイントを選び「マリオのスタート」を押してください。これがないとプロジェクトを保存できません。
+
+en: POINT
+es: PUNTO
+ja: ポイント
+
+en: new point
+es: punto nuevo
+ja: 新しいポイント
+
+en: (not drawn)
+es: (no se dibuja)
+ja: （表示なし）
+
+en: Previous point
+es: Punto anterior
+ja: 前のポイント
+
+en: Next point
+es: Punto siguiente
+ja: 次のポイント
+
+en: new, as
+es: nuevo, como
+ja: 新規、元:
+
+en: no level
+es: sin nivel
+ja: コースなし
+
+en: special
+es: especial
+ja: 特殊
+
+en: Opens
+es: Abre
+ja: 開くコース
+
+en: Previous level
+es: Nivel anterior
+ja: 前のコース
+
+en: Next level
+es: Nivel siguiente
+ja: 次のコース
+
+en: Mario's start
+es: Inicio de Mario
+ja: マリオのスタート
+
+en: Zone entry
+es: Entrada de la zona
+ja: ゾーンの入口
+
+en: PATHS
+es: CAMINOS
+ja: 道
+
+en: pad > point
+es: cruceta > punto
+ja: 方向 > ポイント
+
+en: Delete this path
+es: Borrar este camino
+ja: この道を削除
+
+en: Shut until its level is cleared:
+es: Cerrado hasta superar su nivel:
+ja: コースをクリアするまで閉じる:
+
+en: Shut this way
+es: Cerrar en esta direccion
+ja: この方向を閉じる
+
+en: New path
+es: Nuevo camino
+ja: 新しい道
+
+en: POINTS ON
+es: PUNTOS EN
+ja: ポイント:
+
+en: New point
+es: Nuevo punto
+ja: 新しいポイント
+
+en: Delete point
+es: Borrar punto
+ja: ポイントを削除
+
+en: Drawing a path: click the corners, then the point it goes to. The pad direction is the way it starts; the way back is added too if that point has none that way. Backspace: last corner off. Esc or right click: cancel.
+es: Dibujando un camino: haz clic en las esquinas y luego en el punto al que va. La direccion de la cruceta es hacia donde empieza; tambien se crea la vuelta si ese punto no tiene camino en esa direccion. Retroceso: quitar la ultima esquina. Esc o clic derecho: cancelar.
+ja: 道を描いています：角をクリックし、最後に行き先のポイントをクリック。十字キーの方向が道の出発方向です。行き先のポイントにその方向の道がなければ、帰り道も追加されます。Backspace：最後の角を消す。Escか右クリック：キャンセル
+
+en: Click on the map where the new point goes. Esc: cancel.
+es: Haz clic en el mapa donde va el punto nuevo. Esc: cancelar.
+ja: 新しいポイントを置く場所をマップでクリックしてください。Esc：キャンセル
+
+en: A new zone plays with its base zone's graphics and music. Click a point to choose it, drag it to move it (its paths become straight); New point adds one (up to 20 in the Tree Zone's, 21 in the others). Entry: Mario starts there. Exit to: where its exits lead. Its door is chosen on a world map point. Plays only in this port.
+es: Una zona nueva se juega con los graficos y la musica de su zona base. Haz clic en un punto para elegirlo y arrastralo para moverlo (sus caminos quedan rectos); Nuevo punto anade uno (hasta 20 en las de la Zona Arbol, 21 en las demas). Entrada: Mario empieza ahi. Sale a: adonde llevan sus salidas. Su puerta se elige en un punto del mundo. Solo se juega en este port.
+ja: 新しいゾーンは元のゾーンのグラフィックと音楽で遊びます。ポイントをクリックで選択、ドラッグで移動（道はまっすぐになります）。「新しいポイント」で追加（ツリーゾーン系は20まで、ほかは21まで）。入口：マリオがそこから始めます。出口の行き先：出口のつながる先。扉はワールドマップのポイントで選びます。この移植版でのみ遊べます。
+
+en: Click a point on the map to choose it; with - + choose the level it opens. Door: a world point can enter a zone or a new zone (A or START on it). Exit to: a zone's exit leads to a world point or straight into another zone; Choose on the map (U) picks where by clicking. Exit 1 / 2: Here moves that exit to the chosen zone point. Paths are drawn in yellow; New path draws one, New point puts one on the world map (6 numbers free). Play (F5) saves and tries it.
+es: Haz clic en un punto del mapa para elegirlo; con - + elige el nivel que abre. Puerta: un punto del mundo puede entrar en una zona o en una zona nueva (A o START sobre el). Sale a: la salida de una zona lleva a un punto del mundo o directamente a otra zona; Elegir en el mapa (U) lo elige con un clic. Salida 1 / 2: Aqui mueve esa salida al punto elegido de la zona. Los caminos se ven en amarillo; Nuevo camino dibuja uno, Nuevo punto pone uno en el mundo (6 numeros libres). Jugar (F5) guarda y lo prueba.
+ja: マップのポイントをクリックで選択し、- + で開くコースを選びます。扉：ワールドのポイントからゾーンや新しいゾーンに入れます（その上でAかSTART）。出口の行き先：ゾーンの出口はワールドのポイントか別のゾーンに直接つながります。「マップで選ぶ」(U) でクリックして選べます。出口1 / 2：「ここ」でその出口を選択中のゾーンのポイントへ移します。道は黄色で表示されます。「新しい道」で描き、「新しいポイント」でワールドマップに置けます（空き番号は6）。プレイ (F5) で保存して試せます。
+
+en: HELP
+es: AYUDA
+ja: ヘルプ
+
+en: Level file
+es: Fichero de nivel
+ja: コースファイル
+
+en: Export level
+es: Exportar nivel
+ja: コースを書き出す
+
+en: Import level
+es: Importar nivel
+ja: コースを読み込む
+
+en: Zone or world map file
+es: Fichero de zona o de mapa de mundos
+ja: ゾーンまたはワールドマップのファイル
+
+en: Export zone
+es: Exportar zona
+ja: ゾーンを書き出す
+
+en: Import zone
+es: Importar zona
+ja: ゾーンを読み込む
+
+en: World map file
+es: Fichero de mapa de mundos
+ja: ワールドマップのファイル
+
+en: Export world map
+es: Exportar mapa de mundos
+ja: ワールドマップを書き出す
+
+en: Import world map
+es: Importar mapa de mundos
+ja: ワールドマップを読み込む
+
+en: Project file
+es: Fichero de proyecto
+ja: プロジェクトファイル
+
+en: Export project
+es: Exportar proyecto
+ja: プロジェクトを書き出す
+
+en: Import project
+es: Importar proyecto
+ja: プロジェクトを読み込む
+
+en: Game Boy cartridges
+es: Cartuchos de Game Boy
+ja: ゲームボーイのカートリッジ
+
+en: Choose the Super Mario Land 2 cartridge
+es: Elige el cartucho de Super Mario Land 2
+ja: スーパーマリオランド2のカートリッジを選んでください
+
+en: Automatic (system)
+es: Automatico (el del sistema)
+ja: 自動（システムの言語）
+
+en: &Language
+es: &Idioma
+ja: 言語(&L)
+
+en: Language
+es: Idioma
+ja: 言語
+
+en: made in the editor
+es: hecho en el editor
+ja: エディタで作成
+
+# The objects' names (editor/src/domain/object_names.rs)
+
+en: Ammonite
+es: Amonites
+ja: アンモナイト
+
+en: Ant with ball
+es: Hormiga con bola
+ja: ボールアリ
+
+en: Ant
+es: Hormiga
+ja: アリ
+
+en: Ball rider
+es: Jinete de bola
+ja: ボールライダー
+
+en: Bee
+es: Abeja
+ja: ハチ
+
+en: Beetle
+es: Escarabajo
+ja: カブトムシ
+
+en: Big spiked ball
+es: Bola de pinchos grande
+ja: 大トゲボール
+
+en: Big spiked dome
+es: Cupula de pinchos grande
+ja: 大トゲドーム
+
+en: Bird
+es: Pajaro
+ja: トリ
+
+en: Biting plant
+es: Planta mordedora
+ja: かみつき草
+
+en: Blade
+es: Cuchilla
+ja: 刃
+
+en: Bomb bat
+es: Murcielago bomba
+ja: バクダンコウモリ
+
+en: Bomb
+es: Bomba
+ja: バクダン
+
+en: Bone fish
+es: Pez esqueleto
+ja: ホネ魚
+
+en: Boo
+es: Boo
+ja: テレサ
+
+en: Boss room object
+es: Objeto de sala del jefe
+ja: ボス部屋のオブジェクト
+
+en: Bubble
+es: Burbuja
+ja: 泡
+
+en: Bullet Bill
+es: Bill Bala
+ja: キラー
+
+en: Candle
+es: Vela
+ja: ろうそく
+
+en: Carrot
+es: Zanahoria
+ja: ニンジン
+
+en: Caterpillar
+es: Oruga
+ja: イモムシ
+
+en: Cheep Cheep
+es: Cheep Cheep
+ja: プクプク
+
+en: Cloud
+es: Nube
+ja: 雲
+
+en: Coin bag
+es: Saco de monedas
+ja: コイン袋
+
+en: Crowned bird
+es: Pajaro con corona
+ja: 王冠の鳥
+
+en: Crowned fish
+es: Pez con corona
+ja: 王冠の魚
+
+en: Debris
+es: Escombros
+ja: がれき
+
+en: Eel
+es: Anguila
+ja: ウツボ
+
+en: Egg
+es: Huevo
+ja: タマゴ
+
+en: Eye stalk alien
+es: Alien de ojos saltones
+ja: 目玉宇宙人
+
+en: Falling blocks
+es: Bloques que caen
+ja: 落ちるブロック
+
+en: Falling spike
+es: Pincho que cae
+ja: 落ちるトゲ
+
+en: Fin
+es: Aleta
+ja: ヒレ
+
+en: Finish bell
+es: Campana de meta
+ja: ゴールのベル
+
+en: Fire flower
+es: Flor de fuego
+ja: ファイアフラワー
+
+en: Fireball
+es: Bola de fuego
+ja: 火の玉
+
+en: Fish
+es: Pez
+ja: 魚
+
+en: Fly
+es: Mosca
+ja: ハエ
+
+en: Flying fish
+es: Pez volador
+ja: トビウオ
+
+en: Frog
+es: Rana
+ja: カエル
+
+en: Giant bug
+es: Bicho gigante
+ja: 大きな虫
+
+en: Goblin
+es: Duende
+ja: ゴブリン
+
+en: Goomba
+es: Goomba
+ja: クリボー
+
+en: Grated lift
+es: Plataforma de rejilla
+ja: 格子リフト
+
+en: Heart (extra life)
+es: Corazon (vida extra)
+ja: ハート（1UP）
+
+en: Helmet alien
+es: Alien con casco
+ja: ヘルメット宇宙人
+
+en: Invisible marker
+es: Marcador invisible
+ja: 見えないマーカー
+
+en: Jar
+es: Tarro
+ja: つぼ
+
+en: Koopa Troopa
+es: Koopa Troopa
+ja: ノコノコ
+
+en: Leaf
+es: Hoja
+ja: 葉っぱ
+
+en: Leafy plant
+es: Planta frondosa
+ja: 葉っぱの草
+
+en: Lever
+es: Palanca
+ja: レバー
+
+en: Lift
+es: Plataforma
+ja: リフト
+
+en: Long lift
+es: Plataforma larga
+ja: 長いリフト
+
+en: Masked ghost
+es: Fantasma enmascarado
+ja: 仮面オバケ
+
+en: Midway bell
+es: Campana de control
+ja: 中間のベル
+
+en: Mushroom
+es: Champinon
+ja: キノコ
+
+en: One-eyed ghost
+es: Fantasma de un ojo
+ja: 一つ目オバケ
+
+en: Owl
+es: Buho
+ja: フクロウ
+
+en: Paragoomba
+es: Paragoomba
+ja: パタクリボー
+
+en: Pig
+es: Cerdo
+ja: ブタ
+
+en: Piranha Plant
+es: Planta Pirana
+ja: パックンフラワー
+
+en: Porcupine
+es: Puercoespin
+ja: ヤマアラシ
+
+en: Red ant
+es: Hormiga roja
+ja: 赤アリ
+
+en: Rubble
+es: Cascotes
+ja: がれき片
+
+en: Screw
+es: Tornillo
+ja: ネジ
+
+en: Sea creature
+es: Criatura marina
+ja: 海の生き物
+
+en: Sea urchin
+es: Erizo de mar
+ja: ウニ
+
+en: Shark
+es: Tiburon
+ja: サメ
+
+en: Snail
+es: Caracol
+ja: カタツムリ
+
+en: Soldier ant
+es: Hormiga soldado
+ja: 兵隊アリ
+
+en: Space hippo
+es: Hipopotamo espacial
+ja: 宇宙カバ
+
+en: Spark
+es: Chispa
+ja: スパーク
+
+en: Spike ball
+es: Bola de pinchos
+ja: トゲボール
+
+en: Spike flower
+es: Flor de pinchos
+ja: トゲの花
+
+en: Spiked ball
+es: Bola con pinchos
+ja: トゲつきボール
+
+en: Spiked dome
+es: Cupula de pinchos
+ja: トゲドーム
+
+en: Spiked pillar
+es: Pilar de pinchos
+ja: トゲの柱
+
+en: Spinning blade
+es: Cuchilla giratoria
+ja: 回転する刃
+
+en: Spirit
+es: Espiritu
+ja: 人魂
+
+en: Spitting plant
+es: Planta escupidora
+ja: タネ吐き草
+
+en: Star
+es: Estrella
+ja: スター
+
+en: Toy soldier
+es: Soldadito de juguete
+ja: おもちゃの兵隊
+
+en: Urchin
+es: Erizo
+ja: ウニ（小）
+
+en: Wario room lift
+es: Plataforma de la sala de Wario
+ja: ワリオ部屋のリフト
+
+en: Wario room object
+es: Objeto de la sala de Wario
+ja: ワリオ部屋のオブジェクト
+
+en: Winged king
+es: Rey alado
+ja: 羽の王様
+
+en: Witch's broom
+es: Escoba de bruja
+ja: 魔女のほうき
+

@@ -50,7 +50,7 @@ impl Editor {
         self.look_store.save(&look_cache::to_text(&[], &[]));
         // the old loader's threads stop when their next result has nowhere to go
         self.look_loader = LookLoader::start(self.doc.rom.clone(), self.doc.original.clone(), &Default::default(), &Default::default());
-        self.status = tr(self.es, "Capturing every object picture again (see the box at the bottom right).", "Volviendo a capturar todos los dibujos de objetos (mira el recuadro de abajo a la derecha).").into();
+        self.status = tr(self.lang, "Capturing every object picture again (see the box at the bottom right).").into();
     }
 
     /// Wait until every picture and tile is captured, and keep them (for the command line).
@@ -123,7 +123,7 @@ impl Editor {
         let same = |o: &CatalogueObject| here.is_some_and(|h| self.captured.get(&o.first()).is_some_and(|l| (l.w, l.h, &l.px) == (h.w, h.h, &h.px)));
         let first = self.catalogue_index.1.iter().find(|o| o.uses.contains(&key)).or_else(|| self.catalogue_index.1.iter().find(|o| same(o))).map(|o| o.first());
         let (l, k) = first.unwrap_or(key);
-        object_names::name(l, k)
+        object_names::name(l, k).map(|(n, c)| (tr(self.lang, n), c))
     }
 
     /// For the check pictures: wait for the shown level's object pictures.
@@ -250,7 +250,7 @@ impl Editor {
             marker(Rect::new(x, y, s, s), if sel { 3.0 } else { 1.5 }, c);
             let t = format!("{:02X}", o.kind);
             let fs = (s * 0.55).clamp(10.0, 26.0);
-            let dim = measure_text(&t, None, fs as u16, 1.0);
+            let dim = text_size(&t, fs as u16);
             marked_text(&t, x + (s - dim.width) / 2.0, y + (s + dim.offset_y) / 2.0, fs, c);
         }
     }
@@ -264,13 +264,13 @@ impl Editor {
         let tip = match self.object_at(self.world_pos(m)) {
             Some(i) => {
                 let o = self.doc.levels[self.cur].content.objs[i];
-                format!("#{:02X}  x {} y {}  {}", o.kind, o.x, o.y, tr(self.es, "drag: move   right click: delete", "arrastra: mover   clic dcho: borrar"))
+                format!("#{:02X}  x {} y {}  {}", o.kind, o.x, o.y, tr(self.lang, "drag: move   right click: delete"))
             }
             None => match self.kind {
-                Some(k) => format!("{} #{k:02X}   {}", tr(self.es, "click: place object", "clic: poner objeto"), tr(self.es, "right click: none", "clic dcho: ninguno")),
-                None => tr(self.es, "choose an object in the palette to place it", "elige un objeto en la paleta para ponerlo").to_string(),
+                Some(k) => format!("{} #{k:02X}   {}", tr(self.lang, "click: place object"), tr(self.lang, "right click: none")),
+                None => tr(self.lang, "choose an object in the palette to place it").to_string(),
             },
         };
-        draw_text(&tip, self.panel + 8.0, ch - 8.0, 20.0, WHITE);
+        put_text(&tip, self.panel + 8.0, ch - 8.0, 20.0, WHITE);
     }
 }

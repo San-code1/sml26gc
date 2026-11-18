@@ -11,7 +11,8 @@ with ports and adapters around them. Behaviour is guarded by the golden fingerpr
 | `crates/gb-core` | Domain: the Game Boy (CPU, bus, PPU, APU, cartridge MBCs). No I/O, no dependencies |
 | `crates/cart-model` | Domain: what is known about this cartridge (levels, objects, world map, patches, RAM map) and use cases on a running console |
 | `crates/project-model` | Domain: a project of the editor (what is edited and its rules, level, zone, world map and project files) and the cartridge a project file makes over the base cartridge |
-| `crates/host` | Shared adapters: the base cartridge, file locations, a project's cartridge made from its file, battery saves, settings file, PNG output |
+| `crates/host` | Shared adapters: the base cartridge, file locations, a project's cartridge made from its file, battery saves, settings file, PNG output, the system's language |
+| `crates/i18n` | Languages and a translation dictionary keyed by the English text (the editor's catalogue is `editor/i18n/editor.txt`). No dependencies |
 | `game/` | Application: the game (`game.exe`) |
 | `editor/` | Application: the editor (`editor.exe`) |
 | `tools/research/` | Reverse-engineering CLI (`research.exe`) |
@@ -29,6 +30,7 @@ with ports and adapters around them. Behaviour is guarded by the golden fingerpr
 - `project-model` works on projects and ROM images; no files, no UI. The game uses it only to
   make a project's cartridge from its file (through `host::projects`).
 - `host` knows nothing about macroquad or cpal.
+- `i18n` is used by `host` and the applications; it knows no files and no system.
 - `game` and `editor` do not depend on each other; they share only the contract below.
 
 ## `gb-core`

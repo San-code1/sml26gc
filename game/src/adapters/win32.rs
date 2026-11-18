@@ -42,6 +42,15 @@ mod imp {
         Some(std::path::PathBuf::from(String::from_utf16_lossy(&file[..n])))
     }
 
+    /// Is the window titled `title` the one in front (taking the keyboard)?
+    pub fn in_front(title: &str) -> bool {
+        let w: Vec<u16> = title.encode_utf16().chain(Some(0)).collect();
+        unsafe {
+            let hwnd = FindWindowW(std::ptr::null(), w.as_ptr());
+            !hwnd.is_null() && hwnd == GetForegroundWindow()
+        }
+    }
+
     pub fn send_to_back(title: &str) {
         let w: Vec<u16> = title.encode_utf16().chain(Some(0)).collect();
         unsafe {
@@ -61,9 +70,12 @@ mod imp {
 mod imp {
     pub fn remember_foreground() {}
     pub fn send_to_back(_: &str) {}
+    pub fn in_front(_: &str) -> bool {
+        true
+    }
     pub fn pick_cartridge(_: &str, _: Option<&std::path::Path>, _: &str, _: &str) -> Option<std::path::PathBuf> {
         None
     }
 }
 
-pub use imp::{pick_cartridge, remember_foreground, send_to_back};
+pub use imp::{in_front, pick_cartridge, remember_foreground, send_to_back};

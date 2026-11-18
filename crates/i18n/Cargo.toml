@@ -1,0 +1,7 @@
+[package]
+name = "i18n"
+description = "Languages and a translation dictionary keyed by the English text."
+version.workspace = true
+edition.workspace = true
+
+[dependencies]

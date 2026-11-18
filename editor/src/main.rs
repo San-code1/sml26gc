@@ -10,6 +10,7 @@ mod adapters;
 mod application;
 mod domain;
 mod ports;
+mod texts;
 mod ui;
 
 use adapters::file_dialogs::SystemDialogs;
@@ -19,9 +20,10 @@ use adapters::process_launcher::GameProcess;
 use cart_model::original_points::OnMap;
 use cart_model::zone_maps::ZONES;
 use macroquad::prelude::*;
-use ports::{MenuBar, PrefsStore};
+use i18n::Lang;
+use ports::{FileDialogs, MenuBar, PrefsStore};
 use std::path::PathBuf;
-use ui::{BaseScreen, Editor, Leave, Mode, Ports, ProjectsChoice, ProjectsScreen, TAB_POINTS};
+use ui::{language_menu, BaseScreen, Editor, Leave, Mode, Ports, ProjectsChoice, ProjectsScreen, TAB_POINTS};
 
 const TITLE: &str = "Level Editor (Rust)";
 
@@ -36,18 +38,24 @@ async fn main() {
     let shot = value("--screenshot").map(PathBuf::from);
     let level = value("--level").and_then(|v| v.parse::<usize>().ok());
     macroquad::input::prevent_quit();
-    let es = fs_repository::spanish();
-    let dialogs = SystemDialogs { es, owner: TITLE };
+    let mut lang = fs_repository::language();
+    ui::set_text_language(lang);
+    let mut dialogs = SystemDialogs { lang, owner: TITLE };
     clear_background(ui::col(3));
     next_frame().await;
+    let mut menu: Box<dyn MenuBar> = Box::new(WindowMenu::new(TITLE));
+    language_menu::add(&mut *menu, lang, fs_repository::PrefsFile.load().language);
 
     // the base cartridge, asked for until a valid one is chosen
     let base = match host::base_cartridge() {
         Ok(p) => p,
         Err(problem) => {
-            let mut screen = BaseScreen::new(es, problem);
+            let mut screen = BaseScreen::new(lang, problem);
             let mut frames = 0;
             loop {
+                if choose_language(&mut *menu, &mut lang, &mut dialogs) {
+                    screen.set_lang(lang);
+                }
                 if let Some(p) = screen.frame(&dialogs) {
                     break p;
                 }
@@ -62,19 +70,21 @@ async fn main() {
     let mut straight = value("--project").cloned().filter(|n| host::project_dir(n).is_dir());
     // --new-project: the project screen typing a new project's name
     let mut new_project = args.iter().any(|a| a == "--new-project");
-    let mut menu: Box<dyn MenuBar> = Box::new(WindowMenu::new(TITLE));
     let mut last = Some(fs_repository::PrefsFile.load().last_project).filter(|n| !n.is_empty());
     let mut first = true;
     loop {
         let name = match straight.take() {
             Some(n) => n,
             None => {
-                let mut screen = ProjectsScreen::new(es, base.clone(), last.as_deref());
+                let mut screen = ProjectsScreen::new(lang, base.clone(), last.as_deref());
                 if std::mem::take(&mut new_project) {
                     screen.start_new();
                 }
                 let mut frames = 0;
                 loop {
+                    if choose_language(&mut *menu, &mut lang, &mut dialogs) {
+                        screen.set_lang(lang);
+                    }
                     match screen.frame(&dialogs) {
                         Some(ProjectsChoice::Open(n)) => break n,
                         Some(ProjectsChoice::Quit) => return,
@@ -88,6 +98,7 @@ async fn main() {
             }
         };
         let Ok(opened) = fs_repository::open_project(&base, &name) else { continue };
+        menu.clear();
         let mut prefs = fs_repository::PrefsFile.load();
         prefs.last_project = name.clone();
         fs_repository::PrefsFile.save(&prefs);
@@ -97,13 +108,13 @@ async fn main() {
             store: Box::new(opened.store),
             launcher: Box::new(GameProcess),
             prefs: Box::new(fs_repository::PrefsFile),
-            dialogs: Box::new(SystemDialogs { es, owner: TITLE }),
+            dialogs: Box::new(SystemDialogs { lang, owner: TITLE }),
             text_files: Box::new(fs_repository::TextFile),
             menu,
             sound: Box::new(adapters::cpal_sound::Speakers::new()),
             looks: Box::new(looks),
         };
-        let mut ed = Editor::new(opened.doc, ports, name, es);
+        let mut ed = Editor::new(opened.doc, ports, name, lang);
         // --level N: that level; else where the project was last saved
         match level.filter(|_| first) {
             Some(l) => ed.select_level(l.min(ed.level_count() - 1)),
@@ -137,8 +148,27 @@ async fn main() {
             next_frame().await;
         }
         menu = ed.take_menu();
+        lang = fs_repository::language();
+        dialogs.set_lang(lang);
+        language_menu::add(&mut *menu, lang, fs_repository::PrefsFile.load().language);
         next_frame().await;
     }
+}
+
+/// A language chosen in the Language menu outside the editor (the project and cartridge
+/// screens): kept in `editor.cfg` and applied to the texts, the dialogs and the menu. True when
+/// it changed.
+fn choose_language(menu: &mut dyn MenuBar, lang: &mut Lang, dialogs: &mut SystemDialogs) -> bool {
+    let Some(choice) = menu.chosen().into_iter().find_map(language_menu::chosen) else { return false };
+    let mut prefs = fs_repository::PrefsFile.load();
+    prefs.language = choice;
+    fs_repository::PrefsFile.save(&prefs);
+    *lang = language_menu::resolve(choice);
+    ui::set_text_language(*lang);
+    dialogs.set_lang(*lang);
+    menu.clear();
+    language_menu::add(menu, *lang, choice);
+    true
 }
 
 /// With `--screenshot`: after 20 frames, the window saved as a picture; true then (stop).
@@ -198,6 +228,10 @@ fn command_line(ed: &mut Editor, args: &[String]) -> bool {
     // --test-game: the test game's settings open
     if flag("--test-game") {
         ed.show_test_game();
+    }
+    // --copy-level: a copy of the level shown (not saved)
+    if flag("--copy-level") {
+        ed.copy_level();
     }
     // --inspector: the Level tab shown (with --levels-open, the level grid unfolded)
     if flag("--inspector") {

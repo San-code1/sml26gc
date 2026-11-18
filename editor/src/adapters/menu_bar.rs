@@ -35,6 +35,12 @@ impl MenuBar for WindowMenu {
         }
     }
 
+    fn check(&mut self, id: u16, on: bool) {
+        if let Some(b) = &self.bar {
+            b.check(id, on);
+        }
+    }
+
     fn clear(&mut self) {
         if let Some(b) = &self.bar {
             b.clear();
@@ -121,6 +127,12 @@ mod imp {
             }
         }
 
+        pub fn check(&self, id: u16, on: bool) {
+            unsafe {
+                CheckMenuItem(self.menu, id as u32, MF_BYCOMMAND | if on { MF_CHECKED } else { MF_UNCHECKED });
+            }
+        }
+
         pub fn clear(&self) {
             unsafe {
                 while GetMenuItemCount(self.menu) > 0 {
@@ -144,6 +156,7 @@ mod imp {
         }
         pub fn add_menu(&self, _: &str, _: &[MenuEntry]) {}
         pub fn enable(&self, _: u16, _: bool) {}
+        pub fn check(&self, _: u16, _: bool) {}
         pub fn clear(&self) {}
     }
 

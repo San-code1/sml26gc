@@ -7,8 +7,9 @@ use super::cheats::{draw_icon, Cheat, Cheats, Icon};
 use super::i18n::{texts, Texts, LANG_NAMES};
 use super::keys::{self, Key, DEFAULT_KEYS};
 use super::overlay::{text_width, Canvas};
+use super::pad::{self, Input, PadButton, DEFAULT_PAD};
 use super::settings::Settings;
-use crate::ports::Keyboard;
+use crate::ports::{Gamepad, Keyboard};
 use cart_model::cheats::Item;
 use cart_model::GameMode;
 use gb_core::ppu::H;
@@ -55,6 +56,54 @@ const IT_FILES: usize = 8;
 const IT_CHEATS: usize = 9;
 /// Rows of the level list shown at once (Left and Right move by a page).
 const LEVEL_ROWS: usize = 10;
+/// The Controls screen's rows before the bindings (the Input row).
+const CONTROLS_FIRST: usize = 1;
+
+/// What the menu reads in one frame: the keyboard, and the controller when it plays.
+#[derive(Default)]
+pub struct MenuInput {
+    pub up: bool,
+    pub down: bool,
+    pub left: bool,
+    pub right: bool,
+    pub ok: bool,
+    pub back: bool,
+    /// Esc: leaves the waiting for a key or button.
+    pub escape: bool,
+    /// The key and controller button that went down last (to bind them).
+    pub key: Option<Key>,
+    pub button: Option<PadButton>,
+}
+
+impl MenuInput {
+    /// The keyboard's arrows, Enter and Space and the bound keys, and with `pad` (a connected
+    /// controller) its D-pad, left stick and bound buttons.
+    pub fn read(keys: &dyn Keyboard, pad: Option<&dyn Gamepad>, st: &Settings) -> MenuInput {
+        let any = |ks: &[Key]| ks.iter().any(|&k| keys.pressed(k));
+        let mut m = MenuInput {
+            up: any(&[Key::Up, st.keys[keys::UP]]),
+            down: any(&[Key::Down, st.keys[keys::DOWN]]),
+            left: any(&[Key::Left, st.keys[keys::LEFT]]),
+            right: any(&[Key::Right, st.keys[keys::RIGHT]]),
+            ok: any(&[Key::Enter, Key::KpEnter, Key::Space, st.keys[keys::A]]),
+            back: any(&[st.keys[keys::MENU], st.keys[keys::B]]),
+            escape: keys.pressed(Key::Escape),
+            key: keys.last_pressed(),
+            button: None,
+        };
+        if let Some(p) = pad {
+            let dir = |i: usize| p.pressed(st.pad[i]) || p.pressed(pad::stick(i));
+            m.up |= dir(keys::UP);
+            m.down |= dir(keys::DOWN);
+            m.left |= dir(keys::LEFT);
+            m.right |= dir(keys::RIGHT);
+            m.ok |= p.pressed(st.pad[keys::A]);
+            m.back |= p.pressed(st.pad[keys::B]) || p.pressed(st.pad[keys::MENU]);
+            m.button = p.last_pressed();
+        }
+        m
+    }
+}
 
 /// The cheats as the menu shows them.
 pub struct CheatMenu {
@@ -152,7 +201,7 @@ impl Menu {
         match self.screen {
             Screen::Main => self.items.len(),
             Screen::Confirm(_) => 2,
-            Screen::Controls => keys::KEYS + 2,
+            Screen::Controls => CONTROLS_FIRST + keys::KEYS + 1,
             Screen::Display => 4,
             Screen::Sound => 2,
             Screen::Language => 4,
@@ -168,32 +217,38 @@ impl Menu {
         self.sel = sel;
     }
 
-    pub fn update(&mut self, input: &dyn Keyboard, st: &mut Settings) -> Action {
+    pub fn update(&mut self, input: &MenuInput, st: &mut Settings) -> Action {
         self.blink = self.blink.wrapping_add(1);
         if let Screen::Waiting(b) = self.screen {
-            if input.pressed(Key::Escape) {
-                self.go(Screen::Controls, b);
+            let row = CONTROLS_FIRST + b;
+            if input.escape {
+                self.go(Screen::Controls, row);
                 return Action::None;
             }
-            if let Some(k) = input.last_pressed() {
-                if k.bindable() {
-                    // A key already used elsewhere swaps places, so no button is lost.
-                    if let Some(other) = st.keys.iter().position(|&x| x == k) {
-                        st.keys[other] = st.keys[b];
+            // A key or button already used elsewhere swaps places, so no binding is lost.
+            match st.input {
+                Input::Keyboard => {
+                    if let Some(k) = input.key.filter(|k| k.bindable()) {
+                        if let Some(other) = st.keys.iter().position(|&x| x == k) {
+                            st.keys[other] = st.keys[b];
+                        }
+                        st.keys[b] = k;
+                        self.go(Screen::Controls, row);
                     }
-                    st.keys[b] = k;
-                    self.go(Screen::Controls, b);
+                }
+                Input::Controller => {
+                    if let Some(p) = input.button.filter(|p| p.bindable()) {
+                        if let Some(other) = st.pad.iter().position(|&x| x == p) {
+                            st.pad[other] = st.pad[b];
+                        }
+                        st.pad[b] = p;
+                        self.go(Screen::Controls, row);
+                    }
                 }
             }
             return Action::None;
         }
-        let any = |ks: &[Key]| ks.iter().any(|&k| input.pressed(k));
-        let up = any(&[Key::Up, st.keys[keys::UP]]);
-        let down = any(&[Key::Down, st.keys[keys::DOWN]]);
-        let left = any(&[Key::Left, st.keys[keys::LEFT]]);
-        let right = any(&[Key::Right, st.keys[keys::RIGHT]]);
-        let ok = any(&[Key::Enter, Key::KpEnter, Key::Space, st.keys[keys::A]]);
-        let back = any(&[Key::Escape, st.keys[keys::B]]);
+        let (up, down, left, right, ok, back) = (input.up, input.down, input.left, input.right, input.ok, input.back);
         let n = self.count();
         // Yes/No sit side by side, so they are chosen with Left/Right; lists use Up/Down.
         let (prev, next) = if matches!(self.screen, Screen::Confirm(_) | Screen::Summon) { (left, right) } else { (up, down) };
@@ -253,17 +308,17 @@ impl Menu {
                     self.go(Screen::Main, self.pos(item));
                 }
             }
-            Screen::Controls => {
-                if ok {
-                    match self.sel {
-                        s if s < keys::KEYS => self.screen = Screen::Waiting(s),
-                        s if s == keys::KEYS => {
-                            st.keys = DEFAULT_KEYS;
-                        }
-                        _ => self.go(Screen::Main, self.pos(IT_CONTROLS)),
-                    }
+            Screen::Controls => match self.sel {
+                0 if ok || step != 0 => {
+                    st.input = if st.input == Input::Keyboard { Input::Controller } else { Input::Keyboard };
                 }
-            }
+                s if ok && s < CONTROLS_FIRST + keys::KEYS && s >= CONTROLS_FIRST => self.screen = Screen::Waiting(s - CONTROLS_FIRST),
+                s if ok && s == CONTROLS_FIRST + keys::KEYS => match st.input {
+                    Input::Keyboard => st.keys = DEFAULT_KEYS,
+                    Input::Controller => st.pad = DEFAULT_PAD,
+                },
+                _ => {}
+            },
             Screen::Display => {
                 let change = step != 0 || ok;
                 match self.sel {
@@ -385,19 +440,25 @@ impl Menu {
                 let (x, y, w, h) = (2, 5, 156, 136);
                 c.frame(x, y, w, h);
                 c.title(x, y, w, t.controls);
-                // every binding, Restore and Back between the title and the footer
-                for i in 0..keys::KEYS + 2 {
+                // the input, every binding of it, then Restore, between the title and the footer
+                // (the footer says how to go back)
+                for i in 0..CONTROLS_FIRST + keys::KEYS {
                     let ty = y + 9 + i as i32 * 8;
-                    if i < keys::KEYS {
-                        c.text(x + 16, ty, t.buttons[i], shade(i));
-                        let label = st.keys[i].label(st.lang);
-                        c.text(x + w - 8 - text_width(label), ty, label, 3);
-                    } else {
-                        c.text(x + 16, ty, if i == keys::KEYS { t.restore } else { t.back }, shade(i));
-                    }
+                    let (name, value) = match i {
+                        0 => (t.input, if st.input == Input::Controller { t.controller } else { t.keyboard }),
+                        i => (t.buttons[i - CONTROLS_FIRST], binding_label(st, i - CONTROLS_FIRST)),
+                    };
+                    c.text(x + 16, ty, name, shade(i));
+                    c.text(x + w - 8 - text_width(value), ty, value, 3);
                     if i == self.sel {
                         c.cursor(x + 8, ty, 3);
                     }
+                }
+                let last = CONTROLS_FIRST + keys::KEYS;
+                let ty = y + 9 + last as i32 * 8;
+                c.text(x + 16, ty, t.restore, shade(last));
+                if last == self.sel {
+                    c.cursor(x + 8, ty, 3);
                 }
                 c.footer(x, y + h - 2, w, t.footer_controls);
             }
@@ -405,11 +466,12 @@ impl Menu {
                 let (x, y, w, h) = (14, 44, 132, 56);
                 c.frame(x, y, w, h);
                 c.title(x, y, w, t.buttons[b]);
+                let press = if st.input == Input::Controller { t.press_button } else { t.press_key };
                 if blink_on {
-                    c.text(x + (w - text_width(t.press_key)) / 2, y + 14, t.press_key, 3);
+                    c.text(x + (w - text_width(press)) / 2, y + 14, press, 3);
                 }
                 c.text(x + 18, y + 28, t.now, 2);
-                c.text(x + 22 + text_width(t.now), y + 28, st.keys[b].label(st.lang), 3);
+                c.text(x + 22 + text_width(t.now), y + 28, binding_label(st, b), 3);
                 c.text(x + (w - text_width(t.cancel)) / 2, y + 40, t.cancel, 2);
             }
             Screen::Display => {
@@ -561,6 +623,14 @@ impl Menu {
     }
 }
 
+/// Binding `i`'s key or button for the input chosen.
+fn binding_label(st: &Settings, i: usize) -> &'static str {
+    match st.input {
+        Input::Keyboard => st.keys[i].label(st.lang),
+        Input::Controller => st.pad[i].label(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -580,7 +650,8 @@ mod tests {
     }
 
     fn step(m: &mut Menu, st: &mut Settings, k: Key) -> Action {
-        m.update(&Press(Some(k)), st)
+        let input = MenuInput::read(&Press(Some(k)), None, st);
+        m.update(&input, st)
     }
 
     #[test]
@@ -594,10 +665,10 @@ mod tests {
         step(&mut m, &mut st, Key::Right);
         assert_eq!(st.palette, 1);
         step(&mut m, &mut st, Key::Escape);
-        // Controls: bind A to Space.
+        // Controls: bind A to Space (below the Input row).
         step(&mut m, &mut st, Key::Up);
         step(&mut m, &mut st, Key::Enter);
-        for _ in 0..4 {
+        for _ in 0..5 {
             step(&mut m, &mut st, Key::Down);
         }
         step(&mut m, &mut st, Key::Enter);
