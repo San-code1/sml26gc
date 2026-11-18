@@ -118,3 +118,21 @@ like the same changes on the game's zones.
 #### Scenario: Undo a point
 - **WHEN** a point was added to a new zone and the user presses Undo in the Points tab
 - **THEN** the point is gone
+
+### Requirement: Blank new zone
+The world map editor SHALL make a blank new zone, like a blank level: the user chooses the
+game zone whose tiles and numbers it uses (one a door enters), and the new zone starts with an
+empty picture and only its entry point (where the base zone's is), with no paths, levels or
+exits. Making a new zone as a copy of the zone shown SHALL stay.
+
+#### Scenario: A blank zone over the Pumpkin Zone's tiles
+- **WHEN** New blank zone is chosen and the Pumpkin Zone picked
+- **THEN** a new zone appears with an empty picture drawn with the Pumpkin Zone's tiles and a single point, its entry
+
+### Requirement: Mario's start copied with a zone
+Making a new zone as a copy of the zone that holds Mario's start SHALL ask whether the start
+moves to the copy or stays.
+
+#### Scenario: Copying the start's zone
+- **WHEN** Mario's start is on the Tree Zone and New zone is made from it
+- **THEN** the editor asks whether the start goes to the new zone or stays on the Tree Zone

@@ -42,3 +42,31 @@ SHALL say why.
 #### Scenario: Level file as a zone
 - **WHEN** the user imports a level file as a zone
 - **THEN** nothing changes and the status bar says it is not a zone file
+
+### Requirement: Zone file folders
+Exporting a zone SHALL offer the folder `exports/zones` (any folder may be chosen), and a zone
+imported as a new zone or replacing one SHALL be part of the open project once saved.
+
+#### Scenario: Default folder
+- **WHEN** a zone is exported
+- **THEN** the Save dialog opens in `exports/zones`
+
+### Requirement: The world map as a zone file
+On the world map, Export zone SHALL write the whole world map (picture, point levels, paths,
+places, added points, doors, shut directions) to a world map file, and Replace zone SHALL put
+one in its place, as one change saved with the project. Points and exits leading to new levels
+or new zones the project does not have SHALL lose their destination, and the editor SHALL say
+how many. A world map file SHALL NOT be imported as a new zone.
+
+#### Scenario: A world map to another project
+- **WHEN** the world map of one project is exported with Export zone and, in another project, Replace zone is chosen on the world map with that file
+- **THEN** the second project's world map is the file's, and saving keeps it
+
+### Requirement: Mario's start in zone files
+A zone or world map file SHALL keep Mario's start when the map holds it. Importing or replacing
+from a file that has one, in a project that already has its start elsewhere, SHALL ask which to
+keep (the project's or the file's); the other SHALL be dropped.
+
+#### Scenario: Two starts
+- **WHEN** a zone file holding Mario's start is imported as a new zone into a project whose start is on the world map
+- **THEN** the editor asks which start to keep, and afterwards the project has exactly one

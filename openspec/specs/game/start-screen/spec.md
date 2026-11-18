@@ -1,0 +1,62 @@
+# game/start-screen Specification
+
+## Purpose
+The game's first screen: the base cartridge, checked, and what to play, each with its own
+saves.
+
+## Requirements
+
+### Requirement: The base cartridge
+The game SHALL need the path of the original cartridge file, whatever its name, accept only
+the supported cartridge (checked by the whole file's SHA-1), share the path with the editor,
+and check it at every start; while it is missing or wrong the game SHALL say so and ask for it,
+and start nothing.
+
+#### Scenario: Wrong cartridge
+- **WHEN** the game starts and the base cartridge path points to another file
+- **THEN** the start screen says it is not the supported cartridge and asks for it, and no game can start
+
+### Requirement: What to play
+With a valid base cartridge, the start screen SHALL offer VANILLA (the original cartridge) and
+every project folder of `editor/projects` that has its project file, the last one played chosen
+first. A project's cartridge SHALL NOT be checked against the base cartridge; when it is missing
+or older than the project file, it SHALL be made from the file over the base cartridge before
+the game starts, and a project file of another cartridge or damaged SHALL be refused with why.
+
+#### Scenario: Two projects
+- **WHEN** `editor/projects` has "Islands" with its project file and "Draft" with neither file nor cartridge
+- **THEN** the list offers VANILLA and Islands
+
+#### Scenario: A project file alone
+- **WHEN** "Islands" holds only its project file and is chosen
+- **THEN** its cartridge is made over the base cartridge and the game starts
+
+### Requirement: Choosing is not playing
+The start screen SHALL show one choice at a time in a selector (its kind, its name, and for a
+project how many new levels it has and when it was saved), stepped with arrows, the arrow keys
+or the wheel; choosing SHALL only select it, and Play (Enter) SHALL start the game.
+
+#### Scenario: Looking through the projects
+- **WHEN** the right arrow is pressed twice on the start screen
+- **THEN** the third choice is shown and selected, and no game starts until Play
+
+### Requirement: Editing from the start screen
+The start screen SHALL open the editor on the chosen project ("edit in the editor", not for
+VANILLA) or on a new project (the editor's project screen typing the new name), and SHALL show
+projects made or renamed meanwhile.
+
+#### Scenario: Edit Islands
+- **WHEN** Islands is chosen and E is pressed
+- **THEN** the editor opens with Islands, and the game's start screen stays
+
+#### Scenario: A new project
+- **WHEN** N is pressed, and the project "Sky" is made in the editor
+- **THEN** the editor's project screen asks for the new name, and Sky shows in the game's list
+
+### Requirement: Saves per project
+Each choice SHALL keep its battery save and its new zone progress apart: `saves/vanilla/` for
+the original and `saves/<project>/` for a project.
+
+#### Scenario: Separate progress
+- **WHEN** a level is cleared playing "Islands" and VANILLA is chosen afterwards
+- **THEN** the original's progress does not have that level cleared

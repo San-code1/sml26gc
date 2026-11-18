@@ -133,3 +133,30 @@ map choice and tools, with a bar showing where it is.
 #### Scenario: A long note in a low window
 - **WHEN** a point with notes is chosen in a window too low for the list of points
 - **THEN** the wheel over the panel brings the rest of the list into view
+
+### Requirement: The Zones button
+The level editor's button to the map editor SHALL be called Zones (the world map is one of the
+zones shown there).
+
+#### Scenario: From a level
+- **WHEN** a level is shown
+- **THEN** the panel's button to the maps reads Zones
+
+### Requirement: Mario's start
+Every project SHALL have exactly one start for Mario: a point of the world map, of a game zone
+or of a new zone, where every new game begins (the game's own point $00 on the world map at
+first). The Points tab SHALL set the chosen point as the start (moving it from where it was) and
+mark it on its map. A project whose start is missing (its point or zone deleted) SHALL NOT be
+saved; the editor SHALL say so and point to where to set it.
+
+#### Scenario: Starting in the Pumpkin Zone
+- **WHEN** a point of the Pumpkin Zone is set as Mario's start, the project saved and a new game started
+- **THEN** the game begins with Mario on that point of the Pumpkin Zone
+
+#### Scenario: Only one start
+- **WHEN** Mario's start is set on another point
+- **THEN** the old point is no longer the start and the project has one start
+
+#### Scenario: Start deleted
+- **WHEN** the new zone holding Mario's start is deleted and the project is saved
+- **THEN** it is not saved and the editor says Mario's start is missing
