@@ -2,6 +2,7 @@
 //! implementations (adapters) are plugged in: a real window and speakers, or silent ones
 //! for checks and tests.
 use crate::domain::keys::Key;
+use crate::domain::pad::PadButton;
 use crate::domain::settings::Settings;
 use crate::domain::zone_progress::ZoneProgress;
 use gb_core::Gb;
@@ -14,6 +15,37 @@ pub trait Keyboard {
     fn held(&self, key: Key) -> bool;
     /// The last key that went down this frame, if the game knows it.
     fn last_pressed(&self) -> Option<Key>;
+}
+
+/// The controller as seen during one frame (the first one connected).
+pub trait Gamepad {
+    fn connected(&self) -> bool;
+    /// Went down this frame.
+    fn pressed(&self, b: PadButton) -> bool;
+    /// Is down now.
+    fn held(&self, b: PadButton) -> bool;
+    /// The last button that went down this frame.
+    fn last_pressed(&self) -> Option<PadButton>;
+}
+
+/// No controller at all (tests).
+#[cfg(test)]
+pub struct NoPad;
+
+#[cfg(test)]
+impl Gamepad for NoPad {
+    fn connected(&self) -> bool {
+        false
+    }
+    fn pressed(&self, _: PadButton) -> bool {
+        false
+    }
+    fn held(&self, _: PadButton) -> bool {
+        false
+    }
+    fn last_pressed(&self) -> Option<PadButton> {
+        None
+    }
 }
 
 /// Where the sound goes.

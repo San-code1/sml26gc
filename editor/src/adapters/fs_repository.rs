@@ -71,7 +71,7 @@ pub fn open_project(base: &Path, name: &str) -> Result<Opened, ProjectError> {
         return Err(ProjectError::Missing);
     }
     let original = std::fs::read(base).map_err(io)?;
-    let path = host::projects::ensure_rom(base, name).map_err(|e| ProjectError::Io(e.text(false)))?;
+    let path = host::projects::ensure_rom(base, name).map_err(|e| ProjectError::Io(e.text(i18n::Lang::En)))?;
     let edited = std::fs::read(&path).ok();
     Ok(Opened { doc: EditorDocument::open(original, edited), store: EditedCopyFile { path, project: host::project_file(name), place: host::project_place(name) } })
 }
@@ -189,8 +189,9 @@ impl LookStore for LookFile {
 }
 
 /// Language from the game's settings file (English unless Spanish was chosen).
-pub fn spanish() -> bool {
-    host::settings_file::language().as_deref() == Some("es")
+/// The editor's language: the one chosen (`editor.cfg`), else the system's.
+pub fn language() -> i18n::Lang {
+    PrefsFile.load().language.unwrap_or_else(host::system_language::system_language)
 }
 
 /// Level and project files, wherever the person chose.

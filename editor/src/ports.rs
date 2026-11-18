@@ -68,6 +68,8 @@ pub trait FileDialogs {
     fn open(&self, kind: FileKind) -> Option<PathBuf>;
     /// A Game Boy cartridge file, for the base cartridge.
     fn pick_cartridge(&self) -> Option<PathBuf>;
+    /// The language of the dialogs' titles from now on.
+    fn set_lang(&mut self, lang: i18n::Lang);
 }
 
 pub trait TextFiles {
@@ -88,6 +90,8 @@ pub trait MenuBar {
     /// The ids of the entries chosen since the last call.
     fn chosen(&mut self) -> Vec<u16>;
     fn enable(&mut self, id: u16, on: bool);
+    /// Tick entry `id` or take its tick away.
+    fn check(&mut self, id: u16, on: bool);
     /// Take every menu off the bar (to build it again).
     fn clear(&mut self);
 }

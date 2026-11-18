@@ -15,6 +15,7 @@ mod selftest;
 
 use adapters::cpal_audio::Audio;
 use adapters::fs_stores::{BatteryFile, DefaultSettings, NoBattery, NoZoneProgress, SettingsFile, ZoneFile};
+use adapters::gilrs_pad::GilrsPad;
 use adapters::macroquad_display::{save_window_png, MacroquadDisplay, MacroquadWindow};
 use adapters::macroquad_keyboard::MacroquadKeyboard;
 use adapters::macroquad_picker::{Choice, Picker};
@@ -206,6 +207,7 @@ async fn run(args: Args, found: Result<PathBuf, String>, checking: bool, title: 
     macroquad::input::prevent_quit();
     let audio = if checking { Audio::silent() } else { Audio::new() };
     let keyboard = MacroquadKeyboard;
+    let mut pad = GilrsPad::new();
     let mut display = MacroquadDisplay::new();
     // no cartridge on the command line: the start screen first (checks find it themselves)
     let mut app = if args.rom.is_none() && (!checking || args.start_screen) {
@@ -257,7 +259,7 @@ async fn run(args: Args, found: Result<PathBuf, String>, checking: bool, title: 
                                     picker.error = None;
                                     picker.reload(&last);
                                 }
-                                Err(e) => picker.error = Some(e.text(picker.es())),
+                                Err(e) => picker.error = Some(e.text(picker.lang())),
                             }
                         }
                         None
@@ -284,7 +286,8 @@ async fn run(args: Args, found: Result<PathBuf, String>, checking: bool, title: 
                 }
             }
             App::Run(session) => {
-                if session.frame(dt, &keyboard, &audio) == Flow::Quit {
+                pad.poll(checking || win32::in_front(&title));
+                if session.frame_with(dt, &keyboard, &pad, &audio) == Flow::Quit {
                     break;
                 }
                 display.present(session.screen(), session.palette(), session.settings().integer_scale);

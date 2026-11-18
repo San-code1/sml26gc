@@ -2,23 +2,24 @@
 //! in the kind's folder of `exports\` (`host::paths`; a project's in its own,
 //! `exports\projects\<name>`). Off Windows there is no dialog: every request is cancelled.
 use crate::ports::{FileDialogs, FileKind};
+use crate::texts::tr;
+use i18n::Lang;
 use std::path::PathBuf;
 
 pub struct SystemDialogs {
-    pub es: bool,
+    pub lang: Lang,
     /// The editor window's title: the dialogs open over it.
     pub owner: &'static str,
 }
 
 impl SystemDialogs {
     fn names(&self, kind: FileKind) -> (&'static str, &'static str, &'static str) {
-        let es = self.es;
-        let pick = |en, sp| if es { sp } else { en };
+        let lang = self.lang;
         match kind {
-            FileKind::Level => (pick("Level file", "Fichero de nivel"), pick("Export level", "Exportar nivel"), pick("Import level", "Importar nivel")),
-            FileKind::Zone => (pick("Zone or world map file", "Fichero de zona o de mapa de mundos"), pick("Export zone", "Exportar zona"), pick("Import zone", "Importar zona")),
-            FileKind::World => (pick("World map file", "Fichero de mapa de mundos"), pick("Export world map", "Exportar mapa de mundos"), pick("Import world map", "Importar mapa de mundos")),
-            FileKind::Project => (pick("Project file", "Fichero de proyecto"), pick("Export project", "Exportar proyecto"), pick("Import project", "Importar proyecto")),
+            FileKind::Level => (tr(lang, "Level file"), tr(lang, "Export level"), tr(lang, "Import level")),
+            FileKind::Zone => (tr(lang, "Zone or world map file"), tr(lang, "Export zone"), tr(lang, "Import zone")),
+            FileKind::World => (tr(lang, "World map file"), tr(lang, "Export world map"), tr(lang, "Import world map")),
+            FileKind::Project => (tr(lang, "Project file"), tr(lang, "Export project"), tr(lang, "Import project")),
         }
     }
 }
@@ -48,8 +49,12 @@ impl FileDialogs for SystemDialogs {
 
     fn pick_cartridge(&self) -> Option<PathBuf> {
         let dir = host::base_cartridge::chosen_before().and_then(|p| p.parent().map(|d| d.to_path_buf())).unwrap_or_else(host::exe_dir);
-        let (what, title) = if self.es { ("Cartuchos de Game Boy", "Elige el cartucho de Super Mario Land 2") } else { ("Game Boy cartridges", "Choose the Super Mario Land 2 cartridge") };
+        let (what, title) = (tr(self.lang, "Game Boy cartridges"), tr(self.lang, "Choose the Super Mario Land 2 cartridge"));
         imp::dialog(self.owner, what, title, "gb", None, &dir)
+    }
+
+    fn set_lang(&mut self, lang: Lang) {
+        self.lang = lang;
     }
 }
 

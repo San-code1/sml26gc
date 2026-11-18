@@ -1,7 +1,8 @@
 //! The window's File and Tools menus: their entries come from the shortcut table and run as
 //! actions; entries that can't run where the editor is are greyed out.
 use super::shortcuts::{keys, Action};
-use super::widgets::tr;
+use super::language_menu;
+use super::widgets::{set_text_language, tr, Lang, Severity};
 use super::Editor;
 use crate::ports::MenuEntry;
 use cart_model::levels::LEVELS;
@@ -30,20 +31,20 @@ const TOOLS_MENU: [Option<Action>; 3] = [Some(Action::ObjectCatalogue), None, So
 pub(super) const TOOLS_MENU_LEN: usize = TOOLS_MENU.len();
 const TOOLS_ID: u16 = 101;
 
-fn label(es: bool, a: Action) -> &'static str {
+fn label(lang: Lang, a: Action) -> &'static str {
     match a {
-        Action::ObjectCatalogue => tr(es, "Object catalogue", "Catalogo de objetos"),
-        Action::Projects => tr(es, "Projects...", "Proyectos..."),
-        Action::RecaptureObjects => tr(es, "Capture the object pictures again", "Volver a capturar los dibujos de objetos"),
-        Action::Save => tr(es, "Save", "Guardar"),
-        Action::NewBlankLevel => tr(es, "New blank level...", "Nivel en blanco..."),
-        Action::ExportLevel => tr(es, "Export level...", "Exportar nivel..."),
-        Action::ImportLevel => tr(es, "Import level as a new level...", "Importar nivel como nivel nuevo..."),
-        Action::ReplaceLevel => tr(es, "Replace this level from a file...", "Reemplazar este nivel con un fichero..."),
-        Action::ExportZone => tr(es, "Export zone...", "Exportar zona..."),
-        Action::ImportZone => tr(es, "Import zone as a new zone...", "Importar zona como zona nueva..."),
-        Action::ReplaceZone => tr(es, "Replace this zone from a file...", "Reemplazar esta zona con un fichero..."),
-        Action::ExportProject => tr(es, "Export project...", "Exportar proyecto..."),
+        Action::ObjectCatalogue => tr(lang, "Object catalogue"),
+        Action::Projects => tr(lang, "Projects..."),
+        Action::RecaptureObjects => tr(lang, "Capture the object pictures again"),
+        Action::Save => tr(lang, "Save"),
+        Action::NewBlankLevel => tr(lang, "New blank level..."),
+        Action::ExportLevel => tr(lang, "Export level..."),
+        Action::ImportLevel => tr(lang, "Import level as a new level..."),
+        Action::ReplaceLevel => tr(lang, "Replace this level from a file..."),
+        Action::ExportZone => tr(lang, "Export zone..."),
+        Action::ImportZone => tr(lang, "Import zone as a new zone..."),
+        Action::ReplaceZone => tr(lang, "Replace this zone from a file..."),
+        Action::ExportProject => tr(lang, "Export project..."),
         _ => "",
     }
 }
@@ -54,25 +55,46 @@ impl Editor {
             .iter()
             .enumerate()
             .map(|(i, a)| match a {
-                Some(a) => MenuEntry::Item { id: i as u16 + 1, label: label(self.es, *a), keys: keys(*a) },
+                Some(a) => MenuEntry::Item { id: i as u16 + 1, label: label(self.lang, *a), keys: keys(*a) },
                 None => MenuEntry::Separator,
             })
             .collect();
-        self.menu.add_menu(tr(self.es, "&File", "&Archivo"), &entries);
+        self.menu.add_menu(tr(self.lang, "&File"), &entries);
         let tools: Vec<MenuEntry> = TOOLS_MENU
             .iter()
             .enumerate()
             .map(|(i, a)| match a {
-                Some(a) => MenuEntry::Item { id: TOOLS_ID + i as u16, label: label(self.es, *a), keys: keys(*a) },
+                Some(a) => MenuEntry::Item { id: TOOLS_ID + i as u16, label: label(self.lang, *a), keys: keys(*a) },
                 None => MenuEntry::Separator,
             })
             .collect();
-        self.menu.add_menu(tr(self.es, "&Tools", "&Herramientas"), &tools);
+        self.menu.add_menu(tr(self.lang, "&Tools"), &tools);
+        language_menu::add(&mut *self.menu, self.lang, self.prefs.language);
+    }
+
+    /// Change the editor's language (None: the system's), kept in `editor.cfg`: every text,
+    /// the menu bar and the file dialogs at once.
+    fn set_language(&mut self, choice: Option<Lang>) {
+        self.prefs.language = choice;
+        self.prefs_store.save(&self.prefs);
+        self.lang = language_menu::resolve(choice);
+        set_text_language(self.lang);
+        self.dialogs.set_lang(self.lang);
+        self.menu.clear();
+        self.menu_enabled = [None; FILE_MENU_LEN];
+        self.tools_enabled = [None; TOOLS_MENU_LEN];
+        self.build_menu();
+        self.status = format!("{}: {}", tr(self.lang, "Language"), self.lang.name());
+        self.mark(Severity::Done);
     }
 
     /// Run the entries chosen since the last frame and grey out those that can't run now.
     pub(super) fn update_menu(&mut self) {
         for id in self.menu.chosen() {
+            if let Some(choice) = language_menu::chosen(id) {
+                self.set_language(choice);
+                continue;
+            }
             let a = if id >= TOOLS_ID { TOOLS_MENU.get((id - TOOLS_ID) as usize) } else { FILE_MENU.get((id as usize).wrapping_sub(1)) };
             if let Some(Some(a)) = a {
                 self.run(*a);

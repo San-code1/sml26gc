@@ -7,4 +7,8 @@ edition.workspace = true
 [dependencies]
 gb-core.workspace = true
 png.workspace = true
+i18n.workspace = true
 project-model.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows-sys.workspace = true

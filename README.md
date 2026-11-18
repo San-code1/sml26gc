@@ -31,8 +31,16 @@ research tools find the cartridge from the command line, `RESEARCH_ROM`, the bas
 | Start | Enter |
 | Select | Backspace |
 
-Esc (or Enter in a level) opens the pause menu: controls, display, sound, back to map, file
-select, language. F11: full screen. Hold left Ctrl (Fast forward in Controls): fast-forward.
+Esc (the Menu binding; or Enter in a level) opens the pause menu: controls, display, sound,
+back to map, file select, language. F11: full screen. Hold left Ctrl (Fast forward in
+Controls): fast-forward.
+
+A controller (gamepad, XInput or Windows.Gaming.Input) plays as soon as it is connected, together
+with the keyboard, which always plays. Controls' Input row chooses whose bindings the screen
+lists, sets and restores, the keyboard's or the controller's. The controller's defaults sit as on
+a Game Boy: the D-pad (and the left stick) to move, B (right face button) is the Game Boy's A and
+A (bottom) its B, Start for Start and X (left) for Select, Back / View / Share for the menu, LB / RB
+save and load state, LT rewinds and RT fast-forwards; the guide button also opens the menu.
 
 The start screen shows VANILLA (the base cartridge) and every project of the editor that has
 its project file, one at a time (arrows, the arrow keys or the wheel), the last one played
@@ -149,9 +157,16 @@ the tag shown when a level begins lists them with the key that opens the menu.
 - Painting: Pencil (B) and Box (R) paint the palette selection; drag over the palette, or
   right-drag on the map, to take several cells at once. Select (E), then Ctrl+C / Ctrl+X /
   Del, and Ctrl+V to paste where it was copied (Esc stops).
+- The levels (32 and up) and zones made in the editor carry a stripe in the level grid and the
+  map list ("made in the editor"); a text cut short to fit (ending in "..") shows whole in a
+  tooltip while the mouse is on it.
 - Palettes zoom with their - + buttons or Ctrl - / Ctrl +; the side panel widens or narrows to
   fit (at most half the window). A cut palette scrolls with the wheel or a right-drag. The zoom
   is kept in `editor.cfg`.
+- Language: English, Spanish or Japanese, the system's until one is chosen in the Language
+  menu (Automatic goes back to the system's); kept in `editor.cfg`. The texts are in
+  `editor/i18n/editor.txt` (English, the text in the code, with its Spanish and Japanese);
+  Japanese is drawn with BIZ UDGothic (`editor/fonts/`, SIL Open Font License).
 - Projects: the editor works inside one, a folder with its project file (what the project is)
   and the cartridge made from it over the base cartridge (made again when missing or older, also
   by the game). At start (and from File, Projects..., Ctrl+Shift+O,

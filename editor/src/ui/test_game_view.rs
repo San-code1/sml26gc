@@ -16,9 +16,9 @@ impl Editor {
     /// The button beside Play: it opens and closes the settings, its tooltip says them.
     pub(super) fn test_game_button(&mut self, r: Rect) {
         self.test_game_anchor = r;
-        let es = self.es;
+        let lang = self.lang;
         if r.contains(mouse_position().into()) {
-            self.tip = Some(format!("{}: {} {}, {} {}", tr(es, "Test game", "Partida de prueba"), self.prefs.test_lives, tr(es, "lives", "vidas"), self.prefs.test_coins, tr(es, "coins", "monedas")));
+            self.tip = Some(format!("{}: {} {}, {} {}", tr(lang, "Test game"), self.prefs.test_lives, tr(lang, "lives"), self.prefs.test_coins, tr(lang, "coins")));
         }
         if button(r, if self.test_game_open { "^" } else { "v" }, self.test_game_open, 15.0) {
             self.test_game_open = !self.test_game_open;
@@ -35,9 +35,9 @@ impl Editor {
         if !self.test_game_open {
             return;
         }
-        let es = self.es;
+        let lang = self.lang;
         let inner = W - 2.0 * PAD;
-        let note = wrap_px(tr(es, "Play and Here start a fresh game with these and keep no saves. Shift: 10 lives or 100 coins at a time.", "Jugar y Aqui empiezan una partida nueva con esto y no guardan nada. Mayus: de 10 en 10 vidas o de 100 en 100 monedas."), inner, NOTE);
+        let note = wrap_px(tr(lang, "Play and Here start a fresh game with these and keep no saves. Shift: 10 lives or 100 coins at a time."), inner, NOTE);
         let h = PAD + 18.0 + 2.0 * (ROW + GAP) + 4.0 + note.len() as f32 * (NOTE + 2.0) + 8.0 + ROW + PAD;
         let a = self.test_game_anchor;
         let x = self.panel + 8.0;
@@ -53,25 +53,25 @@ impl Editor {
         draw_rectangle_lines(r.x, r.y, r.w, r.h, 2.0, col(3));
         // the title, joined to the button it drops from
         let mut cy = y + PAD;
-        let title = tr(es, "TEST GAME", "PARTIDA DE PRUEBA");
-        draw_text(title, x + PAD, cy + 13.0, 14.0, col(2));
-        let d = measure_text(title, None, 14, 1.0).width.ceil();
+        let title = tr(lang, "TEST GAME");
+        put_text(title, x + PAD, cy + 13.0, 14.0, col(2));
+        let d = text_size(title, 14).width.ceil();
         draw_rectangle(x + PAD + d + 8.0, cy + 8.0, inner - d - 8.0, 1.0, col(1));
         cy += 18.0 + GAP;
         let far = if is_key_down(KeyCode::LeftShift) || is_key_down(KeyCode::RightShift) { 10 } else { 1 };
         let (mut lives, mut coins) = (self.prefs.test_lives as i32, self.prefs.test_coins as i32);
-        lives += far * stepper(x + PAD, cy, inner, tr(es, "Lives", "Vidas"), &lives.to_string());
+        lives += far * stepper(x + PAD, cy, inner, tr(lang, "Lives"), &lives.to_string());
         cy += ROW + GAP;
-        coins += 10 * far * stepper(x + PAD, cy, inner, tr(es, "Coins", "Monedas"), &coins.to_string());
+        coins += 10 * far * stepper(x + PAD, cy, inner, tr(lang, "Coins"), &coins.to_string());
         cy += ROW + GAP + 4.0;
         for line in &note {
-            draw_text(line, x + PAD, cy + NOTE - 2.0, NOTE, col(2));
+            put_text(line, x + PAD, cy + NOTE - 2.0, NOTE, col(2));
             cy += NOTE + 2.0;
         }
         cy += 8.0;
         let d = Prefs::default();
         let bw = 120.0;
-        if button(Rect::new(x + W - PAD - bw, cy, bw, ROW), tr(es, "Defaults", "Por defecto"), false, 15.0) {
+        if button(Rect::new(x + W - PAD - bw, cy, bw, ROW), tr(lang, "Defaults"), false, 15.0) {
             (lives, coins) = (d.test_lives as i32, d.test_coins as i32);
         }
         let lives = lives.clamp(*TEST_LIVES.start() as i32, *TEST_LIVES.end() as i32) as u32;
@@ -84,15 +84,15 @@ impl Editor {
 
 /// A name, then `-` value `+` over the rest of `w`; returns -1, 0 or 1.
 fn stepper(x: f32, y: f32, w: f32, name: &str, value: &str) -> i32 {
-    draw_text(name, x, y + 18.0, 15.0, col(3));
+    put_text(name, x, y + 18.0, 15.0, col(3));
     let (cx, cw) = (x + LABEL_W, w - LABEL_W);
     let mut d = 0;
     if button(Rect::new(cx, y, ROW, ROW), "-", false, 16.0) {
         d = -1;
     }
     let vw = cw - 2.0 * (ROW + GAP);
-    let t = measure_text(value, None, 16, 1.0);
-    draw_text(value, (cx + ROW + GAP + (vw - t.width) / 2.0).round(), y + 18.0, 16.0, col(3));
+    let t = text_size(value, 16);
+    put_text(value, (cx + ROW + GAP + (vw - t.width) / 2.0).round(), y + 18.0, 16.0, col(3));
     if button(Rect::new(cx + cw - ROW, y, ROW, ROW), "+", false, 16.0) {
         d = 1;
     }

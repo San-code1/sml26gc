@@ -68,9 +68,9 @@ impl Standing {
 
 /// A tag in a cell's bottom right corner; its width.
 fn tag(r: Rect, text: &str, bg: Color, fg: Color) -> f32 {
-    let w = measure_text(text, None, 12, 1.0).width + 10.0;
+    let w = text_size(text, 12).width + 10.0;
     draw_rectangle(r.x + r.w - w, r.y + r.h - 16.0, w, 16.0, bg);
-    draw_text(text, r.x + r.w - w + 5.0, r.y + r.h - 4.0, 12.0, fg);
+    put_text(text, r.x + r.w - w + 5.0, r.y + r.h - 4.0, 12.0, fg);
     w
 }
 
@@ -93,35 +93,35 @@ pub enum Fit {
 const JOINS: [Category; 3] = [Category::Enemy, Category::Trap, Category::Platform];
 
 /// A category as the palette's filter says it.
-pub fn category_plural(es: bool, c: Option<Category>) -> &'static str {
+pub fn category_plural(lang: Lang, c: Option<Category>) -> &'static str {
     match c {
-        None => tr(es, "All objects", "Todos los objetos"),
-        Some(Category::PowerUp) => tr(es, "Power-ups", "Power-ups"),
-        Some(Category::Enemy) => tr(es, "Enemies", "Enemigos"),
-        Some(Category::Trap) => tr(es, "Traps", "Trampas"),
-        Some(Category::Platform) => tr(es, "Platforms", "Plataformas"),
-        Some(Category::Goal) => tr(es, "Goals", "Metas"),
-        Some(Category::Marker) => tr(es, "Invisible markers", "Marcadores invisibles"),
-        Some(Category::Scripted) => tr(es, "Boss and scripted", "Jefes y guiones"),
+        None => tr(lang, "All objects"),
+        Some(Category::PowerUp) => tr(lang, "Power-ups"),
+        Some(Category::Enemy) => tr(lang, "Enemies"),
+        Some(Category::Trap) => tr(lang, "Traps"),
+        Some(Category::Platform) => tr(lang, "Platforms"),
+        Some(Category::Goal) => tr(lang, "Goals"),
+        Some(Category::Marker) => tr(lang, "Invisible markers"),
+        Some(Category::Scripted) => tr(lang, "Boss and scripted"),
     }
 }
 
-pub fn category_name(es: bool, c: Category) -> &'static str {
+pub fn category_name(lang: Lang, c: Category) -> &'static str {
     match c {
-        Category::PowerUp => tr(es, "power-up", "power-up"),
-        Category::Enemy => tr(es, "enemy", "enemigo"),
-        Category::Trap => tr(es, "trap", "trampa"),
-        Category::Platform => tr(es, "platform", "plataforma"),
-        Category::Goal => tr(es, "goal", "meta"),
-        Category::Marker => tr(es, "invisible marker", "marcador invisible"),
-        Category::Scripted => tr(es, "boss or scripted", "jefe o guion"),
+        Category::PowerUp => tr(lang, "power-up"),
+        Category::Enemy => tr(lang, "enemy"),
+        Category::Trap => tr(lang, "trap"),
+        Category::Platform => tr(lang, "platform"),
+        Category::Goal => tr(lang, "goal"),
+        Category::Marker => tr(lang, "invisible marker"),
+        Category::Scripted => tr(lang, "boss or scripted"),
     }
 }
 
 impl Editor {
     pub(super) fn open_catalogue(&mut self) {
         self.catalogue = Some(CatalogueView { objects: Vec::new(), filter: None, show: Show::All, chosen: None, scroll: 0.0 });
-        self.status = tr(self.es, "Object catalogue: the game's objects. Esc: close.", "Catalogo de objetos: los objetos del juego. Esc: cerrar.").into();
+        self.status = tr(self.lang, "Object catalogue: the game's objects. Esc: close.").into();
     }
 
     /// The catalogue open (only power-ups with `power_ups`) once every object of the game's
@@ -164,7 +164,7 @@ impl Editor {
         let (base, second) = self.catalogue_of_shown();
         let offered = self.offered_here();
         let set: Vec<(usize, u8)> = self.doc.level_enemies(self.cur).map(|s| s.enemies.iter().map(|e| (e.level as usize, e.kind)).collect()).unwrap_or_default();
-        let es = self.es;
+        let lang = self.lang;
         let members = self.set_with_tiles();
         let Some(v) = self.catalogue.take() else { return };
         let mut v = v;
@@ -200,17 +200,17 @@ impl Editor {
         draw_rectangle(0.0, 0.0, self.panel, screen_height(), col(0));
         draw_rectangle(self.panel - 3.0, 0.0, 3.0, screen_height(), col(3));
         let w = self.panel - 2.0 * PAD - 8.0;
-        draw_text(tr(es, "OBJECT CATALOGUE", "CATALOGO DE OBJETOS"), PAD, 25.0, 20.0, col(3));
+        put_text(tr(lang, "OBJECT CATALOGUE"), PAD, 25.0, 20.0, col(3));
         let half = (w - 4.0) / 2.0;
         // two filters, combined: what the objects are to this level (one choice), and category
         let mut y = 46.0;
-        draw_text(tr(es, "SHOW", "MOSTRAR"), PAD, y, 13.0, col(2));
+        put_text(tr(lang, "SHOW"), PAD, y, 13.0, col(2));
         y += 8.0;
         let shows = [
-            (Show::All, tr(es, "All", "Todos")),
-            (Show::Compatible, tr(es, "Compatible", "Compatibles")),
-            (Show::Usable, tr(es, "Usable here", "Usables aqui")),
-            (Show::Addable, tr(es, "Can be added", "Se pueden anadir")),
+            (Show::All, tr(lang, "All")),
+            (Show::Compatible, tr(lang, "Compatible")),
+            (Show::Usable, tr(lang, "Usable here")),
+            (Show::Addable, tr(lang, "Can be added")),
         ];
         for (i, (s, label)) in shows.iter().enumerate() {
             let r = Rect::new(PAD + (i % 2) as f32 * (half + 4.0), y + (i / 2) as f32 * (ROW + 4.0), half, ROW);
@@ -219,9 +219,9 @@ impl Editor {
             }
         }
         y += 2.0 * (ROW + 4.0) + 18.0;
-        draw_text(tr(es, "CATEGORY", "CATEGORIA"), PAD, y, 13.0, col(2));
+        put_text(tr(lang, "CATEGORY"), PAD, y, 13.0, col(2));
         y += 8.0;
-        let categories: Vec<(Option<Category>, &str)> = std::iter::once((None, tr(es, "All", "Todas"))).chain(CATEGORIES.iter().map(|c| (Some(*c), category_name(es, *c)))).collect();
+        let categories: Vec<(Option<Category>, &str)> = std::iter::once((None, tr(lang, "All kinds"))).chain(CATEGORIES.iter().map(|c| (Some(*c), category_name(lang, *c)))).collect();
         for (i, (c, label)) in categories.iter().enumerate() {
             let r = Rect::new(PAD + (i % 2) as f32 * (half + 4.0), y + (i / 2) as f32 * (ROW + 4.0), half, ROW);
             if button(r, label, v.filter == *c, 14.0) {
@@ -231,7 +231,7 @@ impl Editor {
         y += categories.len().div_ceil(2) as f32 * (ROW + 4.0) + 6.0;
         draw_rectangle(PAD, y, w, 1.0, col(2));
         y += 8.0;
-        draw_text(&format!("{} {}", shown.len(), tr(es, "objects", "objetos")), PAD, y + 12.0, 15.0, col(2));
+        put_text(&format!("{} {}", shown.len(), tr(lang, "objects")), PAD, y + 12.0, 15.0, col(2));
         y += 24.0;
         let mut pick = None;
         let mut add = None;
@@ -240,10 +240,11 @@ impl Editor {
         if let Some(o) = v.chosen.and_then(|i| v.objects.get(i)) {
             let (l, k) = o.first();
             let (name, cat) = object_names::name(l, k).unwrap_or(("?", Category::Marker));
-            draw_text(&fit(name, w, 18.0), PAD, y + 14.0, 18.0, col(3));
+            let name = tr(lang, name);
+            put_text(&fit(name, w, 18.0), PAD, y + 14.0, 18.0, col(3));
             y += 22.0;
             for line in wrap(&self.object_details(o), 34) {
-                draw_text(&line, PAD, y + 12.0, 15.0, col(3));
+                put_text(&line, PAD, y + 12.0, 15.0, col(3));
                 y += 17.0;
             }
             y += 6.0;
@@ -252,20 +253,20 @@ impl Editor {
             let member = o.uses.iter().find_map(|&(l, k)| members.as_ref()?.iter().find(|m| m.0.level as usize == l && m.0.kind == k).map(|m| m.0));
             if let Some(e) = member {
                 let n = self.doc.levels[self.cur].content.objs.iter().filter(|ob| ob.kind == e.kind).count();
-                if button(Rect::new(PAD, y, w, ROW), &format!("{} ({n} {})", tr(es, "Remove from this level", "Quitar de este nivel"), tr(es, "placed", "colocados")), false, 15.0) {
+                if button(Rect::new(PAD, y, w, ROW), &format!("{} ({n} {})", tr(lang, "Remove from this level"), tr(lang, "placed")), false, 15.0) {
                     remove = Some(e);
                 }
                 y += ROW + 4.0;
             }
             match here(o) {
                 Some(k) => {
-                    if button(Rect::new(PAD, y, w, ROW), tr(es, "Use in this level", "Usar en este nivel"), false, 15.0) {
+                    if button(Rect::new(PAD, y, w, ROW), tr(lang, "Use in this level"), false, 15.0) {
                         pick = Some(k);
                     }
                 }
                 None if JOINS.contains(&cat) => {
                     if let Some(e) = self.joinable(o, second, false) {
-                        let label = tr(es, "Add to this level's enemies", "Anadir a los enemigos del nivel");
+                        let label = tr(lang, "Add to this level's enemies");
                         let r = Rect::new(PAD, y, w, ROW);
                         let fit = self.fit_with(e, members.as_deref());
                         if fit == Fit::Yes {
@@ -275,16 +276,16 @@ impl Editor {
                         } else {
                             draw_rectangle(r.x, r.y, r.w, r.h, col(1));
                             draw_rectangle_lines(r.x, r.y, r.w, r.h, 2.0, col(2));
-                            let d = measure_text(label, None, 15, 1.0);
-                            draw_text(label, r.x + (r.w - d.width) / 2.0, r.y + 17.0, 15.0, col(2));
+                            let d = text_size(label, 15);
+                            put_text(label, r.x + (r.w - d.width) / 2.0, r.y + 17.0, 15.0, col(2));
                         }
                         y += ROW + 4.0;
                         let (why, kind) = match fit {
-                            Fit::Yes => (tr(es, "Fits: its tiles are free in this level.", "Cabe: sus tiles estan libres en este nivel.").to_string(), Severity::Done),
-                            Fit::Graphics => (tr(es, "Not usable here: it also draws with common sprite tiles, which this level loads with other graphics (it would look broken).", "No se usa aqui: tambien se dibuja con tiles de sprites comunes, que este nivel carga con otros graficos (se veria roto).").to_string(), Severity::Warning),
-                            Fit::Clash(other) => (format!("{} {} {}", tr(es, "Does not fit: it needs the tiles of", "No cabe: necesita los tiles de"), Self::enemy_name(other), tr(es, "(remove it first).", "(quitalo antes).")), Severity::Warning),
-                            Fit::Full => (format!("{} {} {}.", tr(es, "Does not fit: the set has", "No cabe: el juego ya tiene"), enemy_sets::MOST, tr(es, "enemies", "enemigos")), Severity::Warning),
-                            Fit::Pending => (format!("{} ({} {}).", tr(es, "Known once the enemies' tiles are captured", "Se sabra cuando se capturen los tiles de los enemigos"), self.look_loader.tiles_left(), tr(es, "left", "por capturar")), Severity::Info),
+                            Fit::Yes => (tr(lang, "Fits: its tiles are free in this level.").to_string(), Severity::Done),
+                            Fit::Graphics => (tr(lang, "Not usable here: it also draws with common sprite tiles, which this level loads with other graphics (it would look broken).").to_string(), Severity::Warning),
+                            Fit::Clash(other) => (format!("{} {} {}", tr(lang, "Does not fit: it needs the tiles of"), Self::enemy_name(lang, other), tr(lang, "(remove it first).")), Severity::Warning),
+                            Fit::Full => (format!("{} {} {}.", tr(lang, "Does not fit: the set has"), enemy_sets::MOST, tr(lang, "enemies")), Severity::Warning),
+                            Fit::Pending => (format!("{} ({} {}).", tr(lang, "Known once the enemies' tiles are captured"), self.look_loader.tiles_left(), tr(lang, "left")), Severity::Info),
                         };
                         y += message_lines(&why, PAD, y + 12.0, w, 14.0, kind);
                         y -= ROW + 4.0;
@@ -294,20 +295,20 @@ impl Editor {
                         let mine = if second { "10-31" } else { "0-9" };
                         let why = format!(
                             "{} {theirs} {} {mine} {} {theirs}.",
-                            tr(es, "Not usable here: it belongs to the object catalogue of levels", "No se usa aqui: es del catalogo de objetos de los niveles"),
-                            tr(es, "and this level plays as one of levels", "y este nivel se juega como uno de los niveles"),
-                            tr(es, "(a level uses one catalogue, and a type number is another object in the other). It can be used in a level, or a blank level, made from levels", "(un nivel usa un solo catalogo, y el mismo numero es otro objeto en el otro). Se puede usar en un nivel, o un nivel en blanco, hecho de los niveles")
+                            tr(lang, "Not usable here: it belongs to the object catalogue of levels"),
+                            tr(lang, "and this level plays as one of levels"),
+                            tr(lang, "(a level uses one catalogue, and a type number is another object in the other). It can be used in a level, or a blank level, made from levels")
                         );
                         y += message_lines(&why, PAD, y + 12.0, w, 14.0, Severity::Info) + 4.0;
-                        if button(Rect::new(PAD, y, w, ROW), &format!("{} {theirs}", tr(es, "New blank level from levels", "Nivel en blanco de los niveles")), false, 14.0) {
+                        if button(Rect::new(PAD, y, w, ROW), &format!("{} {theirs}", tr(lang, "New blank level from levels")), false, 14.0) {
                             blank_from = o.levels().first().copied();
                         }
                     } else {
-                        y += message_lines(tr(es, "This level does not draw it right (its graphics are not loaded here).", "Este nivel no lo dibuja bien (sus graficos no se cargan aqui)."), PAD, y + 12.0, w, 14.0, Severity::Info) - ROW + 4.0;
+                        y += message_lines(tr(lang, "This level does not draw it right (its graphics are not loaded here)."), PAD, y + 12.0, w, 14.0, Severity::Info) - ROW + 4.0;
                     }
                 }
                 None => {
-                    y += message_lines(tr(es, "This level does not draw it right (its graphics are not loaded here).", "Este nivel no lo dibuja bien (sus graficos no se cargan aqui)."), PAD, y + 12.0, w, 14.0, Severity::Info) - ROW + 4.0;
+                    y += message_lines(tr(lang, "This level does not draw it right (its graphics are not loaded here)."), PAD, y + 12.0, w, 14.0, Severity::Info) - ROW + 4.0;
                 }
             }
             y += ROW + 8.0;
@@ -315,7 +316,7 @@ impl Editor {
         // what the last action did
         y += message_lines(&self.status.clone(), PAD, y + 12.0, w, 15.0, self.severity());
         y += 6.0;
-        if button(Rect::new(PAD, y, w, ROW), &format!("{} ({})", tr(es, "Close", "Cerrar"), keys(Action::ObjectCatalogue)), false, 15.0) || is_key_pressed(KeyCode::Escape) {
+        if button(Rect::new(PAD, y, w, ROW), &format!("{} ({})", tr(lang, "Close"), keys(Action::ObjectCatalogue)), false, 15.0) || is_key_pressed(KeyCode::Escape) {
             self.catalogue = None;
             return;
         }
@@ -347,42 +348,42 @@ impl Editor {
                 Standing::Added => {
                     // framed in the palette's mark colour too
                     draw_rectangle_lines(r.x, r.y, r.w, r.h, 2.0, MARK);
-                    tag(r, tr(es, "ADDED", "ANADIDO"), MARK, WHITE)
+                    tag(r, tr(lang, "ADDED"), MARK, WHITE)
                 }
-                Standing::Joins(Fit::Yes) => tag(r, tr(es, "FITS", "CABE"), Severity::Done.colour(), WHITE),
-                Standing::Joins(Fit::Clash(_) | Fit::Full) => tag(r, tr(es, "NO ROOM", "NO CABE"), Severity::Warning.colour(), WHITE),
+                Standing::Joins(Fit::Yes) => tag(r, tr(lang, "FITS"), Severity::Done.colour(), WHITE),
+                Standing::Joins(Fit::Clash(_) | Fit::Full) => tag(r, tr(lang, "NO ROOM"), Severity::Warning.colour(), WHITE),
                 Standing::Joins(Fit::Pending) => tag(r, "...", muted.0, muted.1),
-                Standing::Joins(Fit::Graphics) | Standing::NotDrawn => tag(r, tr(es, "NOT HERE", "AQUI NO"), muted.0, muted.1),
-                Standing::OtherCatalogue => tag(r, tr(es, "OTHER CATALOGUE", "OTRO CATALOGO"), col(3), col(0)),
+                Standing::Joins(Fit::Graphics) | Standing::NotDrawn => tag(r, tr(lang, "NOT HERE"), muted.0, muted.1),
+                Standing::OtherCatalogue => tag(r, tr(lang, "OTHER CATALOGUE"), col(3), col(0)),
             };
             let (l, k) = o.first();
             if let Some((tex, _, _)) = self.looks.get(&(l, k)).and_then(|t| t.as_ref()) {
                 let f = (40.0 / tex.width()).min(40.0 / tex.height()).min(2.0);
                 draw_texture_ex(tex, r.x + 4.0, r.y + 4.0, WHITE, DrawTextureParams { dest_size: Some(vec2(tex.width() * f, tex.height() * f)), ..Default::default() });
             }
-            let (name, cat) = object_names::name(l, k).map_or((format!("#{k:02X}"), "".to_string()), |(n, c)| (n.to_string(), category_name(es, c).to_string()));
+            let (name, cat) = object_names::name(l, k).map_or((format!("#{k:02X}"), "".to_string()), |(n, c)| (tr(lang, n).to_string(), category_name(lang, c).to_string()));
             // the name on up to two lines, then the category
             let per_line = ((r.w - 52.0) / 7.5).max(6.0) as usize;
             let lines = wrap(&name, per_line);
             for (i, line) in lines.iter().take(2).enumerate() {
-                draw_text(&fit(line, r.w - 50.0, 15.0), r.x + 48.0, r.y + 16.0 + i as f32 * 15.0, 15.0, col(3));
+                put_text(&fit(line, r.w - 50.0, 15.0), r.x + 48.0, r.y + 16.0 + i as f32 * 15.0, 15.0, col(3));
             }
-            draw_text(&fit(&cat, r.w - 50.0, 13.0), r.x + 48.0, r.y + 18.0 + lines.len().min(2) as f32 * 15.0, 13.0, col(2));
+            put_text(&fit(&cat, r.w - 50.0, 13.0), r.x + 48.0, r.y + 18.0 + lines.len().min(2) as f32 * 15.0, 13.0, col(2));
             let levels: Vec<String> = o.levels().iter().map(|l| format!("{l:02}")).collect();
-            draw_text(&fit(&levels.join(" "), r.w - 8.0 - badge_w, 13.0), r.x + 4.0, r.y + r.h - 6.0, 13.0, col(2));
+            put_text(&fit(&levels.join(" "), r.w - 8.0 - badge_w, 13.0), r.x + 4.0, r.y + r.h - 6.0, 13.0, col(2));
             if r.contains(m) && is_mouse_button_pressed(MouseButton::Left) {
                 v.chosen = Some(i);
             }
         }
         self.catalogue = Some(v);
         if self.own_pictures_pending() {
-            let t = tr(es, "Still capturing the objects' pictures: until it ends some objects are missing or show twice, and Usable here may leave some out.", "Aun capturando los dibujos de los objetos: hasta que acabe faltan algunos o salen repetidos, y Usables aqui puede dejar fuera alguno.");
+            let t = tr(lang, "Still capturing the objects' pictures: until it ends some objects are missing or show twice, and Usable here may leave some out.");
             let lines = wrap(t, ((screen_width() - x0 - 24.0) / 8.0) as usize);
             let h = lines.len() as f32 * 17.0 + 10.0;
             draw_rectangle(x0, view_h - h - 34.0, screen_width() - x0 - 10.0, h, col(0));
             draw_rectangle_lines(x0, view_h - h - 34.0, screen_width() - x0 - 10.0, h, 2.0, col(3));
             for (i, line) in lines.iter().enumerate() {
-                draw_text(line, x0 + 8.0, view_h - h - 34.0 + 18.0 + i as f32 * 17.0, 15.0, col(3));
+                put_text(line, x0 + 8.0, view_h - h - 34.0 + 18.0 + i as f32 * 17.0, 15.0, col(3));
             }
         }
         draw_rectangle(self.panel, screen_height() - 22.0, screen_width() - self.panel, 22.0, col(1));
@@ -407,14 +408,14 @@ impl Editor {
 
     /// An object's type numbers, levels and enemy tiles, for the catalogue's side panel.
     fn object_details(&self, o: &CatalogueObject) -> String {
-        let es = self.es;
+        let lang = self.lang;
         let mut types: Vec<String> = o.uses.iter().map(|u| format!("${:02X} ({})", u.1, if u.0 >= SECOND { "10-31" } else { "0-9" })).collect();
         types.dedup();
         let levels: Vec<String> = o.levels().iter().map(|l| format!("{l:02}")).collect();
         let tiles = o.uses.iter().find_map(|u| self.object_tiles.get(u)).map(|t| enemy_sets::area_tiles(t).len());
-        let mut s = format!("{}: {}. {}: {}.", tr(es, "Type", "Tipo"), types.join(", "), tr(es, "Levels", "Niveles"), levels.join(" "));
+        let mut s = format!("{}: {}. {}: {}.", tr(lang, "Type"), types.join(", "), tr(lang, "Levels"), levels.join(" "));
         if let Some(n) = tiles {
-            s += &format!(" {} {n} {}.", tr(es, "Uses", "Usa"), tr(es, "of the 56 enemy tiles", "de los 56 tiles de enemigos"));
+            s += &format!(" {} {n} {}.", tr(lang, "Uses"), tr(lang, "of the 56 enemy tiles"));
         }
         s
     }
@@ -444,8 +445,8 @@ impl Editor {
         }
     }
 
-    fn enemy_name(e: Enemy) -> String {
-        object_names::name(e.level as usize, e.kind).map_or(format!("#{:02X}", e.kind), |n| n.0.to_string())
+    fn enemy_name(lang: Lang, e: Enemy) -> String {
+        object_names::name(e.level as usize, e.kind).map_or(format!("#{:02X}", e.kind), |n| tr(lang, n.0).to_string())
     }
 
     /// Whether `e` can join the shown level's set, given the set with its tiles.
@@ -477,9 +478,9 @@ impl Editor {
 
     /// Put enemy `e` in the shown level's set, if its tiles are known and fit.
     pub(super) fn add_enemy(&mut self, e: Enemy) {
-        let es = self.es;
+        let lang = self.lang;
         let (Some(members), Some(tiles)) = (self.set_with_tiles(), self.object_tiles.get(&(e.level as usize, e.kind)).cloned()) else {
-            self.status = format!("{} ({} {}).", tr(es, "Not added: the enemies' tiles are still being captured; try again in a moment", "No anadido: los tiles de los enemigos aun se estan capturando; prueba en un momento"), self.look_loader.tiles_left(), tr(es, "left", "por capturar"));
+            self.status = format!("{} ({} {}).", tr(lang, "Not added: the enemies' tiles are still being captured; try again in a moment"), self.look_loader.tiles_left(), tr(lang, "left"));
             self.mark(Severity::Warning);
             return;
         };
@@ -487,33 +488,33 @@ impl Editor {
             return;
         }
         if self.fit_with(e, Some(&members)) == Fit::Graphics {
-            self.status = format!("{} {}", Self::enemy_name(e), tr(es, "not added: it also draws with common sprite tiles this level loads with other graphics.", "no anadido: tambien se dibuja con tiles comunes que este nivel carga con otros graficos."));
+            self.status = format!("{} {}", Self::enemy_name(lang, e), tr(lang, "not added: it also draws with common sprite tiles this level loads with other graphics."));
             self.mark(Severity::Warning);
             return;
         }
         if members.len() >= enemy_sets::MOST {
-            self.status = format!("{} {} {}.", tr(es, "Not added: a level's set has at most", "No anadido: el juego de un nivel tiene como mucho"), enemy_sets::MOST, tr(es, "enemies", "enemigos"));
+            self.status = format!("{} {} {}.", tr(lang, "Not added: a level's set has at most"), enemy_sets::MOST, tr(lang, "enemies"));
             self.mark(Severity::Warning);
             return;
         }
         if let Some((other, _)) = members.iter().find(|m| enemy_sets::clash(&tiles, &m.1)) {
-            self.status = format!("{} {} {} {}.", Self::enemy_name(e), tr(es, "does not fit: it needs the tiles of", "no cabe: necesita los tiles de"), Self::enemy_name(*other), tr(es, "(remove it first: choose it in the catalogue)", "(quitalo antes: eligelo en el catalogo)"));
+            self.status = format!("{} {} {} {}.", Self::enemy_name(lang, e), tr(lang, "does not fit: it needs the tiles of"), Self::enemy_name(lang, *other), tr(lang, "(remove it first: choose it in the catalogue)"));
             self.mark(Severity::Warning);
             return;
         }
         let mut all = members;
         all.push((e, tiles));
         self.set_level_enemies_from(all);
-        self.status = format!("{} {}.", Self::enemy_name(e), tr(es, "added to this level's enemies", "anadido a los enemigos del nivel"));
+        self.status = format!("{} {}.", Self::enemy_name(lang, e), tr(lang, "added to this level's enemies"));
         self.mark(Severity::Done);
     }
 
     /// Take enemy `e` out of the shown level's set, and its objects out of the level (they
     /// would look broken), in one undo step.
     pub(super) fn remove_enemy(&mut self, e: Enemy) {
-        let es = self.es;
+        let lang = self.lang;
         let Some(mut members) = self.set_with_tiles() else {
-            self.status = tr(es, "Not removed: the enemies' tiles are still being captured.", "No quitado: los tiles de los enemigos aun se estan capturando.").into();
+            self.status = tr(lang, "Not removed: the enemies' tiles are still being captured.").into();
             self.mark(Severity::Warning);
             return;
         };
@@ -528,7 +529,7 @@ impl Editor {
         if self.kind == Some(e.kind) {
             self.kind = None;
         }
-        self.status = format!("{} {}; {gone} {} {}", Self::enemy_name(e), tr(es, "removed from this level's enemies", "quitado de los enemigos del nivel"), tr(es, "of its objects removed from the level", "de sus objetos quitados del nivel"), tr(es, "(Ctrl+Z brings them back).", "(Ctrl+Z los recupera)."));
+        self.status = format!("{} {}; {gone} {} {}", Self::enemy_name(lang, e), tr(lang, "removed from this level's enemies"), tr(lang, "of its objects removed from the level"), tr(lang, "(Ctrl+Z brings them back)."));
         self.mark(Severity::Done);
     }
 
