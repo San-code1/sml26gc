@@ -36,20 +36,31 @@ be written to any file, and the battery save SHALL keep working as before.
 ### Requirement: Keys for save states and rewind
 The save state, load state and rewind keys SHALL be set in the pause menu's Controls with the
 Game Boy buttons, kept in `settings.cfg`, and never share a key with another binding (choosing
-a key in use swaps the two, as for the buttons).
+a key in use swaps the two, as for the buttons). Each SHALL also have a controller button
+(`game/controllers`), set and kept the same way, apart from the keyboard's; both work.
 
 #### Scenario: Another save key
 - **WHEN** the save state key is set to F9 in Controls
 - **THEN** F9 saves the game and F6 does nothing more
 
+#### Scenario: Save from the controller
+- **WHEN** a controller is connected with its defaults and the cheats mode is on
+- **THEN** the left shoulder button saves the game and the right one loads it, and F6 and F7 still do
+
 ### Requirement: The keys shown when a level begins
 The tag shown for a few seconds at start-up and when a level begins SHALL say which key opens
-the menu (Start in a level, Esc elsewhere) and, in the cheats mode, the save state, load state
-and rewind keys as they are set; it SHALL NOT repeat a second way of opening the menu.
+the menu (Start in a level, the menu binding elsewhere) and, in the cheats mode, the save
+state, load state and rewind keys as they are set; it SHALL NOT repeat a second way of
+opening the menu. While a controller is connected it SHALL name the controller's buttons
+instead.
 
 #### Scenario: Cheats mode on
-- **WHEN** a level begins with the cheats mode on and the default keys
+- **WHEN** a level begins with the cheats mode on, the default keys and no controller
 - **THEN** the tag reads "ENTER: MENU", "F6: SAVE", "F7: LOAD", "R: REWIND"
+
+#### Scenario: Controller
+- **WHEN** a level begins with a controller connected, its defaults and the cheats mode on
+- **THEN** the tag reads "START: MENU", "LB: SAVE", "RB: LOAD", "LT: REWIND"
 
 ### Requirement: Rewind
 With the cheats mode on, holding the rewind key (R unless changed) SHALL play the game backwards, at the game's speed, up to

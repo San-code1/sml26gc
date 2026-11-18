@@ -83,3 +83,18 @@ it and replace it (`editor/zone-files`).
 #### Scenario: Level editor
 - **WHEN** a level is shown and the File menu is opened
 - **THEN** Projects... and Export project can be chosen, and no world map entry is listed
+
+### Requirement: Language menu
+The window SHALL have a Language menu after Tools (Spanish: Idioma, Japanese: 言語) with
+Automatic (the system's language), English, Español and 日本語, each language written in
+itself; the one in use SHALL be ticked (Automatic when no language was chosen). Choosing one
+SHALL change the editor's language (`editor/languages`), the menu bar's own labels included.
+The menu SHALL be there in the editor and on the project screen.
+
+#### Scenario: Japanese from the menu
+- **WHEN** Language, 日本語 is chosen in the level editor
+- **THEN** 日本語 is ticked, the panels and the File and Tools menus read in Japanese, and the menu's title reads 言語
+
+#### Scenario: Automatic
+- **WHEN** Language, Automatic is chosen on a Windows set to Spanish
+- **THEN** Automatic is ticked and the editor is in Spanish
