@@ -33,3 +33,17 @@ again after losing a life, SHALL use its own start.
 #### Scenario: A new level
 - **WHEN** Play from here is used in a new level of the editor
 - **THEN** that new level is played with Mario at the chosen place
+
+### Requirement: A fresh test game
+Play and Play from here SHALL start a test game of the project: no battery save read or
+written, no new zone progress kept, and Mario starting with the lives (0-99) and coins (0-999)
+set in the Level tab's Test game (99 and 999 at first, kept between starts of the editor), so
+every Play is the same fresh game.
+
+#### Scenario: Two plays
+- **WHEN** a level is played from the editor, Mario loses lives and collects coins, and Play is pressed again
+- **THEN** the new game starts again with the lives and coins set, and nothing of the first game kept
+
+#### Scenario: Fewer lives to test
+- **WHEN** the Test game is set to 5 lives and 120 coins and Play is pressed
+- **THEN** the game starts with 5 lives and 120 coins
