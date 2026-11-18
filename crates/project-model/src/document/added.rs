@@ -271,7 +271,7 @@ mod tests {
         let again = EditorDocument::open(doc.original.clone(), Some(doc.rom.clone()));
         assert_eq!(again.zones_added(), z);
         let p = again.project_file();
-        assert_eq!(crate::domain::files::read_project(&crate::domain::files::project_text(&p)), Ok(p.clone()));
+        assert_eq!(crate::files::read_project(&crate::files::project_text(&p)), Ok(p.clone()));
         assert_eq!(p.zone_points, z);
 
         // undo across maps: back to before the zone's point, with the world map's kept

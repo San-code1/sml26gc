@@ -33,6 +33,8 @@ pub enum Action {
     NewBlankLevel,
     ObjectCatalogue,
     RecaptureObjects,
+    /// Leave the project for the project screen.
+    Projects,
     DeleteLevel,
     WorldEditor,
     PrevMap,
@@ -72,7 +74,13 @@ pub enum Action {
     NewPoint,
     DeletePoint,
     MakeEntry,
+    /// Mario's start on the chosen point.
+    SetStart,
+    /// Show the map and point of Mario's start.
+    GoToStart,
     NewZone,
+    /// An empty new zone: its graphics chosen from a base zone.
+    BlankZone,
     DeleteZone,
     ExportLevel,
     ImportLevel,
@@ -81,13 +89,12 @@ pub enum Action {
     ImportZone,
     ReplaceZone,
     ExportProject,
-    ImportProject,
 }
 
 impl Action {
     /// Actions that open a file dialog.
     pub fn uses_files(self) -> bool {
-        matches!(self, ExportLevel | ImportLevel | ReplaceLevel | ExportZone | ImportZone | ReplaceZone | ExportProject | ImportProject)
+        matches!(self, ExportLevel | ImportLevel | ReplaceLevel | ExportZone | ImportZone | ReplaceZone | ExportProject)
     }
 }
 
@@ -140,7 +147,7 @@ pub const TABLE: &[Shortcut] = &[
     s(ZoomOut, PALETTES, true, false, &[K::Minus, K::Slash, K::KpSubtract], "Ctrl+-"),
     s(ZoomIn, PALETTES, true, false, &[K::Equal, K::RightBracket, K::KpAdd], "Ctrl++"),
     s(ExportProject, ALL, true, true, &[K::E], "Ctrl+Shift+E"),
-    s(ImportProject, ALL, true, true, &[K::I], "Ctrl+Shift+I"),
+    s(Projects, ALL, true, true, &[K::O], "Ctrl+Shift+O"),
     s(Overview, LEVEL, false, false, &[K::M], "M"),
     s(BlocksObjects, LEVEL, false, false, &[K::Tab, K::O], "Tab"),
     s(PrevLevel, LEVEL, false, false, &[K::PageUp], "PgUp"),
@@ -178,7 +185,10 @@ pub const TABLE: &[Shortcut] = &[
     s(NewPoint, &[Points], false, false, &[K::N], "N"),
     s(DeletePoint, &[Points], false, false, &[K::Delete], "Del"),
     s(MakeEntry, &[Points], false, false, &[K::H], "H"),
+    s(SetStart, &[Points], false, false, &[K::I], "I"),
+    s(GoToStart, WORLD, false, false, &[K::M], "M"),
     s(NewZone, WORLD, true, false, &[K::N], "Ctrl+N"),
+    s(BlankZone, WORLD, true, false, &[K::B], "Ctrl+B"),
     s(DeleteZone, WORLD, true, false, &[K::Delete], "Ctrl+Del"),
 ];
 
@@ -192,11 +202,6 @@ pub fn pressed(ctx: Ctx) -> Vec<Action> {
 /// The keys of an action, as its button shows them.
 pub fn keys(action: Action) -> &'static str {
     TABLE.iter().find(|s| s.action == action).map(|s| s.label).unwrap_or("")
-}
-
-/// A button's text: its name and its keys.
-pub fn with_keys(name: &str, action: Action) -> String {
-    format!("{name} ({})", keys(action))
 }
 
 #[cfg(test)]

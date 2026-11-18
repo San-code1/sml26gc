@@ -1,21 +1,25 @@
 # New Mario Bros
 
 A Game Boy emulator in Rust that runs **your own** Super Mario Land 2 cartridge file, plus an
-editor that changes the game's levels, objects and maps and writes an edited copy. For private
-use: cartridges, saves and edited copies never go into this repository (see `.gitignore`).
+editor that changes the game's levels, objects and maps in projects, each with its own edited
+cartridge. For private use: cartridges, saves and projects never go into this repository (see
+`.gitignore`).
 
 Architecture: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). Contributing rules: [`AGENTS.md`](AGENTS.md).
 
 ## Build and run
 
     cargo build --release
-    target\release\game.exe ["path\to\game.gb"] [--level N] [--cheats]
+    target\release\game.exe ["path\to\game.gb"] [--project NAME | --test] [--level N] [--cheats]
     target\release\editor.exe
     target\release\research.exe disasm 0 0361 20
 
-The cartridge is found from the command line, a `rom` folder next to (or above) the program,
-or `%USERPROFILE%\Games`. Saves (`saves\`), edited copies (`edits\`) and `settings.cfg` live
-next to the executables.
+Both programs ask once for the base cartridge, Super Mario Land 2 - 6 Golden Coins (USA,
+Europe) under any file name, check it by its SHA-1 at every start, and share the choice
+(`base_cartridge.txt`). Projects (`editor\projects\<name>\`), saves (`saves\vanilla\`,
+`saves\<project>\`), `settings.cfg` and `editor.cfg` live next to the executables. The
+research tools find the cartridge from the command line, `RESEARCH_ROM`, the base cartridge, a
+`rom` folder or `%USERPROFILE%\Games`.
 
 ## Game
 
@@ -28,11 +32,17 @@ next to the executables.
 | Select | Backspace |
 
 Esc (or Enter in a level) opens the pause menu: controls, display, sound, back to map, file
-select, language. F11: full screen. Hold Ctrl: fast-forward.
+select, language. F11: full screen. Hold left Ctrl (Fast forward in Controls): fast-forward.
 
-The start screen's "Debug / cheats" box (C) adds a "Debug / cheats" entry to the pause menu;
-the choice is kept in `settings.cfg` (`cheats=1`). The game started from the editor (F5,
-`--cheats`) always has it. The cheats only change the game being played, never the file:
+The start screen shows VANILLA (the base cartridge) and every project of the editor that has
+its project file, one at a time (arrows, the arrow keys or the wheel), the last one played
+first; each keeps its own saves. Each is drawn as a cartridge whose label shows the base
+cartridge's own title screen, running, and the name. Enter plays the one shown, E opens it in the editor and N the
+editor's project screen to make a new one. A project's cartridge is
+made from its file over the base cartridge when it is missing or older. Its "Debug / cheats" box (C)
+adds a "Debug / cheats" entry to the pause menu; the choice is kept in `settings.cfg`
+(`cheats=1`). The game started from the editor (`--cheats`) always has it; its test games
+(`--test [--lives N] [--coins N]`) keep no saves and start with those lives and coins. The cheats only change the game being played, never the file:
 
 | Cheat | What it does |
 |---|---|
@@ -57,7 +67,7 @@ the tag shown when a level begins lists them with the key that opens the menu.
 ## Editor
 
 - Levels: paint blocks, place and move objects (Tab), add new levels (Ctrl+N copies the level shown, Ctrl+B makes a blank one) and name them.
-  PgUp / PgDn change level, F2 opens the world map editor. A game level or map whose saved
+  PgUp / PgDn change level, F2 (Zones) opens the zone editor (the world map and the zones). A game level or map whose saved
   copy differs from the game's (blocks, objects, start, points, picture) is marked "mod".
 - Where Mario begins a level is drawn on it; Place start (I) puts him on the block clicked, and
   he can be dragged (the game's camera follows from his place). Place finish (F) moves where
@@ -89,13 +99,20 @@ the tag shown when a level begins lists them with the key that opens the menu.
   exit leads. Each of their paths can be shut until the point's level is cleared (Ctrl+arrow
   keys). A path drawn from a point that stands on another path's road replaces that path's
   way back, so Mario stops at the new point.
+- Mario's start (I in the Points tab): the point of the world map, a game zone or a new zone
+  where every new game begins, marked "Mario starts here" on its map; Go to Mario's start (M)
+  shows it. A project has exactly one: setting it moves it, the Points tab warns when it is missing (its new zone deleted) and the project is not saved without it.
+  Zone and world map files carry it; bringing one in while the project has its own start
+  elsewhere asks which to keep.
 - The game's own points are drawn as Mario meets them, and the Points tab says what the
   original game does with the chosen one besides its level and paths (the flight to the Space
   Zone after clearing point $05's level, a zone entrance and the number Mario stands on there
   after leaving the zone, whose level follows it, points Mario never stands on) and whether it
   was changed. The panel scrolls with the wheel.
-- New zones (Ctrl+N on a zone map, Ctrl+Del deletes): a copy of the Tree, Pumpkin, Macro,
-  Space or Mario zone with its own name, picture, points (up to 40), paths, levels,
+- Maps: the map name opens the list of every map (the world map, the game's zones, the new
+  zones) with Copy zone (Ctrl+N, the zone map shown), Blank zone (Ctrl+B: a screen showing each
+  base zone's map and tiles; the zone starts as a plain picture with one point) and Delete zone
+  (Ctrl+Del), as for levels. New zones (from the Tree, Pumpkin, Macro, Space or Mario zone) have their own name, picture, points (up to 40), paths, levels,
   exits and progress, entered from any world point. It plays with its base zone's graphics
   and music, and only in this game: the game puts it in place of its base while Mario is at
   its door or inside, and keeps its progress in `saves\<game>.zones`.
@@ -135,21 +152,34 @@ the tag shown when a level begins lists them with the key that opens the menu.
 - Palettes zoom with their - + buttons or Ctrl - / Ctrl +; the side panel widens or narrows to
   fit (at most half the window). A cut palette scrolls with the wheel or a right-drag. The zoom
   is kept in `editor.cfg`.
+- Projects: the editor works inside one, a folder with its project file (what the project is)
+  and the cartridge made from it over the base cartridge (made again when missing or older, also
+  by the game). At start (and from File, Projects..., Ctrl+Shift+O,
+  which asks to save, discard or cancel when there are unsaved changes, as closing the window
+  does) the project screen opens, creates, renames, duplicates, deletes or imports projects, the
+  last one first. A project opens where it was last saved (the level, or the zone editor's
+  map; `editor_place.txt` in its folder), a new one on the world map.
 - Files, from the File menu or the keys (Windows Save and Open dialogs, starting in
-  `exports\`): Ctrl+E exports the level
-  shown; Ctrl+Shift+N imports a level file as a new level, Ctrl+I replaces the new level shown
-  with one (the game's 32 levels are never replaced, only edited). On a zone map the same keys
-  export the zone and import or replace a new zone. Ctrl+Shift+E / Ctrl+Shift+I export and
-  import the whole project (every level, the maps, points, paths, doors and new zones) over the
-  same cartridge; nothing is written until you save.
-- The level editor's panel: the level picker (its grid unfolds with the middle button), a
-  toolbar, Blocks / Objects with their tools, and two tabs: Palette, and Level (its start,
-  goals, checkpoints, settings and warnings; it scrolls with the wheel). Its buttons show
-  their keys in a tooltip; the world map editor's show them in the label.
+  `exports\levels`, `exports\zones` or `exports\projects\<name>`): Ctrl+E
+  exports the level shown; Ctrl+Shift+N imports a level file as a new level, Ctrl+I replaces the
+  new level shown with one (the game's 32 levels are never replaced, only edited). On a zone map
+  the same keys export the zone and import or replace a new zone; on the world map they export
+  it and replace it with a world map file (picture, points, paths, doors) from another project.
+  Ctrl+Shift+E exports the whole project; the project screen imports one as a new project.
+  Imports are kept in the project when it is saved.
+- The level editor's panel: the level picker (its grid unfolds with the middle button, with
+  Copy, Blank and Delete under it), a toolbar (Undo, Redo, Restore; Save, Play, Here),
+  Blocks / Objects with their tools, and two tabs: Palette, and Level (its start, goals,
+  checkpoints, settings and warnings; it scrolls with the wheel). The zone editor's panel is
+  laid out the same way: map picker, toolbar, Go to Mario's start, Picture / Points with the
+  picture's tools. Buttons show their keys in a tooltip.
 - Every button has a shortcut. Ctrl+Z / Ctrl+Y undo and redo (in the order the changes were
   made, whatever the mode or tab: blocks, objects and goals; map pictures and points), Ctrl+S saves
-  `edits\<game> (edit).gb` (the original is never changed), F5 saves and plays it (with the cheats on);
-  Shift+F5 (Here), then a click on the level, plays it with Mario on the clicked block.
+  the project's cartridge (the base cartridge is never changed), F5 saves and plays a test game
+  (cheats on, no saves, with the lives and coins set in the window the button beside Play
+  opens, in both editors, 99 and 999 at first); Shift+F5 (Here), then a click on the level,
+  plays it with Mario on the clicked block. The project with its own saves is played from the
+  game's start screen.
 - Object pictures are captured from the game in the background (the shown level's first), then
   the tiles each of the game's objects shows, and kept in `cache\` next to the editor, so later
   starts have them at once. Until it ends a box at the bottom right shows how far it is, the

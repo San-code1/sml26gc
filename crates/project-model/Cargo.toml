@@ -1,0 +1,11 @@
+[package]
+name = "project-model"
+description = "A project of the editor: the levels, maps and zones being edited, their files, and the cartridge built from them."
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+cart-model.workspace = true
+
+[dev-dependencies]
+host.workspace = true

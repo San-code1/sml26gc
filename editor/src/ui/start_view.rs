@@ -4,6 +4,7 @@ use super::testing_view::warn_col;
 use super::widgets::*;
 use super::{Editor, Mode};
 use cart_model::level_start::{Start, SPRITE_H, SPRITE_TOP, SPRITE_W};
+use cart_model::levels::ROWS;
 use macroquad::prelude::*;
 
 /// What a click on the level places.
@@ -94,19 +95,26 @@ impl Editor {
     }
 
     /// Mario at the start, over the blocks and objects, and (with objects or in Objects mode)
-    /// the screen the level begins on, where objects never appear.
+    /// the band around the screen the level begins on, whose objects do not appear at first.
     pub(super) fn draw_start(&self) {
         let r = self.mario_rect();
         let k = self.scale();
         let c = &self.doc.levels[self.cur].content;
-        let crowded = c.objs.iter().any(|o| c.start.on_first_screen(o.x, o.y));
+        let crowded = c.objs.iter().any(|o| c.start.passed_at_start(o.x));
         if self.mode == Mode::Objects || crowded {
-            let (fx, fy, fw, fh) = c.start.first_screen();
-            let at = vec2(self.panel + (fx as f32 - self.cam.x) * k, (fy as f32 - self.cam.y) * k);
+            let (l, right) = c.start.passed_band();
+            let at = vec2(self.panel + (l as f32 - self.cam.x) * k, -self.cam.y * k);
             let col = if crowded { warn_col() } else { MARK };
-            marker(Rect::new(at.x, at.y, fw as f32 * k, fh as f32 * k), 2.0, col);
-            let t = tr(self.es, "first screen: objects here never appear", "primera pantalla: aqui los objetos no aparecen");
-            marked_text(t, at.x + 4.0, at.y + 14.0, 14.0, col);
+            marker(Rect::new(at.x, at.y, (right + 1 - l) as f32 * k, (ROWS * 16) as f32 * k), 2.0, col);
+            // the note at the foot of the view, clear of the overview
+            let t = tr(self.es, "objects here do not appear at the start (only if Mario comes back)", "aqui los objetos no aparecen al empezar (solo si Mario vuelve)");
+            let left = at.x.max(self.panel) + 6.0;
+            let width = at.x + (right + 1 - l) as f32 * k - left - 6.0;
+            let lines = wrap_px(t, width.max(120.0), 14.0);
+            let bottom = (screen_height() - STATUS_H - 30.0).min(at.y + (ROWS * 16) as f32 * k - 8.0);
+            for (i, line) in lines.iter().enumerate() {
+                marked_text(line, left, bottom - (lines.len() - 1 - i) as f32 * 16.0, 14.0, col);
+            }
         }
         let (x, y) = (self.panel + (r.x - self.cam.x) * k, (r.y - self.cam.y) * k);
         match self.mario.as_ref().and_then(|m| m.as_ref()) {

@@ -5,9 +5,12 @@ pub const PALETTE_ZOOMS: std::ops::RangeInclusive<u32> = 1..=5;
 const DEFAULT_ZOOM: u32 = 2;
 /// Volume steps of a level's music played in the editor (not the game's).
 pub const MUSIC_VOLUMES: std::ops::RangeInclusive<u32> = 0..=10;
+/// What a test game from the editor starts with.
+pub const TEST_LIVES: std::ops::RangeInclusive<u32> = 0..=99;
+pub const TEST_COINS: std::ops::RangeInclusive<u32> = 0..=999;
 const DEFAULT_VOLUME: u32 = 6;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Prefs {
     /// The block and object type palettes.
     pub level_palette_zoom: u32,
@@ -15,11 +18,16 @@ pub struct Prefs {
     pub map_palette_zoom: u32,
     /// Listening to a level's music in the editor.
     pub music_volume: u32,
+    /// The project opened last (empty: none).
+    pub last_project: String,
+    /// Mario's lives and coins in a test game (Play, Here).
+    pub test_lives: u32,
+    pub test_coins: u32,
 }
 
 impl Default for Prefs {
     fn default() -> Prefs {
-        Prefs { level_palette_zoom: DEFAULT_ZOOM, map_palette_zoom: DEFAULT_ZOOM, music_volume: DEFAULT_VOLUME }
+        Prefs { level_palette_zoom: DEFAULT_ZOOM, map_palette_zoom: DEFAULT_ZOOM, music_volume: DEFAULT_VOLUME, last_project: String::new(), test_lives: 99, test_coins: 999 }
     }
 }
 
@@ -34,11 +42,14 @@ impl Prefs {
             level_palette_zoom: value("level_palette_zoom", &PALETTE_ZOOMS, d.level_palette_zoom),
             map_palette_zoom: value("map_palette_zoom", &PALETTE_ZOOMS, d.map_palette_zoom),
             music_volume: value("music_volume", &MUSIC_VOLUMES, d.music_volume),
+            test_lives: value("test_lives", &TEST_LIVES, d.test_lives),
+            test_coins: value("test_coins", &TEST_COINS, d.test_coins),
+            last_project: text.lines().filter_map(|l| l.split_once('=')).find(|(k, _)| k.trim() == "last_project").map(|(_, v)| v.trim().to_string()).unwrap_or_default(),
         }
     }
 
     pub fn to_text(&self) -> String {
-        format!("level_palette_zoom={}\nmap_palette_zoom={}\nmusic_volume={}\n", self.level_palette_zoom, self.map_palette_zoom, self.music_volume)
+        format!("level_palette_zoom={}\nmap_palette_zoom={}\nmusic_volume={}\nlast_project={}\ntest_lives={}\ntest_coins={}\n", self.level_palette_zoom, self.map_palette_zoom, self.music_volume, self.last_project, self.test_lives, self.test_coins)
     }
 }
 
@@ -48,7 +59,7 @@ mod tests {
 
     #[test]
     fn text_round_trip_and_bad_values() {
-        let p = Prefs { level_palette_zoom: 4, map_palette_zoom: 5, music_volume: 3 };
+        let p = Prefs { level_palette_zoom: 4, map_palette_zoom: 5, music_volume: 3, last_project: "Sky Islands".into(), test_lives: 5, test_coins: 120 };
         assert_eq!(Prefs::from_text(&p.to_text()), p);
         assert_eq!(Prefs::from_text(""), Prefs::default());
         let odd = Prefs::from_text("other=1\nlevel_palette_zoom = 9\nmap_palette_zoom=x\nmusic_volume=11\n");

@@ -61,3 +61,11 @@ game's zones as edited, and a new zone's door SHALL lead nowhere there.
 #### Scenario: Other emulator
 - **WHEN** the edited copy is played on another emulator and Mario presses A on a door into a new zone
 - **THEN** nothing happens, as on a point with no door
+
+### Requirement: Starting inside a new zone
+When a project's start for Mario is in a new zone, a new game SHALL begin inside that new zone
+on that point, as if Mario had entered it through its door.
+
+#### Scenario: A new game in a new zone
+- **WHEN** a project's start is on a point of a new zone and a new game is started
+- **THEN** the game shows the new zone with Mario on that point

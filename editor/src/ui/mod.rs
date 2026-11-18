@@ -3,6 +3,7 @@
 //! `EditorDocument`, and saving / graphics / starting the game go through the application
 //! layer and the ports.
 mod blank_view;
+mod blank_zone_view;
 mod catalogue_view;
 mod files_view;
 mod grid_edit;
@@ -12,15 +13,18 @@ mod menu;
 mod names_view;
 mod objects_view;
 mod palette;
+mod projects_view;
 mod shortcuts;
 mod goal_view;
 mod start_view;
 mod status_bar;
 mod target_picker;
+mod test_game_view;
 mod testing_view;
 mod widgets;
 mod world_view;
 
+pub use projects_view::{BaseScreen, ProjectsChoice, ProjectsScreen};
 pub use widgets::col;
 
 use crate::application::art_service::{ArtService, Capture};
@@ -29,6 +33,7 @@ use crate::application::music::MusicPlayer;
 use crate::domain::look_cache;
 use crate::application::save::{self, SaveError};
 use crate::domain::document::{EditorDocument, Grid, Saved};
+use crate::domain::place::Place as SavedPlace;
 use crate::domain::prefs::{Prefs, PALETTE_ZOOMS};
 use crate::domain::stamp::Stamp;
 use crate::domain::tools::{self, GridCanvas, Pointer, Tool, ToolKind};
@@ -59,6 +64,20 @@ pub struct Editor {
     pub(crate) doc: EditorDocument,
     store: Box<dyn EditedCopyStore>,
     launcher: Box<dyn GameLauncher>,
+    /// The project open, and it as last saved (a project file's text), to see unsaved changes.
+    project: String,
+    saved_project: String,
+    /// Leaving asked while there are unsaved changes: Save, Discard or Cancel is shown.
+    asking: Option<Leave>,
+    /// Where the editor is going once this frame ends.
+    leaving: Option<Leave>,
+    /// The blank zone chooser, open on `new_zones::BASES[i]`.
+    blank_zone_choice: Option<usize>,
+    /// The zone editor's map list is open.
+    maps_open: bool,
+    /// A map brought in with Mario's start while the project has its own: which to keep is
+    /// asked (the start offered, and where it is).
+    start_offer: Option<(cart_model::start_point::Start, String)>,
     art: ArtService,
     atlases: Vec<Option<Texture2D>>,
     world_atlas: Option<Texture2D>,
@@ -136,10 +155,14 @@ pub struct Editor {
     menu: Box<dyn MenuBar>,
     /// Each File menu entry's state as last set (None: not set yet).
     menu_enabled: [Option<bool>; menu::FILE_MENU_LEN],
+    tools_enabled: [Option<bool>; menu::TOOLS_MENU_LEN],
     /// A warning's place marked on the level until a time.
     mark: Option<(Vec2, f64)>,
     /// The level picker's grid is unfolded.
     levels_open: bool,
+    /// The test game's settings are open, dropped from the button at `test_game_anchor`.
+    test_game_open: bool,
+    test_game_anchor: Rect,
     side_tab: level_panel::SideTab,
     /// The level inspector scrolled by, and how tall it was last drawn.
     side_scroll: f32,
@@ -183,6 +206,13 @@ pub struct Editor {
 }
 
 /// What the editor works through, besides the document.
+/// Where the editor goes when it leaves the project.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Leave {
+    Projects,
+    Quit,
+}
+
 pub struct Ports {
     pub store: Box<dyn EditedCopyStore>,
     pub launcher: Box<dyn GameLauncher>,
@@ -192,6 +222,18 @@ pub struct Ports {
     pub menu: Box<dyn MenuBar>,
     pub sound: Box<dyn SoundOut>,
     pub looks: Box<dyn LookStore>,
+}
+
+/// No menu bar (an editor whose bar went to the next project's).
+struct NoMenu;
+
+impl MenuBar for NoMenu {
+    fn add_menu(&mut self, _: &str, _: &[crate::ports::MenuEntry]) {}
+    fn chosen(&mut self) -> Vec<u16> {
+        Vec::new()
+    }
+    fn enable(&mut self, _: u16, _: bool) {}
+    fn clear(&mut self) {}
 }
 
 /// Painting into the level or map picture shown.
@@ -221,23 +263,27 @@ fn left_button() -> Pointer {
 }
 
 impl Editor {
-    pub fn new(doc: EditorDocument, ports: Ports, had_copy: bool, es: bool) -> Editor {
+    pub fn new(doc: EditorDocument, ports: Ports, project: String, es: bool) -> Editor {
         let Ports { store, launcher, prefs: prefs_store, dialogs, text_files, menu, sound, looks: look_store } = ports;
         let (cached, cached_tiles) = look_store.load().map(|t| look_cache::from_text(&t)).unwrap_or_default();
         let known = cached.iter().map(|e| (e.0, e.1)).collect();
         let known_tiles = cached_tiles.iter().map(|e| (e.0, e.1)).collect();
         let look_loader = LookLoader::start(doc.rom.clone(), doc.original.clone(), &known, &known_tiles);
-        let status = if !had_copy {
-            tr(es, "Original cartridge opened. Saving makes an edited copy; the original is never changed.", "Cartucho original abierto. Al guardar se crea una copia editada; el original no se toca.").to_string()
-        } else {
-            format!("{} {}", tr(es, "Edited copy opened:", "Copia editada abierta:"), store.path().display())
-        };
+        let status = format!("{} {project}", tr(es, "Project", "Proyecto"));
+        let saved_project = crate::domain::files::project_text(&doc.project_file());
 
         let mut ed = Editor {
             es,
             doc,
             store,
             launcher,
+            project,
+            saved_project,
+            asking: None,
+            leaving: None,
+            start_offer: None,
+            blank_zone_choice: None,
+            maps_open: false,
             art: ArtService::new(),
             atlases: (0..LEVELS).map(|_| None).collect(),
             world_atlas: None,
@@ -293,8 +339,11 @@ impl Editor {
             picker: None,
             menu,
             menu_enabled: [None; menu::FILE_MENU_LEN],
+            tools_enabled: [None; menu::TOOLS_MENU_LEN],
             mark: None,
             levels_open: false,
+            test_game_open: false,
+            test_game_anchor: Rect::default(),
             side_tab: level_panel::SideTab::Palette,
             side_scroll: 0.0,
             side_content: 0.0,
@@ -346,9 +395,21 @@ impl Editor {
 
     /// One frame: the menu, shortcuts, input, then drawing.
     pub fn frame(&mut self) {
+        if self.asking.is_some() {
+            self.unsaved_frame();
+            return;
+        }
+        if self.start_offer.is_some() {
+            self.start_offer_frame();
+            return;
+        }
         self.update_menu();
         if self.blank_choice.is_some() && !self.in_world {
             self.blank_frame();
+            return;
+        }
+        if self.blank_zone_choice.is_some() && self.in_world {
+            self.blank_zone_frame();
             return;
         }
         if self.catalogue.is_some() && !self.in_world {
@@ -362,11 +423,17 @@ impl Editor {
         }
         self.run_pending_file();
         self.panel = self.fitted_panel();
+        // the open test game settings take the clicks off the view
+        let view_input = !self.test_game_open;
         if self.in_world {
-            self.update_world();
+            if view_input {
+                self.update_world();
+            }
             self.draw_world();
         } else {
-            self.update_level();
+            if view_input {
+                self.update_level();
+            }
             self.draw_level();
         }
         if self.in_world {
@@ -453,6 +520,7 @@ impl Editor {
             Action::NewLevel => self.new_level(),
             Action::NewBlankLevel if !self.in_world => self.open_blank_chooser(),
             Action::ObjectCatalogue if !self.in_world => self.open_catalogue(),
+            Action::Projects => self.ask_leave(Leave::Projects),
             Action::RecaptureObjects => self.recapture_objects(),
             Action::DeleteLevel => self.delete_level(),
             Action::WorldEditor => self.enter_world(!self.in_world),
@@ -673,6 +741,28 @@ impl Editor {
         self.in_world = on;
     }
 
+    /// Where the editor is: the level shown, or the zone editor's map.
+    fn place(&self) -> SavedPlace {
+        if self.in_world {
+            SavedPlace::Map(self.world_map)
+        } else {
+            SavedPlace::Level(self.cur)
+        }
+    }
+
+    /// Show where the editor was when the project was last saved; the world map when it was
+    /// never saved there or that level or map is gone.
+    pub fn open_at_saved_place(&mut self) {
+        match self.store.read_place().as_deref().and_then(SavedPlace::from_text) {
+            Some(SavedPlace::Level(l)) if l < self.level_count() => self.select_level(l),
+            Some(SavedPlace::Map(m)) if self.all_maps().contains(&m) => {
+                self.enter_world(true);
+                self.show_map(m);
+            }
+            _ => self.enter_world(true),
+        }
+    }
+
     pub fn level_count(&self) -> usize {
         self.doc.levels.len()
     }
@@ -780,6 +870,8 @@ impl Editor {
                     if notes.is_empty() { String::new() } else { format!("({})", notes.join(", ")) }
                 );
                 self.mark(Severity::Done);
+                self.saved_project = crate::domain::files::project_text(&self.doc.project_file());
+                let _ = self.store.write_place(&self.place().to_text());
                 true
             }
             Err(SaveError::Layout(e)) => {
@@ -792,6 +884,95 @@ impl Editor {
                 self.mark(Severity::Error);
                 false
             }
+        }
+    }
+
+    /// Leave the project (`to`), asking first when there are unsaved changes.
+    pub fn ask_leave(&mut self, to: Leave) {
+        if self.unsaved() {
+            self.asking = Some(to);
+        } else {
+            self.leaving = Some(to);
+        }
+    }
+
+    /// Where the editor is going, once it has left the project.
+    pub fn leaving(&self) -> Option<Leave> {
+        self.leaving
+    }
+
+    /// The window's menu bar, to build the next project's editor on.
+    pub fn take_menu(&mut self) -> Box<dyn MenuBar> {
+        let mut m = std::mem::replace(&mut self.menu, Box::new(NoMenu));
+        m.clear();
+        m
+    }
+
+    /// Is the project different from what was last saved?
+    fn unsaved(&self) -> bool {
+        crate::domain::files::project_text(&self.doc.project_file()) != self.saved_project
+    }
+
+    /// Save, Discard or Cancel before leaving with unsaved changes.
+    fn unsaved_frame(&mut self) {
+        let es = self.es;
+        clear_background(col(3));
+        let (w, h) = (520.0, 150.0);
+        let r = Rect::new((screen_width() - w) / 2.0, (screen_height() - h) / 2.0, w, h);
+        draw_rectangle(r.x, r.y, r.w, r.h, col(0));
+        draw_rectangle_lines(r.x, r.y, r.w, r.h, 3.0, col(3));
+        draw_text(&format!("{} {}", tr(es, "Unsaved changes in", "Cambios sin guardar en"), self.project), r.x + 20.0, r.y + 36.0, 22.0, col(3));
+        draw_text(tr(es, "Save them before leaving?", "Guardarlos antes de salir?"), r.x + 20.0, r.y + 64.0, 18.0, col(2));
+        let bw = (w - 40.0 - 2.0 * 12.0) / 3.0;
+        let at = |i: f32| Rect::new(r.x + 20.0 + i * (bw + 12.0), r.y + h - 56.0, bw, 36.0);
+        if button(at(0.0), tr(es, "Save", "Guardar"), true, 17.0) || is_key_pressed(KeyCode::Enter) {
+            let to = self.asking.take();
+            if self.save() {
+                self.leaving = to;
+            }
+        } else if button(at(1.0), tr(es, "Discard", "Descartar"), false, 17.0) {
+            self.leaving = self.asking.take();
+        } else if button(at(2.0), tr(es, "Cancel", "Cancelar"), false, 17.0) || is_key_pressed(KeyCode::Escape) {
+            self.asking = None;
+        }
+    }
+
+    /// A map brought in (imported, replaced or copied) holding Mario's start at point `start`:
+    /// taken when the project has none; asked when it has one elsewhere.
+    pub(super) fn offer_start(&mut self, map: OnMap, start: Option<u8>) {
+        let Some(s) = start.and_then(|p| self.doc.start_at(map, p)) else { return };
+        if s == self.doc.start {
+            return;
+        }
+        if !self.doc.start_ok() {
+            self.doc.set_start(s);
+            return;
+        }
+        let other = self.doc.start_map().map(|m| self.map_name(m)).unwrap_or_default();
+        self.start_offer = Some((s, format!("{} {:02X} ({} {other})", self.map_name(map), s.point, tr(self.es, "the project's is on", "el del proyecto esta en"))));
+    }
+
+    /// Which of two starts for Mario to keep.
+    fn start_offer_frame(&mut self) {
+        let es = self.es;
+        let Some((s, what)) = self.start_offer.clone() else { return };
+        clear_background(col(3));
+        let (w, h) = (560.0, 170.0);
+        let r = Rect::new((screen_width() - w) / 2.0, (screen_height() - h) / 2.0, w, h);
+        draw_rectangle(r.x, r.y, r.w, r.h, col(0));
+        draw_rectangle_lines(r.x, r.y, r.w, r.h, 3.0, col(3));
+        draw_text(tr(es, "Two starts for Mario", "Dos inicios de Mario"), r.x + 20.0, r.y + 34.0, 22.0, col(3));
+        let mut y = r.y + 60.0;
+        for line in wrap_px(&format!("{} {what}. {}", tr(es, "The map brought in has Mario's start at", "El mapa que entra tiene el inicio de Mario en"), tr(es, "A project has one start: which do you keep?", "Un proyecto tiene un solo inicio: cual conservas?")), w - 40.0, 16.0) {
+            draw_text(&line, r.x + 20.0, y, 16.0, col(2));
+            y += 20.0;
+        }
+        let bw = (w - 40.0 - 12.0) / 2.0;
+        if button(Rect::new(r.x + 20.0, r.y + h - 52.0, bw, 34.0), tr(es, "The project's", "El del proyecto"), true, 16.0) || is_key_pressed(KeyCode::Escape) {
+            self.start_offer = None;
+        } else if button(Rect::new(r.x + 32.0 + bw, r.y + h - 52.0, bw, 34.0), tr(es, "The map's", "El del mapa"), false, 16.0) {
+            self.doc.set_start(s);
+            self.start_offer = None;
         }
     }
 
@@ -817,7 +998,7 @@ impl Editor {
         if !self.save() {
             return;
         }
-        let started = self.launcher.launch(self.store.path(), Some(self.cur), start);
+        let started = self.launcher.launch(self.store.path(), Some(self.cur), start, self.prefs.test_lives, self.prefs.test_coins);
         self.status = match &started {
             Ok(()) if self.cur >= LEVELS => format!("{} {:02} ({} {:02})", tr(self.es, "Playing level", "Jugando el nivel"), self.cur, tr(self.es, "as", "como"), self.doc.base_of(self.cur)),
             Ok(()) => format!("{} {:02}", tr(self.es, "Playing level", "Jugando el nivel"), self.cur),
@@ -833,7 +1014,7 @@ impl Editor {
         if !self.save() {
             return;
         }
-        let started = self.launcher.launch(self.store.path(), None, None);
+        let started = self.launcher.launch(self.store.path(), None, None, self.prefs.test_lives, self.prefs.test_coins);
         self.status = match &started {
             Ok(()) => tr(self.es, "Game started with the edited copy.", "Juego abierto con la copia editada.").into(),
             Err(e) => e.clone(),

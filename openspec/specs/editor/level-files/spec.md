@@ -86,3 +86,11 @@ version 1 files SHALL still be read, with no name. The game's 32 levels SHALL ha
 #### Scenario: Old level file
 - **WHEN** the user imports a level file of version 1
 - **THEN** it becomes a new level with no name
+
+### Requirement: Level file folders
+Exporting a level SHALL offer the folder `exports/levels` (any folder may be chosen), and a
+level imported as a new level or replacing one SHALL be part of the open project once saved.
+
+#### Scenario: Default folder
+- **WHEN** a level is exported
+- **THEN** the Save dialog opens in `exports/levels`

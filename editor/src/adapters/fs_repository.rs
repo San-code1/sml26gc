@@ -1,5 +1,5 @@
-//! The cartridge files: the original (read only) and the edited copy in `edits\`
-//! (paths: `host::paths`).
+//! The cartridge files: the base cartridge (read only) and the projects in
+//! `editor\projects\<name>\`, each with its edited cartridge (paths: `host::paths`).
 use crate::domain::document::EditorDocument;
 use crate::domain::prefs::Prefs;
 use crate::ports::{EditedCopyStore, LookStore, PrefsStore, TextFiles};
@@ -7,6 +7,8 @@ use std::path::{Path, PathBuf};
 
 pub struct EditedCopyFile {
     path: PathBuf,
+    project: PathBuf,
+    place: PathBuf,
 }
 
 impl EditedCopyFile {
@@ -25,22 +27,127 @@ impl EditedCopyStore for EditedCopyFile {
         self.make_dir();
         std::fs::write(&self.path, rom)
     }
+    fn write_project(&self, text: &str) -> std::io::Result<()> {
+        self.make_dir();
+        std::fs::write(&self.project, text)
+    }
+    fn read_place(&self) -> Option<String> {
+        std::fs::read_to_string(&self.place).ok()
+    }
+    fn write_place(&self, text: &str) -> std::io::Result<()> {
+        self.make_dir();
+        std::fs::write(&self.place, text)
+    }
 }
 
-/// What opening a cartridge gives: the document, where it saves, and whether an edited
-/// copy already existed.
+/// What opening a project gives: the document and where it saves.
 pub struct Opened {
     pub doc: EditorDocument,
     pub store: EditedCopyFile,
-    pub had_copy: bool,
 }
 
-pub fn open(original_path: &Path) -> Result<Opened, String> {
-    let original = std::fs::read(original_path).map_err(|e| e.to_string())?;
-    let path = host::edited_copy_path(original_path);
+/// Why a project could not be made, renamed or opened.
+#[derive(Debug, PartialEq, Eq)]
+pub enum ProjectError {
+    BadName,
+    Taken,
+    Missing,
+    Io(String),
+}
+
+fn io(e: std::io::Error) -> ProjectError {
+    ProjectError::Io(e.to_string())
+}
+
+/// Is `name` another project's (names differ only in case on Windows)?
+fn taken(name: &str) -> bool {
+    host::projects().iter().any(|p| p.eq_ignore_ascii_case(name))
+}
+
+/// Open project `name` over the base cartridge `base` (its cartridge made from its project file
+/// when missing or older, `host::projects::ensure_rom`).
+pub fn open_project(base: &Path, name: &str) -> Result<Opened, ProjectError> {
+    if !host::project_dir(name).is_dir() {
+        return Err(ProjectError::Missing);
+    }
+    let original = std::fs::read(base).map_err(io)?;
+    let path = host::projects::ensure_rom(base, name).map_err(|e| ProjectError::Io(e.text(false)))?;
     let edited = std::fs::read(&path).ok();
-    let had_copy = path.exists();
-    Ok(Opened { doc: EditorDocument::open(original, edited), store: EditedCopyFile { path }, had_copy })
+    Ok(Opened { doc: EditorDocument::open(original, edited), store: EditedCopyFile { path, project: host::project_file(name), place: host::project_place(name) } })
+}
+
+/// A new project `name`: its folder, its project file and cartridge as the game is.
+pub fn create_project(base: &Path, name: &str) -> Result<(), ProjectError> {
+    if !host::valid_project_name(name) {
+        return Err(ProjectError::BadName);
+    }
+    if taken(name) {
+        return Err(ProjectError::Taken);
+    }
+    let original = std::fs::read(base).map_err(io)?;
+    let doc = EditorDocument::open(original, None);
+    std::fs::create_dir_all(host::project_dir(name)).map_err(io)?;
+    std::fs::write(host::project_file(name), crate::domain::files::project_text(&doc.project_file())).map_err(io)?;
+    std::fs::write(host::project_rom(name, base), &doc.rom).map_err(io)
+}
+
+/// Rename project `old` to `new`: its folder, its cartridge and its saves folder.
+pub fn rename_project(base: &Path, old: &str, new: &str) -> Result<(), ProjectError> {
+    if !host::valid_project_name(new) {
+        return Err(ProjectError::BadName);
+    }
+    if !old.eq_ignore_ascii_case(new) && taken(new) {
+        return Err(ProjectError::Taken);
+    }
+    let rom = host::project_rom_in(old);
+    let file = host::project_file(old).file_name().map(|n| n.to_owned());
+    std::fs::rename(host::project_dir(old), host::project_dir(new)).map_err(io)?;
+    if let Some(rom) = rom.and_then(|r| r.file_name().map(|n| host::project_dir(new).join(n))) {
+        std::fs::rename(rom, host::project_rom(new, base)).map_err(io)?;
+    }
+    if let Some(f) = file.map(|n| host::project_dir(new).join(n)).filter(|f| f.is_file()) {
+        std::fs::rename(f, host::project_file(new)).map_err(io)?;
+    }
+    let saves = host::saves_dir(Some(old));
+    if saves.is_dir() {
+        std::fs::rename(saves, host::saves_dir(Some(new))).map_err(io)?;
+    }
+    Ok(())
+}
+
+/// A copy of project `name` as project `new` (with no saves).
+pub fn duplicate_project(base: &Path, name: &str, new: &str) -> Result<(), ProjectError> {
+    if !host::valid_project_name(new) {
+        return Err(ProjectError::BadName);
+    }
+    if taken(new) {
+        return Err(ProjectError::Taken);
+    }
+    std::fs::create_dir_all(host::project_dir(new)).map_err(io)?;
+    if host::project_file(name).is_file() {
+        std::fs::copy(host::project_file(name), host::project_file(new)).map_err(io)?;
+    }
+    if let Some(rom) = host::project_rom_in(name) {
+        std::fs::copy(rom, host::project_rom(new, base)).map_err(io)?;
+    }
+    Ok(())
+}
+
+/// Delete project `name`, its folder and its saves.
+pub fn delete_project(name: &str) -> Result<(), ProjectError> {
+    std::fs::remove_dir_all(host::project_dir(name)).map_err(io)?;
+    let saves = host::saves_dir(Some(name));
+    if saves.is_dir() {
+        std::fs::remove_dir_all(saves).map_err(io)?;
+    }
+    Ok(())
+}
+
+/// A free project name from `wanted`: itself, or with " 2", " 3"... after it.
+pub fn free_name(wanted: &str) -> String {
+    let base: String = wanted.chars().filter(|c| c.is_ascii() && !c.is_control() && !r#"\/:*?"<>|"#.contains(*c)).collect::<String>().trim().trim_end_matches('.').chars().take(host::paths::PROJECT_NAME_MAX - 4).collect();
+    let base = if host::valid_project_name(&base) { base } else { "Project".to_string() };
+    (1..).map(|n| if n == 1 { base.clone() } else { format!("{base} {n}") }).find(|n| !taken(n)).unwrap_or(base)
 }
 
 /// `editor.cfg` next to the editor; a missing or unreadable file gives the defaults.

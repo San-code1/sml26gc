@@ -71,6 +71,9 @@ fn hold_timer(g: &mut Gb, frozen: &mut Option<[u8; 2]>, on: bool) {
     }
 }
 
+/// How long the tag with the menu's key (and the cheats mode's keys) stays up.
+const HINT_SECONDS: f32 = 1.5;
+
 /// Rewind keeps a state every this many frames, as many as `REWIND_STATES` (10 seconds).
 const REWIND_EVERY: u32 = 2;
 const REWIND_STATES: usize = 300;
@@ -137,6 +140,9 @@ pub struct SessionParts {
     pub checking: bool,
     /// The debug / cheats mode is on.
     pub cheats: bool,
+    /// A test game from the editor: Mario gets these lives and coins once the game is on the
+    /// map or in a level.
+    pub test: Option<(u8, u16)>,
 }
 
 pub struct GameSession {
@@ -167,6 +173,8 @@ pub struct GameSession {
     /// Times the session swapped the program in memory itself (loading a saved game).
     loads: u32,
     note: Option<(&'static str, f32)>,
+    /// A test game's lives and coins, until given.
+    boost: Option<(u8, u16)>,
 }
 
 impl GameSession {
@@ -199,7 +207,7 @@ impl GameSession {
             save_timer: 0.0,
             input_lock: false,
             start_tap: 0,
-            hint_time: if parts.checking { 0.0 } else { 4.0 },
+            hint_time: if parts.checking { 0.0 } else { HINT_SECONDS },
             prev_mode: GameMode::Other(0),
             screen,
             extra,
@@ -210,6 +218,7 @@ impl GameSession {
             rewind: Rewind::default(),
             loads: 0,
             note: None,
+            boost: parts.test,
         }
     }
 
@@ -316,9 +325,14 @@ impl GameSession {
         let in_level = mode == GameMode::Playing;
         // Show the "ESC: menu / Enter: pause" tag again each time a level begins.
         if in_level && self.prev_mode != GameMode::Playing && self.prev_mode != GameMode::Paused && !self.checking {
-            self.hint_time = 3.0;
+            self.hint_time = HINT_SECONDS;
         }
         self.prev_mode = mode;
+        if let (Some((lives, coins)), true) = (self.boost, in_level || mode == GameMode::Map) {
+            cart_model::cheats::set_lives(g, lives);
+            cart_model::cheats::set_coins(g, coins);
+            self.boost = None;
+        }
         // back on the map: the base level of a new level is itself again
         if mode == GameMode::Map {
             if let Some((_, undo)) = self.extra.take() {
@@ -471,7 +485,7 @@ impl GameSession {
         }
         b |= self.zones.buttons();
         g.set_buttons(b);
-        let fast = input.held(Key::LeftControl) || input.held(Key::RightControl);
+        let fast = input.held(self.prefs.settings.keys[keys::FAST_FORWARD]);
         self.acc += dt.min(0.1) as f64;
         // Keep the sound queue fed: nudge timing when it runs low or high.
         let q = audio.queued_seconds();
@@ -590,7 +604,7 @@ mod tests {
             eprintln!("no cartridge found: session test skipped");
             return;
         };
-        let gb = host::load_gb(&rom, 44100, false).unwrap();
+        let gb = host::load_gb(&rom, 44100, None).unwrap();
         let rec = Record::default();
         let prefs = Preferences::new(Box::new(rec.clone()), Box::new(rec.clone()));
         let parts = SessionParts {
@@ -601,6 +615,7 @@ mod tests {
             start_at: None,
             checking: false,
             cheats: false,
+            test: None,
         };
         let mut s = GameSession::new(gb, parts);
         let mut keys = FakeKeys::default();
@@ -657,7 +672,7 @@ mod tests {
     /// A session in `level` with the cheats mode as given, and Mario at `start` if any.
     fn in_level(level: u8, cheats: bool, start: Option<(u16, u16)>) -> Option<(GameSession, Record)> {
         let rom = host::find_rom(None)?;
-        let gb = host::load_gb(&rom, 44100, false).unwrap();
+        let gb = host::load_gb(&rom, 44100, None).unwrap();
         let rec = Record::default();
         let parts = SessionParts {
             prefs: Preferences::new(Box::new(rec.clone()), Box::new(rec.clone())),
@@ -667,6 +682,7 @@ mod tests {
             start_at: start,
             checking: false,
             cheats,
+            test: None,
         };
         Some((GameSession::new(gb, parts), rec))
     }
@@ -755,7 +771,7 @@ mod tests {
             return;
         };
         let file = std::fs::read(&rom).unwrap();
-        let gb = host::load_gb(&rom, 44100, false).unwrap();
+        let gb = host::load_gb(&rom, 44100, None).unwrap();
         let original = gb.cart().rom().to_vec();
         let rec = Record::default();
         let parts = SessionParts {
@@ -766,6 +782,7 @@ mod tests {
             start_at: None,
             checking: false,
             cheats: true,
+            test: None,
         };
         let mut s = GameSession::new(gb, parts);
         let mut keys = FakeKeys::default();
@@ -832,6 +849,7 @@ mod tests {
             start_at: None,
             checking: false,
             cheats: false,
+            test: None,
         };
         let mut s = GameSession::new(gb, parts);
         let mut keys = FakeKeys::default();
@@ -883,6 +901,7 @@ mod tests {
                 start_at: None,
                 checking: false,
                 cheats: false,
+                test: None,
             };
             GameSession::new(Gb::new(copy.clone(), 44100).unwrap(), parts)
         };
@@ -976,6 +995,7 @@ mod tests {
                 start_at: None,
                 checking: false,
                 cheats: false,
+                test: None,
             };
             GameSession::new(gb, parts)
         };
@@ -1094,6 +1114,7 @@ mod tests {
                 start_at: None,
                 checking: false,
                 cheats: false,
+                test: None,
             };
             GameSession::new(gb, parts)
         };

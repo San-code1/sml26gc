@@ -66,3 +66,20 @@ opens the catalogue as F3 does.
 #### Scenario: Opened from the menu
 - **WHEN** Tools, Object catalogue is chosen while a level is shown
 - **THEN** the object catalogue opens on that level
+
+### Requirement: Catalogue only in the level editor
+Tools, Object catalogue SHALL be greyed out and do nothing outside the level editor (the world
+map and zone maps).
+
+#### Scenario: World map
+- **WHEN** the world map editor is shown and the Tools menu is opened
+- **THEN** Object catalogue is greyed out
+
+### Requirement: Project entries
+The File menu SHALL have Projects... (the project screen: new, open, rename, duplicate, delete,
+import) and Export project. The world map has no entries of its own: the zone entries export
+it and replace it (`editor/zone-files`).
+
+#### Scenario: Level editor
+- **WHEN** a level is shown and the File menu is opened
+- **THEN** Projects... and Export project can be chosen, and no world map entry is listed

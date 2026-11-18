@@ -34,6 +34,13 @@ impl MenuBar for WindowMenu {
             b.enable(id, on);
         }
     }
+
+    fn clear(&mut self) {
+        if let Some(b) = &self.bar {
+            b.clear();
+        }
+        let _ = self.chosen();
+    }
 }
 
 #[cfg(windows)]
@@ -113,6 +120,15 @@ mod imp {
                 EnableMenuItem(self.menu, id as u32, MF_BYCOMMAND | if on { MF_ENABLED } else { MF_GRAYED });
             }
         }
+
+        pub fn clear(&self) {
+            unsafe {
+                while GetMenuItemCount(self.menu) > 0 {
+                    DeleteMenu(self.menu, 0, MF_BYPOSITION);
+                }
+                DrawMenuBar(self.hwnd);
+            }
+        }
     }
 }
 
@@ -128,6 +144,7 @@ mod imp {
         }
         pub fn add_menu(&self, _: &str, _: &[MenuEntry]) {}
         pub fn enable(&self, _: u16, _: bool) {}
+        pub fn clear(&self) {}
     }
 
     pub fn take_chosen() -> Vec<u16> {

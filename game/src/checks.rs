@@ -10,7 +10,7 @@ use std::path::Path;
 
 /// Save the pause menu's screens over a level frame as PNGs into `dir`.
 pub fn menu_shots(rom: &Path, dir: &Path) {
-    let Ok(mut gb) = load_gb(rom, 44100, false) else { return };
+    let Ok(mut gb) = load_gb(rom, 44100, None) else { return };
     let sc = parse_script("S@400-405;S@600-605;S@800-805;R@960-1000;");
     for f in 0..1010 {
         gb.set_buttons(buttons_at(&sc, f));

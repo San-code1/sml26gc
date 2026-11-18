@@ -7,32 +7,34 @@ another computer or go back to an earlier state, over the same original cartridg
 ## Requirements
 
 ### Requirement: Exporting the project
-The editor SHALL export the whole project, as it is being edited, to a file the user names:
-every level (the 32 and the new ones, with their base levels and headers), the world map and
-zone map pictures, the new zones, the level each map point opens, the paths, where Mario
-stands on each point, the new points, the doors, and which cartridge it belongs to. It SHALL
-include what has not changed too.
+The editor SHALL export the whole project, as it is being edited, to a file the user names,
+offered as `exports/projects/<project>/<project>.nmbproject` (any folder may be chosen): every
+level (the 32 and the new ones, with their base levels and headers), the world map and zone
+map pictures, the new zones, the level each map point opens, the paths, where Mario stands on
+each point, the new points, the doors, and which cartridge it belongs to. It SHALL include
+what has not changed too.
 
 #### Scenario: Export
-- **WHEN** the user exports the project to "my world.nmbproject"
-- **THEN** the file holds all of the above as shown in the editor, unsaved changes included, and the status bar says where it was written
+- **WHEN** the project "Islands" is exported and the offered name is kept
+- **THEN** `exports/projects/Islands/Islands.nmbproject` holds all of the above as shown in the editor, unsaved changes included, and the status bar says where it was written
 
 #### Scenario: Export cancelled
 - **WHEN** the user closes the Save dialog without a name
 - **THEN** no file is written and nothing changes
 
 ### Requirement: Importing a project
-The editor SHALL import a project file over the open project, replacing every level, map
-picture, map point level, path, point and door with the file's, and SHALL mark everything
-changed. Nothing SHALL be written to the edited copy until the user saves.
+The editor SHALL import a project file from any folder as a new project in `editor/projects`
+(named after the file, or as the user renames it when the name is taken), with every level,
+map picture, map point level, path, point and door of the file, and open it. The open project
+SHALL be left as it is (asking first if it has unsaved changes).
 
 #### Scenario: Import
-- **WHEN** a project file with 3 new levels and a repainted world map is imported over a project with 1 new level
-- **THEN** the editor has the file's 35 levels, its world map, points, paths and doors, and shows the first level
+- **WHEN** "friend.nmbproject", with 3 new levels and a repainted world map, is imported
+- **THEN** a project "friend" appears in `editor/projects` with the file's 35 levels, world map, points, paths and doors, and the editor shows it
 
 #### Scenario: Leave without saving
 - **WHEN** a project was imported and the editor is closed without saving
-- **THEN** the edited copy is as it was before the import
+- **THEN** the project that was open before is as it was before the import
 
 ### Requirement: Same cartridge only
 A project file SHALL be imported only over the cartridge it was exported from; otherwise
@@ -56,13 +58,6 @@ A project import SHALL clear every undo history, since it is not undoable as a w
 #### Scenario: Undo after import
 - **WHEN** the user presses Undo right after importing a project
 - **THEN** nothing changes
-
-### Requirement: World map only in projects
-The world map and the zone maps SHALL be exported and imported only as part of a project.
-
-#### Scenario: World map editor
-- **WHEN** the world map editor is shown
-- **THEN** the File menu offers project export and import, and no export or import of the map alone
 
 ### Requirement: Older project files
 Project files written before new zones existed SHALL still be imported, as projects with no

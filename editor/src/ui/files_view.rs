@@ -20,13 +20,13 @@ impl Editor {
             self.mark(Severity::Warning);
             return;
         }
-        if a == Action::ReplaceZone && !matches!(self.world_map, OnMap::NewZone(_)) {
-            self.status = tr(self.es, "Only new zones can be replaced from a file; the game's zones are only edited.", "Solo las zonas nuevas se pueden reemplazar con un fichero; las zonas del juego solo se editan.").into();
+        if a == Action::ReplaceZone && !matches!(self.world_map, OnMap::NewZone(_) | OnMap::World) {
+            self.status = tr(self.es, "Only new zones and the world map can be replaced from a file; the game's zones are only edited.", "Solo las zonas nuevas y el mapa de mundos se pueden reemplazar con un fichero; las zonas del juego solo se editan.").into();
             self.mark(Severity::Warning);
             return;
         }
         if a == Action::ExportZone && !self.zone_exportable() {
-            self.status = tr(self.es, "Show a new zone, or the Tree, Pumpkin, Macro, Space or Mario zone, to export it.", "Muestra una zona nueva, o la Zona Arbol, Calabaza, Macro, Espacial o Mario, para exportarla.").into();
+            self.status = tr(self.es, "Show the world map, a new zone, or the Tree, Pumpkin, Macro, Space or Mario zone, to export it.", "Muestra el mapa de mundos, una zona nueva, o la Zona Arbol, Calabaza, Macro, Espacial o Mario, para exportarlo.").into();
             self.mark(Severity::Done);
             self.mark(Severity::Warning);
             return;
@@ -34,12 +34,12 @@ impl Editor {
         self.pending_file = Some(a);
     }
 
-    /// Does the map shown make a zone file (a new zone, or a zone a door enters)?
+    /// Can the map shown be exported: the world map (a world map file), a new zone or a zone a
+    /// door enters (a zone file)?
     pub(super) fn zone_exportable(&self) -> bool {
         match self.world_map {
             OnMap::Zone(z) => cart_model::new_zones::base_of(z).is_some(),
-            OnMap::NewZone(_) => true,
-            OnMap::World => false,
+            OnMap::NewZone(_) | OnMap::World => true,
         }
     }
 
@@ -54,10 +54,21 @@ impl Editor {
         }
     }
 
-    /// The cartridge's name, to suggest file names.
+    /// The project's name, to suggest file names.
     fn cartridge_name(&self) -> String {
-        let stem = self.store.path().file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
-        stem.trim_end_matches(" (edit)").to_string()
+        self.project.clone()
+    }
+
+    /// The file name offered for an export: the name the level or zone was given, else
+    /// `fallback` (characters a file name cannot have left out).
+    fn export_name(named: &str, fallback: String) -> String {
+        let clean: String = named.chars().filter(|c| !r#"<>:"/\|?*"#.contains(*c) && !c.is_control()).collect();
+        let clean = clean.trim().trim_end_matches('.').trim();
+        if clean.is_empty() {
+            fallback
+        } else {
+            clean.to_string()
+        }
     }
 
     fn run_file(&mut self, a: Action) {
@@ -65,7 +76,7 @@ impl Editor {
         let (dialogs, files) = (&*self.dialogs, &*self.text_files);
         let l = self.cur;
         let status = match a {
-            Action::ExportLevel => exchange::export_level(&self.doc, l, &format!("{} {} {l:02}", self.cartridge_name(), tr(es, "level", "nivel")), dialogs, files)
+            Action::ExportLevel => exchange::export_level(&self.doc, l, &Self::export_name(self.doc.level_name(l), format!("{} {} {l:02}", self.cartridge_name(), tr(es, "level", "nivel"))), dialogs, files)
                 .map(|p| p.map(|p| format!("{} {l:02} {} {}", tr(es, "Level", "Nivel"), tr(es, "exported to", "exportado a"), p.display()))),
             Action::ImportLevel => match exchange::import_level(&mut self.doc, dialogs, files) {
                 Ok(Some(n)) => {
@@ -84,34 +95,49 @@ impl Editor {
                     other => other.map(|_| None),
                 }
             }
+            Action::ExportZone if self.world_map == OnMap::World => exchange::export_world(&self.doc, &format!("{} {}", self.project, tr(es, "world map", "mapa de mundos")), dialogs, files).map(|p| p.map(|p| format!("{} {}", tr(es, "World map exported to", "Mapa de mundos exportado a"), p.display()))),
             Action::ExportZone => {
-                let name = format!("{} {}", self.cartridge_name(), self.map_name(self.world_map));
+                let named = match self.world_map {
+                    OnMap::NewZone(k) => self.doc.new_zones.get(k).map_or("", |z| z.name.as_str()),
+                    _ => "",
+                };
+                let name = Self::export_name(named, format!("{} {}", self.cartridge_name(), self.map_name(self.world_map)));
                 exchange::export_zone(&self.doc, self.world_map, &name, dialogs, files).map(|p| p.map(|p| format!("{} {}", tr(es, "Zone exported to", "Zona exportada a"), p.display())))
             }
             Action::ImportZone => match exchange::import_zone(&mut self.doc, dialogs, files) {
-                Ok(Some(k)) => {
+                Ok(Some((k, start))) => {
                     self.clipboard = None;
                     self.show_map(OnMap::NewZone(k));
                     self.point = self.doc.new_zones[k].entry as usize;
+                    self.offer_start(OnMap::NewZone(k), start);
                     Ok(Some(format!("{} {}. {}", self.map_name(OnMap::NewZone(k)), tr(es, "from the file; it has no door yet", "desde el fichero; aun no tiene puerta"), tr(es, "Save to keep it.", "Guarda para conservarla."))))
                 }
                 other => other.map(|_| None),
             },
-            Action::ReplaceZone => match exchange::replace_zone(&mut self.doc, self.world_map, dialogs, files) {
-                Ok(Some(())) => {
+            Action::ReplaceZone if self.world_map != OnMap::World => match exchange::replace_zone(&mut self.doc, self.world_map, dialogs, files) {
+                Ok(Some(start)) => {
                     self.clipboard = None;
                     if let OnMap::NewZone(k) = self.world_map {
                         self.point = self.doc.new_zones[k].entry as usize;
                     }
+                    self.offer_start(self.world_map, start);
                     Ok(Some(format!("{} {}", self.map_name(self.world_map), tr(es, "replaced from the file; it keeps its door. Save to keep it.", "reemplazada con el fichero; conserva su puerta. Guarda para conservarla."))))
                 }
                 other => other.map(|_| None),
             },
-            Action::ExportProject => exchange::export_project(&self.doc, &self.cartridge_name(), dialogs, files).map(|p| p.map(|p| format!("{} {}", tr(es, "Project exported to", "Proyecto exportado a"), p.display()))),
-            Action::ImportProject => match exchange::import_project(&mut self.doc, dialogs, files) {
-                Ok(Some(())) => {
-                    self.project_replaced();
-                    Ok(Some(tr(es, "Project imported. Nothing is written until you save; closing without saving keeps the edited copy as it was.", "Proyecto importado. No se escribe nada hasta que guardes; si cierras sin guardar, la copia editada queda como estaba.").to_string()))
+            Action::ExportProject => exchange::export_project(&self.doc, &self.project, dialogs, files).map(|p| p.map(|p| format!("{} {}", tr(es, "Project exported to", "Proyecto exportado a"), p.display()))),
+            Action::ReplaceZone if self.world_map == OnMap::World => match exchange::import_world(&mut self.doc, dialogs, files) {
+                Ok(Some((points, exits, start))) => {
+                    self.clipboard = None;
+                    self.overview = None;
+                    self.show_map(OnMap::World);
+                    self.offer_start(OnMap::World, start);
+                    let lost = if points + exits == 0 {
+                        String::new()
+                    } else {
+                        format!(" {points} {} {exits} {}", tr(es, "points opened new levels this project does not have, and", "puntos abrian niveles nuevos que este proyecto no tiene, y"), tr(es, "exits led to missing new zones: they lead nowhere now.", "salidas llevaban a zonas nuevas que faltan: ahora no llevan a ningun sitio."))
+                    };
+                    Ok(Some(format!("{}{lost}", tr(es, "World map imported. Save to keep it.", "Mapa de mundos importado. Guarda para conservarlo."))))
                 }
                 other => other.map(|_| None),
             },
@@ -127,15 +153,6 @@ impl Editor {
         }
     }
 
-    /// Everything changed: back to the first level, nothing left from what was shown.
-    fn project_replaced(&mut self) {
-        self.clipboard = None;
-        self.looks.clear();
-        self.overview = None;
-        self.enter_world(false);
-        self.select_level(0);
-    }
-
     fn file_error(&self, e: &ExchangeError) -> String {
         let es = self.es;
         match e {
@@ -143,11 +160,13 @@ impl Editor {
             ExchangeError::NoRoom => tr(es, "There can't be more levels.", "No caben mas niveles.").into(),
             ExchangeError::Zone(ZoneRefusal::TooManyZones(max)) => format!("{} {max}.", tr(es, "No more new zones: there can be", "No caben mas zonas nuevas: puede haber")),
             ExchangeError::Zone(_) => tr(es, "New zones are made from the Tree, Pumpkin, Macro, Space or Mario zone.", "Las zonas nuevas se hacen de la Zona Arbol, Calabaza, Macro, Espacial o Mario.").into(),
+            ExchangeError::WorldAsZone => tr(es, "This is a world map file: the game has one world map, so it replaces it (Replace zone on the world map) and is not a new zone.", "Este es un fichero de mapa de mundos: el juego tiene un solo mapa de mundos, asi que lo reemplaza (Reemplazar zona en el mapa de mundos) y no es una zona nueva.").into(),
             ExchangeError::ProtectedZone => tr(es, "Only new zones can be replaced from a file.", "Solo las zonas nuevas se pueden reemplazar con un fichero.").into(),
             ExchangeError::Protected => tr(es, "Only new levels (32 and up) can be replaced from a file.", "Solo los niveles nuevos (32 en adelante) se pueden reemplazar con un fichero.").into(),
             ExchangeError::File(f) => match f {
                 FileError::NotLevel => tr(es, "This is not a level file.", "Este no es un fichero de nivel.").into(),
                 FileError::NotZone => tr(es, "This is not a zone file.", "Este no es un fichero de zona.").into(),
+                FileError::NotWorld => tr(es, "This is not a world map file.", "Este no es un fichero de mapa de mundos.").into(),
                 FileError::NotABase(z) => format!("{} {z}.", tr(es, "The file's zone is made from a zone no door enters:", "La zona del fichero se hace de una zona en la que no entra ninguna puerta:")),
                 FileError::NotProject => tr(es, "This is not a project file.", "Este no es un fichero de proyecto.").into(),
                 FileError::Newer => tr(es, "This file was made by a newer editor.", "Este fichero lo hizo un editor mas nuevo.").into(),

@@ -21,6 +21,10 @@ const CAM_Y_MAX: u16 = 0x2C0;
 /// Where the game's own headers put the camera from Mario.
 const CAM_AHEAD: u16 = 0x21;
 const CAM_ABOVE: u16 = 0x14;
+/// How far past the screen's left and right edges the objects a level begins with are already
+/// passed (research `startobjects`).
+const PASSED_LEFT: u16 = 33;
+const PASSED_RIGHT: u16 = 24;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub struct Start {
@@ -58,18 +62,19 @@ impl Start {
         }
     }
 
-    /// The screen the level begins on (left, top, width, height in level pixels). The game
-    /// brings an object to life only when it comes in at the screen's edge, so the objects
-    /// already on this screen never appear (research `startobjects`; none of the game's
-    /// levels has one there, `firstscreen`).
-    pub fn first_screen(&self) -> (u16, u16, u16, u16) {
-        (self.camera_x.saturating_sub(0x50), self.camera_y.saturating_sub(0x48), 0xA0, 0x90)
+    /// The band of the level, from x `.0` to x `.1` (both in) and all its height, whose objects
+    /// do not appear when the level begins. The game brings an object to life when its x comes
+    /// in a little past the screen's left or right edge, whatever its height, and these are
+    /// already past: they appear only once Mario has gone far enough away and comes back
+    /// (research `startobjects`; none of the game's levels has one there, `firstscreen`).
+    pub fn passed_band(&self) -> (u16, u16) {
+        (self.camera_x.saturating_sub(0x50 + PASSED_LEFT), self.camera_x + 0x50 + PASSED_RIGHT)
     }
 
-    /// Is level pixel `(x, y)` on the screen the level begins on?
-    pub fn on_first_screen(&self, x: u16, y: u16) -> bool {
-        let (l, t, w, h) = self.first_screen();
-        (l..l + w).contains(&x) && (t..t + h).contains(&y)
+    /// Is an object at level x `x` missing when the level begins?
+    pub fn passed_at_start(&self, x: u16) -> bool {
+        let (l, r) = self.passed_band();
+        (l..=r).contains(&x)
     }
 
     /// The top left corner of Mario's sprite, in level pixels.
@@ -123,6 +128,17 @@ mod tests {
         map[(0x1F0 / 16 - 1) * COLS + 0x100 / 16] = 0x10;
         assert!(s.blocked(&map));
         assert!(Start::standing(4090, 0x100).blocked(&[0x60u8; COLS * ROWS]) == false);
+    }
+
+    #[test]
+    fn the_objects_passed_at_the_start_are_those_the_game_skipped() {
+        // research `startobjects`: the last x skipped and the first that came to life
+        let s = |camera_x| Start { camera_x, ..Start::default() };
+        assert!(s(80).passed_at_start(184) && !s(80).passed_at_start(192));
+        assert!(s(88).passed_at_start(192) && !s(87).passed_at_start(192));
+        assert!(s(465).passed_at_start(352) && !s(465).passed_at_start(344));
+        assert!(!s(466).passed_at_start(352));
+        assert!(s(80).passed_at_start(0));
     }
 
     #[test]

@@ -201,13 +201,25 @@ pub fn summon<O: BusObserver>(g: &mut GameBoy<O>, item: Item) -> bool {
 }
 
 pub fn max_lives<O: BusObserver>(g: &mut GameBoy<O>) {
-    set_ram(g, LIVES, 0x99);
+    set_lives(g, 99);
 }
 
 /// 999 coins.
 pub fn max_coins<O: BusObserver>(g: &mut GameBoy<O>) {
-    set_ram(g, COINS, 0x99);
-    set_ram(g, COINS + 1, 0x09);
+    set_coins(g, 999);
+}
+
+/// `n` lives (at most 99; BCD, as the game counts them).
+pub fn set_lives<O: BusObserver>(g: &mut GameBoy<O>, n: u8) {
+    let n = n.min(99);
+    set_ram(g, LIVES, (n / 10) << 4 | n % 10);
+}
+
+/// `n` coins (at most 999; BCD, the two low digits first).
+pub fn set_coins<O: BusObserver>(g: &mut GameBoy<O>, n: u16) {
+    let n = n.min(999);
+    set_ram(g, COINS, ((n / 10 % 10) << 4 | n % 10) as u8);
+    set_ram(g, COINS + 1, (n / 100) as u8);
 }
 
 /// The six golden coins: the six bosses marked beaten, as the game marks them.
