@@ -983,9 +983,11 @@ pub fn type_groups(rom_path: &Path) {
 }
 
 /// Objects near Mario's start: a blank level made from `base` with one object of `kind`
-/// `dx` pixels right of Mario at his height; the objects alive after the level begins, after
-/// walking right a little, and after walking back.
-pub fn start_objects_probe(rom_path: &Path, base: u8, kind: u8, dx: u16) {
+/// `dx` pixels right of Mario (left when negative) and `up` pixels above his height, Mario's
+/// start moved `shift` pixels right and `drop` pixels up (he falls to the floor); the objects
+/// alive after the level begins, after the fall, after walking towards the object, and after
+/// walking far on and back.
+pub fn start_objects_probe(rom_path: &Path, base: u8, kind: u8, dx: i32, up: i32, shift: u16, drop: u16) {
     use cart_model::extra_levels::{apply, based_on, writes_for};
     use cart_model::level_start::Start;
     use cart_model::objects::Obj;
@@ -998,40 +1000,91 @@ pub fn start_objects_probe(rom_path: &Path, base: u8, kind: u8, dx: u16) {
     let (map, start) = blank_level::blank(&e.map, &Start::read(&e.header));
     e.map = map;
     let feet = start.mario_y + cart_model::level_start::FEET;
-    e.objs = vec![Obj { x: (start.mario_x + dx) / 8 * 8, y: (feet - 16) / 8 * 8, kind, flag: false }];
+    let feet = feet - drop;
+    let start = Start::standing(start.mario_x + shift, feet);
+    let y = (feet as i32 - 16 - up).max(0) as u16;
+    e.objs = vec![Obj { x: (start.mario_x as i32 + dx).max(0) as u16 / 8 * 8, y: y / 8 * 8, kind, flag: false }];
     start.write(&mut e.header);
+    println!("mario x {} y {}, camera x {} y {}, object x {} y {}", start.mario_x, start.mario_y, start.camera_x, start.camera_y, e.objs[0].x, e.objs[0].y);
     apply(g.cart_mut().rom_mut(), &writes_for(&rom, &e));
     g.enter_level(base);
     let report = |g: &mut gb_core::Gb, when: &str| {
         let a = cheats::active_objects(g);
-        println!("{when}: {} alive {:?}", a.len(), a.iter().map(|o| (o.kind, o.x, o.y)).collect::<Vec<_>>());
+        let mut cam = |at: u16| g.read(at) as u16 | (g.read(at + 1) as u16) << 8;
+        println!("{when}: camera x {} y {}; {} alive {:?}", cam(0xFFCA), cam(0xFFC8), a.len(), a.iter().map(|o| (o.kind, o.x, o.y)).collect::<Vec<_>>());
     };
     for _ in 0..30 {
         g.run_frame_with(Buttons::NONE);
     }
     report(&mut g, "after the start");
-    for _ in 0..40 {
-        g.run_frame_with(Buttons::RIGHT);
+    for _ in 0..150 {
+        g.run_frame_with(Buttons::NONE);
     }
-    report(&mut g, "walked right");
+    report(&mut g, "after the fall");
+    let towards = if dx < 0 { Buttons::LEFT } else { Buttons::RIGHT };
+    for _ in 0..40 {
+        g.run_frame_with(towards);
+    }
+    report(&mut g, "walked a little");
     for _ in 0..120 {
-        g.run_frame_with(Buttons::RIGHT);
+        g.run_frame_with(towards);
     }
     report(&mut g, "walked further");
+    for _ in 0..400 {
+        g.run_frame_with(towards);
+    }
+    let back = if dx < 0 { Buttons::RIGHT } else { Buttons::LEFT };
+    for _ in 0..500 {
+        g.run_frame_with(back);
+    }
+    report(&mut g, "walked far and back");
 }
 
-/// The game's levels' objects that are on the first screen (the camera of the level's start).
+/// From power-on with no buttons: the game mode byte and the LCD every 10 frames up to
+/// `frames`, and the screen as `DIR/titleNNNN.png` every 50 frames.
+pub fn title_frames(rom_path: &Path, frames: u32, dir: &Path) {
+    use cart_model::ram_map::GAME_MODE;
+    let Some(mut g) = crate::console::load(rom_path) else { return };
+    let _ = std::fs::create_dir_all(dir);
+    for f in 0..=frames {
+        if f % 10 == 0 {
+            println!("frame {f}: mode {:02x} lcd {}", g.read(GAME_MODE), g.video().lcd_on());
+        }
+        if f % 50 == 0 {
+            host::png_out::save_png(&g, &dir.join(format!("title{f:04}.png")));
+        }
+        g.run_frame_with(Buttons::NONE);
+    }
+}
+
+/// The objects alive in the game's level `level` after it begins and `frames` frames later
+/// (Mario left alone).
+pub fn level_objects_probe(rom_path: &Path, level: u8, frames: u32) {
+    use cart_model::{cheats, patch};
+    let Some(gb) = crate::console::load(rom_path) else { return };
+    let Ok(rom) = patch::expand(gb.cart().rom()) else { return };
+    let Ok(mut g) = gb_core::Gb::new(rom, 44100) else { return };
+    g.boot_to_map();
+    println!("entered: {}", g.enter_level(level));
+    for f in 0..=frames {
+        if f % 60 == 0 {
+            let a = cheats::active_objects(&mut g);
+            println!("frame {f}: {:?}", a.iter().map(|o| (o.kind, o.x, o.y)).collect::<Vec<_>>());
+        }
+        g.run_frame_with(Buttons::NONE);
+    }
+}
+
+/// The game's levels' objects that are missing when the level begins (`Start::passed_band`).
 pub fn first_screen_objects(rom_path: &Path) {
     use cart_model::{level_start::Start, levels, objects};
     let Ok(rom) = std::fs::read(rom_path) else { return };
     for l in 0..32 {
         let h = levels::header(&rom, l).at;
         let s = Start::read(&rom[h..h + 8]);
-        let (left, right) = (s.camera_x as i32 - 0x50, s.camera_x as i32 + 0x50);
-        let (top, bottom) = (s.camera_y as i32 - 0x48, s.camera_y as i32 + 0x48);
-        let on: Vec<(u8, u16, u16)> = objects::read(&rom, l).0.iter().filter(|o| (left..right).contains(&(o.x as i32)) && (top..bottom).contains(&(o.y as i32))).map(|o| (o.kind, o.x, o.y)).collect();
+        let on: Vec<(u8, u16, u16)> = objects::read(&rom, l).0.iter().filter(|o| s.passed_at_start(o.x)).map(|o| (o.kind, o.x, o.y)).collect();
         if !on.is_empty() {
-            println!("level {l:02}: screen x {left}-{right} y {top}-{bottom}: {on:?}");
+            println!("level {l:02}: camera {} {}, band x {:?}: {on:?}", s.camera_x, s.camera_y, s.passed_band());
         }
     }
 }
@@ -2128,4 +2181,88 @@ pub fn add_member(rom_path: &Path, copy: &str, level: usize, from: usize, kind: 
     enemy_sets::store(&mut rom, &original, &all).unwrap();
     let _ = std::fs::write(copy, &rom);
     println!("level {level}'s set: {:?}", with.iter().map(|m| m.0).collect::<Vec<_>>());
+}
+
+/// From power on with no save to the world map: every write to Mario's map point ($A840) and
+/// to the zone shown ($A68B), with the code that made it.
+pub fn start_point(rom_path: &Path) {
+    let Some(mut g) = probed(rom_path) else { return };
+    g.observer_mut().watch = vec![0xA840, 0xA68B, 0xA000, 0xA050, 0xA0A0];
+    g.boot_to_map();
+    for (pc, bank, addr, v) in &g.observer().watch_log {
+        println!("{bank:02x}:{pc:04x} [{addr:04x}] = {v:02x}");
+    }
+    println!("on the map: point {:02x}, zone {:02x}", g.read(0xA840), g.read(0xA68B));
+}
+
+/// Mario put on map point `point` (its map shown as after a level), the game left to save, then
+/// the console started again with that battery save: which map and point it shows.
+pub fn continue_at(rom_path: &Path, point: u8) {
+    use cart_model::driver::GameDriver;
+    let Some(g) = crate::console::load(rom_path) else { return };
+    let rom = g.cart().rom().to_vec();
+    let Ok(mut g) = gb_core::Gb::new(rom.clone(), 1000) else { return };
+    g.boot_to_map();
+    println!("shown: {}", g.show_map_at(point));
+    for _ in 0..300 {
+        g.run_frame_with(Buttons::NONE);
+        g.clear_audio();
+    }
+    println!("before: point {:02x}, zone shown {:02x}, slot byte {:02x}", g.read(0xA840), g.read(0xA68B), g.read(0xA000));
+    let ram = g.cart().ram().to_vec();
+    let Ok(mut h) = gb_core::Gb::new(rom, 1000) else { return };
+    h.cart_mut().ram_mut().copy_from_slice(&ram);
+    h.boot_to_map();
+    for _ in 0..120 {
+        h.run_frame_with(Buttons::NONE);
+        h.clear_audio();
+    }
+    println!("after a restart: point {:02x}, zone shown {:02x}", h.read(0xA840), h.read(0xA68B));
+    host::png_out::save_png(&h, std::path::Path::new(&std::env::var("SHOT").unwrap_or_else(|_| "continue.png".into())));
+}
+
+/// A new game starting with Mario on map point `point`: the new-slot code (0:2914, `ld b,$40 /
+/// xor a / ld (hl+),a / dec b / jr nz`, clearing the slot's 64 map bytes, the first being Mario's
+/// point) calls a stub at 0:1967 that writes `point` first, then the 63 zeros. Booted to the map
+/// with no save: the map and point shown.
+pub fn new_start(rom_path: &Path, point: u8) {
+    use cart_model::driver::GameDriver;
+    let Some(g) = crate::console::load(rom_path) else { return };
+    let mut rom = g.cart().rom().to_vec();
+    assert_eq!(rom[0x2914..0x291B], [0x06, 0x40, 0xAF, 0x22, 0x05, 0x20, 0xFC]);
+    rom[0x2914..0x291B].copy_from_slice(&[0xCD, 0x67, 0x19, 0x00, 0x00, 0x00, 0x00]);
+    rom[0x1967..0x1972].copy_from_slice(&[0x3E, point, 0x22, 0x06, 0x3F, 0xAF, 0x22, 0x05, 0x20, 0xFC, 0xC9]);
+    let Ok(mut h) = gb_core::Gb::new(rom, 1000) else { return };
+    println!("map reached: {}", h.boot_to_map());
+    for _ in 0..120 {
+        h.run_frame_with(Buttons::NONE);
+        h.clear_audio();
+    }
+    println!("new game: point {:02x}, zone shown {:02x}, mode {:02x}", h.read(0xA840), h.read(0xA68B), h.read(GAME_MODE));
+    host::png_out::save_png(&h, std::path::Path::new(&std::env::var("SHOT").unwrap_or_else(|_| "newstart.png".into())));
+    // and it plays: into the point's level and back
+    println!("enters a level from there: {}", h.enter_level_anywhere(1));
+}
+
+/// A new game starting on map point `point` (as `newstart`), frame by frame from power on: when
+/// the game mode, Mario's point ($A840) and the map shown ($A68B) change, to see what the port
+/// can know before the map is drawn.
+pub fn new_start_frames(rom_path: &Path, point: u8) {
+    let Some(g) = crate::console::load(rom_path) else { return };
+    let mut rom = g.cart().rom().to_vec();
+    cart_model::start_point::write(&mut rom, cart_model::start_point::Start { point, new_zone: None });
+    let Ok(mut h) = gb_core::Gb::new(rom, 1000) else { return };
+    let mut last = (0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8);
+    for f in 0..2000u32 {
+        let now = (h.read(GAME_MODE), h.read(0xA840), h.read(0xA68B), h.read(0xFF40) >> 7);
+        if now != last {
+            println!("frame {f}: mode {:02x}, point {:02x}, map {:02x}, lcd {}", now.0, now.1, now.2, now.3);
+            last = now;
+        }
+        if now.0 == 0x0C && f > 0 && h.read(0xFF40) >> 7 == 1 {
+            break;
+        }
+        h.run_frame_with(if f % 50 < 5 && f > 120 { Buttons::START } else { Buttons::NONE });
+        h.clear_audio();
+    }
 }

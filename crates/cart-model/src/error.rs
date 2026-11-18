@@ -35,6 +35,8 @@ pub enum CartError {
     TooManyPoints { max: usize },
     /// The game zones' added points don't fit in the space kept for them.
     AddedPointsFull { need: usize, capacity: usize },
+    /// Mario's start is not on a point the project has.
+    StartMissing,
 }
 
 impl fmt::Display for CartError {
@@ -66,6 +68,7 @@ impl fmt::Display for CartError {
             CartError::SecretExitsFull { need, capacity } => write!(f, "the secret exits need {need} bytes but the cartridge has {capacity} for them; send fewer levels' secret exits elsewhere"),
             CartError::TooManyPoints { max } => write!(f, "a map can have {max} added points at most"),
             CartError::AddedPointsFull { need, capacity } => write!(f, "the zones' added points need {need} bytes but the cartridge has {capacity} for them; remove a point or shorten its paths"),
+            CartError::StartMissing => write!(f, "Mario's start is missing: choose a point and set it as the start (Zones, Points tab)"),
         }
     }
 }

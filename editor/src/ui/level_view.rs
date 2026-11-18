@@ -142,6 +142,7 @@ impl Editor {
         self.draw_overview(cw, ch);
         let (act, pick) = self.level_panel();
         self.level_status_bar(cw, ch);
+        self.test_game_popover();
         self.draw_tip();
         if let Some(a) = act {
             self.run(a);

@@ -28,30 +28,37 @@ impl SettingsStore for DefaultSettings {
     fn save(&self, _: &Settings) {}
 }
 
-/// `saves/<cartridge>.sav`.
+/// The battery save in a saves folder (`host::battery_file`).
 pub struct BatteryFile {
-    pub rom: PathBuf,
+    pub saves: PathBuf,
 }
 
 impl SaveStore for BatteryFile {
     fn save(&self, gb: &mut Gb) {
-        if let Err(e) = host::write_battery_save(gb, &self.rom) {
+        if let Err(e) = host::write_battery_save(gb, &host::battery_file(&self.saves)) {
             eprintln!("could not write the save file: {e}");
         }
     }
 }
 
-/// `saves/<cartridge>.zones`.
+/// No battery save kept (checks, and the editor's test games).
+pub struct NoBattery;
+
+impl SaveStore for NoBattery {
+    fn save(&self, _: &mut Gb) {}
+}
+
+/// The new zone progress in a saves folder (`host::zones_file`).
 pub struct ZoneFile {
-    pub rom: PathBuf,
+    pub saves: PathBuf,
 }
 
 impl ZoneProgressStore for ZoneFile {
     fn load(&self) -> Option<ZoneProgress> {
-        ZoneProgress::from_text(&std::fs::read_to_string(host::zones_path(&self.rom)).ok()?)
+        ZoneProgress::from_text(&std::fs::read_to_string(host::zones_file(&self.saves)).ok()?)
     }
     fn save(&self, progress: &ZoneProgress) {
-        let p = host::zones_path(&self.rom);
+        let p = host::zones_file(&self.saves);
         let written = p.parent().map_or(Ok(()), std::fs::create_dir_all).and_then(|_| std::fs::write(&p, progress.to_text()));
         if let Err(e) = written {
             eprintln!("could not write the new zones' progress: {e}");

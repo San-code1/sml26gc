@@ -17,13 +17,17 @@ fn first_rom_in(dir: &Path) -> Option<PathBuf> {
     v.into_iter().next()
 }
 
-/// Where to find the cartridge: the command line, a `rom` folder beside the
-/// program (or its parent folders), then the person's Games folder.
+/// Where to find the cartridge (for the tools and tests; the programs use the base cartridge):
+/// the command line, the base cartridge, a `rom` folder beside the program (or its parent
+/// folders), then the person's Games folder.
 pub fn find_rom(arg: Option<PathBuf>) -> Option<PathBuf> {
     if let Some(p) = arg {
         if p.is_dir() {
             return first_rom_in(&p);
         }
+        return Some(p);
+    }
+    if let Ok(p) = crate::base_cartridge::base_cartridge() {
         return Some(p);
     }
     if let Ok(exe) = std::env::current_exe() {
@@ -63,24 +67,4 @@ pub fn require_rom(arg: Option<PathBuf>) -> Result<PathBuf, String> {
         Some(p) => Err(format!("The cartridge file was not found:\n{}", p.display())),
         None => Err(NO_CARTRIDGE.to_string()),
     }
-}
-
-/// The cartridge file chosen last at the game's start screen, if it is still there.
-pub fn last_rom() -> Option<PathBuf> {
-    let text = std::fs::read_to_string(crate::paths::last_cartridge_path()).ok()?;
-    let p = PathBuf::from(text.trim());
-    p.is_file().then_some(p)
-}
-
-/// The cartridge file the remembered one points to, even if it is gone (to say so).
-pub fn last_rom_named() -> Option<PathBuf> {
-    let text = std::fs::read_to_string(crate::paths::last_cartridge_path()).ok()?;
-    let t = text.trim();
-    (!t.is_empty()).then(|| PathBuf::from(t))
-}
-
-/// Remember the cartridge file the game started with, for next time.
-pub fn remember_rom(rom: &Path) -> std::io::Result<()> {
-    let full = std::path::absolute(rom).unwrap_or_else(|_| rom.to_path_buf());
-    std::fs::write(crate::paths::last_cartridge_path(), full.to_string_lossy().as_bytes())
 }

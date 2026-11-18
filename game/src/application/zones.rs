@@ -6,7 +6,9 @@
 //! memory, are kept by a `ZoneProgressStore`, so a game saved inside a new zone resumes there.
 //! An exit into a new zone leads to its door (`new_zones::resolve`): arriving there from
 //! another zone, the port presses A for Mario; so does a secret exit into a new zone
-//! (`secret_exits`), arriving there from a level played elsewhere.
+//! (`secret_exits`), arriving there from a level played elsewhere. A new game whose start is
+//! in a new zone (`cart_model::start_point`) gets the zone once the file is chosen: the game
+//! sets Mario's point before it loads the map (research `newstartframes`).
 //!
 //! Added points (`cart_model::added_points`): the copy has the world map's in place; while a
 //! game zone is shown its own are written in (a new zone's come with the zone), and the flag
@@ -17,6 +19,7 @@ use crate::ports::ZoneProgressStore;
 use cart_model::added_points::{self, ZoneAdded};
 use cart_model::new_zones::{self, NewZone, CURRENT_FILE};
 use cart_model::secret_exits::{self, SecretTo};
+use cart_model::start_point;
 use cart_model::ram_map::{GAME_MODE, MAP_POINT};
 use gb_core::{Buttons, Gb};
 use std::rc::Rc;
@@ -66,6 +69,9 @@ pub struct ZoneSwap {
     added_undo: Vec<(usize, Vec<u8>)>,
     /// How many times the program in memory has been changed.
     swaps: u32,
+    /// Mario's start, when it is in a new zone: the zone and the point.
+    start: Option<(usize, u8)>,
+    last_mode: u8,
 }
 
 impl ZoneSwap {
@@ -82,7 +88,9 @@ impl ZoneSwap {
         let added = added_points::installed(g.cart().rom());
         let added_zones = added_points::read_zones(g.cart().rom());
         let store: Rc<dyn ZoneProgressStore> = Rc::from(store);
-        let mut s = ZoneSwap { swaps: 0, zones, progress, store, undo: Vec::new(), last_map: 0, enter_in: 0, secret_doors, played_from: None, last_point: 0, added, added_zones, added_in: None, added_rom: None, added_undo: Vec::new() };
+        let start = start_point::read(g.cart().rom());
+        let start = start.new_zone.filter(|&k| k < zones.len()).map(|k| (k, start.point));
+        let mut s = ZoneSwap { start, last_mode: 0, swaps: 0, zones, progress, store, undo: Vec::new(), last_map: 0, enter_in: 0, secret_doors, played_from: None, last_point: 0, added, added_zones, added_in: None, added_rom: None, added_undo: Vec::new() };
         if let Some(i) = s.progress.inside.clone() {
             match new_zones::writes_for(g.cart().rom(), &s.zones, i.zone).ok() {
                 Some(w) => s.undo = new_zones::apply(g.cart_mut().rom_mut(), &w),
@@ -124,6 +132,9 @@ impl ZoneSwap {
             return false;
         }
         let mode = g.read(GAME_MODE);
+        if std::mem::replace(&mut self.last_mode, mode) == FILE_SELECT && mode != FILE_SELECT && self.new_game_start(g) {
+            return true;
+        }
         if mode != MAP_MODE {
             if mode == LEVEL_MODE {
                 self.played_from = self.played_from.or(Some(self.last_point));
@@ -238,6 +249,19 @@ impl ZoneSwap {
         true
     }
 
+    /// A file just chosen on Mario's start in a new zone, never in it before (no progress of
+    /// it kept): the zone is put in before the map is drawn.
+    fn new_game_start(&mut self, g: &mut Gb) -> bool {
+        let Some((k, point)) = self.start else { return false };
+        let file = g.read(CURRENT_FILE);
+        if self.inside().is_some() || g.read(MAP_POINT) != point || self.progress.kept.contains_key(&(k, file)) {
+            return false;
+        }
+        self.enter(g, k);
+        self.store.save(&self.progress);
+        true
+    }
+
     fn enter(&mut self, g: &mut Gb, k: usize) {
         let Some(b) = new_zones::base_of(self.zones[k].base) else { return };
         let Ok(w) = new_zones::writes_for(g.cart().rom(), &self.zones, k) else { return };
@@ -259,5 +283,54 @@ impl ZoneSwap {
         let own = new_zones::progress(g, i.file, &flags);
         self.progress.kept.insert((i.zone, i.file), own);
         new_zones::set_progress(g, i.file, &flags, &values);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use cart_model::start_point::Start;
+    use std::cell::RefCell;
+
+    #[derive(Default)]
+    struct Kept(RefCell<Option<ZoneProgress>>);
+    impl ZoneProgressStore for Kept {
+        fn load(&self) -> Option<ZoneProgress> {
+            self.0.borrow().clone()
+        }
+        fn save(&self, p: &ZoneProgress) {
+            *self.0.borrow_mut() = Some(p.clone());
+        }
+    }
+
+    /// A project whose Mario's start is in an empty new zone, played with no save: the new
+    /// game is in the new zone, on its point (SHOT=file.png keeps the screen).
+    #[test]
+    fn a_new_game_begins_in_the_new_zone_holding_the_start() {
+        let Some(path) = host::find_rom(None) else { return };
+        let mut doc = project_model::document::EditorDocument::open(std::fs::read(path).unwrap(), None);
+        let k = doc.blank_zone(1).unwrap();
+        let point = doc.new_zones[k].entry;
+        doc.set_start(Start { point, new_zone: Some(k) });
+        doc.commit().unwrap();
+        let mut g = Gb::new(doc.rom.clone(), 1000).unwrap();
+        let mut swap = ZoneSwap::new(&mut g, Box::new(Kept::default()));
+        let mut on_map = 0;
+        for f in 0..3000u32 {
+            g.run_frame_with(if f % 50 < 5 && f > 120 { Buttons::START } else { Buttons::NONE });
+            g.clear_audio();
+            swap.update(&mut g);
+            if g.read(GAME_MODE) == MAP_MODE {
+                on_map += 1;
+                if on_map == 120 {
+                    break;
+                }
+            }
+        }
+        assert_eq!(on_map, 120, "the map is reached");
+        assert_eq!((swap.inside(), g.read(MAP_POINT)), (Some(k), point));
+        if let Ok(shot) = std::env::var("SHOT") {
+            host::png_out::save_png(&g, std::path::Path::new(&shot));
+        }
     }
 }

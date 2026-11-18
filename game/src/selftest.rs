@@ -10,7 +10,7 @@ pub fn dump(rom: Option<&Path>, dir: &Path, script: &str, frames: u32, every: u3
         eprintln!("no cartridge found");
         return;
     };
-    let mut gb = match load_gb(rom, 44100, false) {
+    let mut gb = match load_gb(rom, 44100, None) {
         Ok(g) => g,
         Err(e) => {
             eprintln!("{e}");
@@ -91,7 +91,7 @@ pub fn run(rom: Option<&Path>) -> String {
     let Some(rom) = rom else {
         return r#"{"version":1,"steps":[{"step":"move","passed":false,"detail":"no cartridge file found"},{"step":"act","passed":false,"detail":"no cartridge file found"},{"step":"hud","passed":false,"detail":"no cartridge file found"}]}"#.into();
     };
-    let mut gb = match load_gb(rom, 44100, false) {
+    let mut gb = match load_gb(rom, 44100, None) {
         Ok(g) => g,
         Err(e) => {
             let e = e.replace('"', "'").replace('\\', "/");

@@ -385,8 +385,9 @@ impl Menu {
                 let (x, y, w, h) = (2, 5, 156, 136);
                 c.frame(x, y, w, h);
                 c.title(x, y, w, t.controls);
+                // every binding, Restore and Back between the title and the footer
                 for i in 0..keys::KEYS + 2 {
-                    let ty = y + 9 + i as i32 * 9;
+                    let ty = y + 9 + i as i32 * 8;
                     if i < keys::KEYS {
                         c.text(x + 16, ty, t.buttons[i], shade(i));
                         let label = st.keys[i].label(st.lang);

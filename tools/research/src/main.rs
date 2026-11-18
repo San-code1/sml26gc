@@ -147,8 +147,10 @@ const COMMANDS: &[(&str, Run)] = &[
     ("bossprobe", |r, a| testing::boss_probe(r, a.num(1) as u8, a.num(2) as usize, a.num(3))),
     ("tablescheck", |r, _a| testing::tables_check(r)),
     ("typegroups", |r, _a| testing::type_groups(r)),
-    ("startobjects", |r, a| testing::start_objects_probe(r, a.num(1) as u8, a.hex(2) as u8, a.num(3) as u16)),
+    ("startobjects", |r, a| testing::start_objects_probe(r, a.num(1) as u8, a.hex(2) as u8, a.s(3).parse().unwrap_or(0), a.s(4).parse().unwrap_or(0), a.num(5) as u16, a.num(6) as u16)),
     ("firstscreen", |r, _a| testing::first_screen_objects(r)),
+    ("titleframes", |r, a| testing::title_frames(r, a.num(1), &a.path(2))),
+    ("levelobjects", |r, a| testing::level_objects_probe(r, a.num(1) as u8, a.num(2))),
     ("objecttiles", |r, _a| testing::object_tiles(r)),
     ("objectlist", |r, a| testing::object_list(r, &a.path(1))),
     ("walkright", |r, a| testing::walk_probe(r, a.num(1) as u8)),
@@ -167,6 +169,10 @@ const COMMANDS: &[(&str, Run)] = &[
     ("fulltiles", |r, _| testing::full_tiles(r)),
     ("mariooam", |r, a| testing::mario_oam(r, a.num(1) as usize)),
     ("addmember", |r, a| testing::add_member(r, &a.s(1), a.num(2) as usize, a.num(3) as usize, a.hex(4) as u8)),
+    ("startpoint", |r, _| testing::start_point(r)),
+    ("continueat", |r, a| testing::continue_at(r, a.hex(1) as u8)),
+    ("newstart", |r, a| testing::new_start(r, a.hex(1) as u8)),
+    ("newstartframes", |r, a| testing::new_start_frames(r, a.hex(1) as u8)),
     ("mapprobe", |r, a| testing::door_probe(r, a.hex(1) as u8, (a.num(2) > 0).then(|| a.num(2) as u8 - 1))),
     ("goalprobe", |r, a| levels::goal_probe(r, a.num(1) as u8, a.hex(2), a.hex(3), &a.s(4))),
 ];
@@ -202,6 +208,6 @@ mod tests {
         let a = Args(["watch", "x", "ffc2,a200-a202", "0x10", "12"].map(String::from).to_vec());
         assert_eq!(a.list(2), vec![0xFFC2, 0xA200, 0xA201, 0xA202]);
         assert_eq!((a.hex(3), a.big(3), a.num(4), a.num(9)), (0x10, 0x10, 12, 0));
-        assert_eq!(COMMANDS.len(), 109);
+        assert_eq!(COMMANDS.len(), 115);
     }
 }

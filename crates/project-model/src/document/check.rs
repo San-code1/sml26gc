@@ -81,7 +81,7 @@ pub fn check(c: &LevelContent, ends_with_boss: bool, bell_expected: bool) -> Vec
     if c.start.blocked(&c.map) {
         w.push(Warning::StartBlocked(c.start.sprite_at()));
     }
-    let first: Vec<(u16, u16)> = c.objs.iter().filter(|o| c.start.on_first_screen(o.x, o.y)).map(|o| (o.x, o.y)).collect();
+    let first: Vec<(u16, u16)> = c.objs.iter().filter(|o| c.start.passed_at_start(o.x)).map(|o| (o.x, o.y)).collect();
     if let Some(&p) = first.first() {
         w.push(Warning::OnFirstScreen(p, first.len()));
     }
@@ -128,17 +128,24 @@ mod tests {
     }
 
     #[test]
-    fn the_game_levels_have_no_warnings() {
+    fn the_game_levels_have_no_warnings_but_their_objects_missing_at_the_start() {
         let Some(rom) = host::find_rom(None) else {
             eprintln!("no cartridge found: test skipped");
             return;
         };
         let rom = std::fs::read(rom).unwrap();
+        // the game's own levels with objects far above or below the first screen that do not
+        // appear at the start either (research `firstscreen`, `startobjects`): level, how many
+        let missing = [(4, 1), (15, 3), (17, 2), (24, 2)];
         for l in 0..cart_model::levels::LEVELS {
             let c = super::super::level_from(&rom, l);
             let boss = level_goals::BOSS_LEVELS.contains(&l) && level_goals::cells(&c.map, Goal::Finish).is_empty();
             let bell = c.objs.iter().any(|o| o.kind == level_goals::BELL);
-            assert_eq!(check(&c, boss, bell), vec![], "level {l}");
+            let found: Vec<Warning> = check(&c, boss, bell);
+            match missing.iter().find(|m| m.0 == l) {
+                Some(&(_, n)) => assert!(matches!(found[..], [Warning::OnFirstScreen(_, k)] if k == n), "level {l}: {found:?}"),
+                None => assert_eq!(found, vec![], "level {l}"),
+            }
         }
     }
 
@@ -153,8 +160,9 @@ mod tests {
         let near = Obj { x: c.start.mario_x + 48, y: c.start.mario_y, kind: 9, flag: false };
         c.objs.push(near);
         c.objs.push(Obj { x: c.start.mario_x + 48, y: c.start.mario_y + 8, kind: 9, flag: false });
+        c.objs.push(Obj { x: c.start.mario_x + 120, y: 0, kind: 9, flag: false });
         c.objs.push(Obj { x: c.start.mario_x + 240, y: c.start.mario_y, kind: 9, flag: false });
-        assert_eq!(check(&c, false, true), vec![Warning::OnFirstScreen((near.x, near.y), 2)], "off the first screen they come in as usual");
+        assert_eq!(check(&c, false, true), vec![Warning::OnFirstScreen((near.x, near.y), 3)], "whatever their height; further on they come in as usual");
     }
 
     #[test]

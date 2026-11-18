@@ -14,11 +14,13 @@ pub struct Settings {
     pub lang: usize,
     /// The debug / cheats mode for games started from the start screen.
     pub cheats: bool,
+    /// What the start screen played last: a project's name, or empty for the original.
+    pub last_play: String,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Settings { keys: DEFAULT_KEYS, palette: 0, volume: 8, fullscreen: false, integer_scale: true, lang: LANG_EN, cheats: false }
+        Settings { keys: DEFAULT_KEYS, palette: 0, volume: 8, fullscreen: false, integer_scale: true, lang: LANG_EN, cheats: false, last_play: String::new() }
     }
 }
 
@@ -43,6 +45,7 @@ impl Settings {
                 "integer_scale" => s.integer_scale = v != "0",
                 "language" => s.lang = LANG_IDS.iter().position(|&id| id == v).unwrap_or(LANG_EN),
                 "cheats" => s.cheats = v == "1",
+                "last_play" => s.last_play = v.to_string(),
                 _ => {}
             }
         }
@@ -55,13 +58,14 @@ impl Settings {
             out += &format!("key{i}={}\n", k.id().unwrap_or("Unknown"));
         }
         out += &format!(
-            "palette={}\nvolume={}\nfullscreen={}\ninteger_scale={}\nlanguage={}\ncheats={}\n",
+            "palette={}\nvolume={}\nfullscreen={}\ninteger_scale={}\nlanguage={}\ncheats={}\nlast_play={}\n",
             self.palette,
             self.volume,
             self.fullscreen as u8,
             self.integer_scale as u8,
             LANG_IDS[self.lang.min(2)],
-            self.cheats as u8
+            self.cheats as u8,
+            self.last_play
         );
         out
     }

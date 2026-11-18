@@ -10,7 +10,8 @@ with ports and adapters around them. Behaviour is guarded by the golden fingerpr
 |---|---|
 | `crates/gb-core` | Domain: the Game Boy (CPU, bus, PPU, APU, cartridge MBCs). No I/O, no dependencies |
 | `crates/cart-model` | Domain: what is known about this cartridge (levels, objects, world map, patches, RAM map) and use cases on a running console |
-| `crates/host` | Shared adapters: finding the cartridge, file locations, battery saves, settings file, PNG output |
+| `crates/project-model` | Domain: a project of the editor (what is edited and its rules, level, zone, world map and project files) and the cartridge a project file makes over the base cartridge |
+| `crates/host` | Shared adapters: the base cartridge, file locations, a project's cartridge made from its file, battery saves, settings file, PNG output |
 | `game/` | Application: the game (`game.exe`) |
 | `editor/` | Application: the editor (`editor.exe`) |
 | `tools/research/` | Reverse-engineering CLI (`research.exe`) |
@@ -18,13 +19,15 @@ with ports and adapters around them. Behaviour is guarded by the golden fingerpr
 | `legacy/gb_port/` | The original single-crate port, kept as reference; built on its own |
 
 ```
- game ─────┐                     tools/research ─┐
- editor ───┼──► host ──► cart-model ──► gb-core ◄─┘
-           └──────────────►┘
+ game ─────┐                                       tools/research ─┐
+ editor ───┼──► host ──► project-model ──► cart-model ──► gb-core ◄─┘
+           └──────────────────►┘
 ```
 
 - `gb-core` knows nothing about the game, files, macroquad or cpal.
 - `cart-model` works on `&[u8]` ROM images and `GameBoy`; no files, no UI.
+- `project-model` works on projects and ROM images; no files, no UI. The game uses it only to
+  make a project's cartridge from its file (through `host::projects`).
 - `host` knows nothing about macroquad or cpal.
 - `game` and `editor` do not depend on each other; they share only the contract below.
 
@@ -54,13 +57,13 @@ Each module documents the ROM addresses and formats it relies on.
 | `level_tables` | A level's entries in the bank-0 tables of gravity, auto-scroll, camera margin and animated tiles |
 | `level_graphics` | Which levels draw the same objects (enemy sprites 0:362A and the object catalogue split at level 10) |
 | `enemy_sets` | A level's enemies chosen from several levels: the sprite block built for them, where the copy keeps it (the low copies of the map banks' maps) and the 0:362A entry |
-| `mixed_catalogues` | The bytes a copy saved with the dropped object catalogue mixing patch has changed, and giving the game's back |
 | `blank_level` | An empty map and start made from a game level's (its sky, a floor under Mario's start) |
 | `objects` | Object lists: 3-byte format, reading, re-packing |
 | `patch` | The 1 MB edited copy (twin banks $20-$3F) that gives levels and objects more room |
 | `layout` | Each zone's space for its maps and packing edited maps back |
 | `extra_levels` | Levels 32+, stored in banks $38-$3F and played in place of a base level |
 | `new_zones` | New zones, stored in bank $31 and played in place of a base zone (point numbers, entry code, progress kept apart) |
+| `start_point` | Where every new game begins (the new save slot's first map byte) and the new zone it is in |
 | `world` | World map picture and the level each map point opens |
 | `zone_maps` | The zones' one-screen map pictures |
 | `original_notes` | What the original game does with some map points (Space Zone flight, entrance twins, unused door) |
@@ -134,15 +137,16 @@ trace, ROM views, and checks that play the edited data in the emulator (`routech
 
 | Item | Format |
 |---|---|
-| Start the game | `game.exe <rom> [--level N [--start X,Y]] [--cheats]` (no rom: start screen to choose one; `--start`: Mario's left x and feet y for that start only) |
-| Edited copy | `edits/<name> (edit).gb` |
-| Battery saves | `saves/<name>.sav` |
-| New zone and added point progress (game only) | `saves/<name>.zones` |
-| Last cartridge chosen | `last_cartridge.txt` |
+| Start the game | `game.exe <rom> [--project NAME \| --test [--lives N] [--coins N]] [--level N [--start X,Y]] [--cheats]` (no rom: the start screen; `--test`: no saves, those lives and coins, 99 and 999 when not given; `--start`: Mario's left x and feet y for that start only) |
+| Start the editor (from the game) | `editor.exe [--project NAME \| --new-project]` (the project opened, or the project screen typing a new one) |
+| Base cartridge (checked by SHA-1) | `base_cartridge.txt` |
+| A project (its file, and the cartridge made from it over the base cartridge when missing or older) | `editor/projects/<name>/<name>.nmbproject`, `editor/projects/<name>/<base name> - <name>.gb` |
+| Battery saves | `saves/vanilla/game.sav`, `saves/<project>/game.sav` |
+| New zone and added point progress (game only) | `saves/vanilla/zones.txt`, `saves/<project>/zones.txt` |
 | Settings (the editor reads the language) | `settings.cfg` |
 | Editor settings (palette zoom, listening volume) | `editor.cfg` |
 | Captured object pictures (editor only) | `cache/looks-<hash of the cartridge>.txt` |
-| Level, zone and project files (editor only) | `exports/*.nmblevel`, `exports/*.nmbzone`, `exports/*.nmbproject` |
+| Level, zone, world map and project files (editor only) | `exports/levels/*.nmblevel`, `exports/zones/*.nmbzone`, `exports/world/*.nmbworld`, `exports/projects/<name>/<name>.nmbproject` (any folder may be chosen) |
 
 Paths and names live in `host::paths`, so both programs compute them the same way.
 

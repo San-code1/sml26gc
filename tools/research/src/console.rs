@@ -12,10 +12,11 @@ pub fn use_battery_save(on: bool) {
     WITH_SAVE.store(on, std::sync::atomic::Ordering::Relaxed);
 }
 
-/// The cartridge on a Game Boy (with the player's save only under `--with-save`), or None
+/// The cartridge on a Game Boy (with the original's save only under `--with-save`), or None
 /// if it can't be loaded.
 pub fn load(rom: &Path) -> Option<Gb> {
-    host::load_gb(rom, 44100, WITH_SAVE.load(std::sync::atomic::Ordering::Relaxed)).ok()
+    let save = WITH_SAVE.load(std::sync::atomic::Ordering::Relaxed).then(|| host::battery_file(&host::saves_dir(None)));
+    host::load_gb(rom, 44100, save.as_deref()).ok()
 }
 
 /// Play frame `f` of a button script (sound dropped).

@@ -9,12 +9,13 @@ mod mods;
 pub use mods::SavedMods;
 mod points;
 mod restore;
+mod start;
 mod zones;
 
 pub use added::ZONE_POINTS;
 
 pub use zones::{ZonePoints, ZoneRefusal};
-use super::files::{self, FileError, LevelFile, ProjectFile};
+use super::files::{self, FileError, LevelFile, ProjectFile, WorldFile};
 use super::history::History;
 use super::stamp::{Area, Stamp};
 use cart_model::error::{BankUsage, ObjectsUsage};
@@ -34,7 +35,8 @@ use cart_model::objects::{self, Obj};
 use cart_model::original_notes::{self, Note};
 use cart_model::new_zones::ZonePoint;
 use cart_model::original_points::OnMap;
-use cart_model::{added_points, checkpoint, layout, mixed_catalogues, new_zones, patch, world, zone_maps, CartError};
+use cart_model::start_point::{self, Start as GameStart};
+use cart_model::{added_points, checkpoint, layout, level_graphics, new_zones, patch, world, zone_maps, CartError};
 
 /// What a painting tool works on: a level's blocks or a map picture's tiles.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -188,6 +190,9 @@ pub struct EditorDocument {
     pub new_zones_dirty: bool,
     /// The point each zone a door enters is entered on (`doors::INTO` order).
     pub entries: Vec<u8>,
+    /// Where every new game begins (`cart_model::start_point`).
+    pub start: GameStart,
+    pub start_dirty: bool,
     /// The map's paths and places as the original has them.
     original_routes: MapRoutes,
     /// What the original game does with each of its points besides level, paths and doors.
@@ -207,7 +212,7 @@ pub struct EditorDocument {
 }
 
 type PointsState = (Vec<u8>, MapRoutes, Doors, Vec<ZonePoints>, Vec<u8>, usize, Vec<Vec<ZonePoint>>, Vec<u8>);
-type MapState = ((Vec<u8>, Vec<Vec<u8>>), PointsState);
+type MapState = ((Vec<u8>, Vec<Vec<u8>>), PointsState, GameStart);
 
 /// `points` with the game's special values (the castle door's $FF) back where a copy saved
 /// by an editor that lost them on deleting a level has "no level" (the editor cannot set
@@ -282,6 +287,8 @@ impl EditorDocument {
             new_zones,
             new_zones_dirty: false,
             entries: entries_of(&rom),
+            start: start_point::read(&rom),
+            start_dirty: false,
             original_routes: map_routes::read(&original),
             original_notes: (0..map_routes::POINTS as u8).map(|p| original_notes::notes(&original, p)).collect(),
             map_history: History::default(),
@@ -446,9 +453,9 @@ impl EditorDocument {
     pub fn drop_other_catalogue(&mut self) -> (Vec<usize>, usize) {
         let (mut levels, mut objects) = (Vec::new(), 0);
         for l in 0..self.levels.len() {
-            let own = mixed_catalogues::catalogue(self.base_of(l));
+            let own = level_graphics::catalogue(self.base_of(l));
             let Some(set) = self.levels[l].content.enemies.clone() else { continue };
-            for e in set.enemies.iter().filter(|e| mixed_catalogues::catalogue(e.level as usize) != own) {
+            for e in set.enemies.iter().filter(|e| level_graphics::catalogue(e.level as usize) != own) {
                 let mut kept = self.levels[l].content.enemies.clone().unwrap_or(set.clone());
                 kept.enemies.retain(|m| m != e);
                 objects += self.drop_set_enemy(l, kept, e.kind);
@@ -603,6 +610,7 @@ impl EditorDocument {
             new_zones: (0..self.new_zones.len()).map(|k| self.new_zone(k)).collect(),
             entries: self.entries.clone(),
             zone_points: self.zones_added(),
+            start: self.start,
         }
     }
 
@@ -633,6 +641,8 @@ impl EditorDocument {
         self.added_kept = added::kept_from(p.zone_points);
         self.shuts = added::shuts_from(&p.shuts);
         self.entries = if p.entries.len() == doors::INTO.len() { p.entries } else { entries_of(&self.original) };
+        self.start = p.start;
+        self.start_dirty = true;
         self.new_zones_dirty = !self.new_zones.is_empty() || !p.new_zones.is_empty();
         let count = p.new_zones.len();
         let (zones, pictures): (Vec<ZonePoints>, Vec<Vec<u8>>) = p.new_zones.into_iter().map(|z| ZonePoints::from(zones::settled(z, count))).unzip();
@@ -648,6 +658,49 @@ impl EditorDocument {
         self.doors_dirty = true;
         self.map_history = History::default();
         Ok(())
+    }
+
+    /// The world map as a world map file (`files::WorldFile`).
+    pub fn world_file(&self) -> WorldFile {
+        let (routes, points) = self.world_routes();
+        WorldFile { cartridge: files::cartridge_id(&self.original), world: self.world.clone(), points, routes, doors: self.doors.clone(), shuts: self.world_shuts(), start: self.map_start(OnMap::World) }
+    }
+
+    /// Put a world map file in place of the world map (picture, point levels, paths, places,
+    /// added points, doors), marked changed, nothing written until the next save, the map undo
+    /// history emptied. Points opening a new level the project does not have open none, and
+    /// exits into a missing new zone lead nowhere: how many of each. Refused when the file was
+    /// made over another cartridge.
+    pub fn replace_world(&mut self, w: WorldFile) -> Result<(usize, usize), FileError> {
+        if w.cartridge != files::cartridge_id(&self.original) {
+            return Err(FileError::OtherCartridge);
+        }
+        self.show_added(OnMap::World);
+        let mut points = with_specials(&self.original, w.points);
+        let mut cleared = 0;
+        for p in points.iter_mut() {
+            if (*p as usize) >= self.levels.len() && *p != world::NO_LEVEL && *p != 0xFF {
+                *p = world::NO_LEVEL;
+                cleared += 1;
+            }
+        }
+        let mut doors = w.doors;
+        let mut exits = 0;
+        for e in &mut doors.exits {
+            if matches!(e.1, Leads::NewZone(j) if j >= self.new_zones.len()) {
+                e.1 = Leads::World(doors::NONE);
+                exits += 1;
+            }
+        }
+        self.world = w.world;
+        (self.points, self.routes, self.doors) = (points, w.routes, doors);
+        self.shuts = added::shuts_from(&w.shuts);
+        self.world_dirty = true;
+        self.points_dirty = true;
+        self.routes_dirty = true;
+        self.doors_dirty = true;
+        self.map_history = History::default();
+        Ok((cleared, exits))
     }
 
     /// Delete new level `l`; the ones after it move down a number, and the points of every
@@ -752,19 +805,21 @@ impl EditorDocument {
     /// Remember the maps (pictures and points) before a change, for undo.
     pub fn map_snapshot(&mut self) {
         let points = (self.points.clone(), self.routes.clone(), self.doors.clone(), self.new_zones.clone(), self.entries.clone(), self.added_on, self.added_kept.clone(), self.shuts.clone());
-        self.map_history.record(((self.world.clone(), self.zones.clone()), points));
+        self.map_history.record(((self.world.clone(), self.zones.clone()), points, self.start));
     }
 
     fn map_swap(&mut self, undo: bool) -> bool {
         let pictures = (std::mem::take(&mut self.world), std::mem::take(&mut self.zones));
         let points = (std::mem::take(&mut self.points), std::mem::take(&mut self.routes), std::mem::take(&mut self.doors), std::mem::take(&mut self.new_zones), std::mem::take(&mut self.entries), self.added_on, std::mem::take(&mut self.added_kept), std::mem::take(&mut self.shuts));
-        let mut now = (pictures, points);
+        let mut now = (pictures, points, self.start);
         let done = if undo { self.map_history.undo(&mut now) } else { self.map_history.redo(&mut now) };
-        let (pictures, points) = now;
+        let (pictures, points, start) = now;
+        self.start = start;
         (self.world, self.zones) = pictures;
         (self.points, self.routes, self.doors, self.new_zones, self.entries, self.added_on, self.added_kept, self.shuts) = points;
         let left = if undo { self.map_history.next_redo() } else { self.map_history.next_undo() };
-        if let (true, Some(((world, zones), (points, routes, doors, new_zones, entries, added_on, added_kept, shuts)))) = (done, left) {
+        if let (true, Some(((world, zones), (points, routes, doors, new_zones, entries, added_on, added_kept, shuts), start))) = (done, left) {
+            self.start_dirty |= *start != self.start;
             self.world_dirty |= *world != self.world || *zones != self.zones;
             self.points_dirty |= *points != self.points || *shuts != self.shuts;
             self.routes_dirty |= *routes != self.routes || *added_on != self.added_on || *added_kept != self.added_kept;
@@ -1047,6 +1102,13 @@ impl EditorDocument {
     /// Write every change into the cartridge image (`rom`). Zones already written stay
     /// written if a later one doesn't fit.
     pub fn commit(&mut self) -> Result<Vec<Saved>, CartError> {
+        if !self.start_ok() {
+            return Err(CartError::StartMissing);
+        }
+        if !start_point::write(&mut self.rom, self.start) {
+            return Err(CartError::UnknownVersion);
+        }
+        self.start_dirty = false;
         let mut notes = Vec::new();
         let pictures_changed = self.world_dirty;
         let mut banks: Vec<u8> = (0..LEVELS).filter(|&l| self.levels[l].blocks_dirty).map(|l| levels::header(&self.rom, l).bank).collect();
@@ -1113,7 +1175,6 @@ impl EditorDocument {
         }
         let mut rom = self.rom.clone();
         enemy_sets::store(&mut rom, &self.original, &sets)?;
-        mixed_catalogues::remove(&mut rom, &self.original);
         self.rom = rom;
         Ok(())
     }
@@ -1270,6 +1331,24 @@ mod tests {
     fn open() -> Option<EditorDocument> {
         let rom = host::find_rom(None)?;
         Some(EditorDocument::open(std::fs::read(rom).ok()?, None))
+    }
+
+    #[test]
+    fn a_world_map_moves_to_another_project() {
+        let Some(mut a) = open() else { return };
+        let Some(mut b) = open() else { return };
+        a.world[0] ^= 1;
+        let w = a.world_file();
+        assert_eq!(b.replace_world(w.clone()), Ok((0, 0)));
+        assert_eq!(b.world, a.world);
+        assert!(b.world_dirty);
+        // a point opening a new level the project does not have opens none
+        let mut far = w;
+        far.points[0] = 40;
+        assert_eq!(b.replace_world(far.clone()), Ok((1, 0)));
+        assert_eq!(b.points[0], world::NO_LEVEL);
+        far.cartridge ^= 1;
+        assert_eq!(b.replace_world(far), Err(FileError::OtherCartridge));
     }
 
     #[test]

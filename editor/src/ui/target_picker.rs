@@ -2,7 +2,7 @@
 //! a time (tabs over the map), and a click picks a world map point or a zone (a door or an
 //! exit into a zone enters it on the point clicked, which becomes that zone's entry point for
 //! every door and exit into it). Esc or right click cancels.
-use super::shortcuts::{with_keys, Action};
+use super::shortcuts::Action;
 use super::widgets::*;
 use super::Editor;
 use cart_model::added_points;
@@ -281,7 +281,7 @@ impl Editor {
             return None;
         }
         y += 30.0;
-        if button(Rect::new(10.0, y, 276.0, 26.0), &with_keys(tr(self.es, "Cancel", "Cancelar"), Action::Escape), false, 15.0) {
+        if self.tool_button(Rect::new(10.0, y, 276.0, 26.0), tr(self.es, "Cancel", "Cancelar"), Action::Escape, false) {
             self.finish_picking(None);
         }
         None

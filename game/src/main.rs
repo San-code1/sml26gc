@@ -4,7 +4,8 @@
 //! Layers: `domain` (rules, no I/O) ← `application` (session use case) ← `ports` (traits)
 //! ← `adapters` (macroquad, cpal, files, Win32). This file is the composition root: it
 //! reads the command line, picks the adapters and starts the window loop. Opened without
-//! a cartridge file, it first shows the start screen to choose one (`macroquad_picker`).
+//! a cartridge file, it first shows the start screen: the base cartridge, then what to play
+//! (`macroquad_picker`).
 mod adapters;
 mod application;
 mod checks;
@@ -13,7 +14,7 @@ mod ports;
 mod selftest;
 
 use adapters::cpal_audio::Audio;
-use adapters::fs_stores::{BatteryFile, DefaultSettings, NoZoneProgress, SettingsFile, ZoneFile};
+use adapters::fs_stores::{BatteryFile, DefaultSettings, NoBattery, NoZoneProgress, SettingsFile, ZoneFile};
 use adapters::macroquad_display::{save_window_png, MacroquadDisplay, MacroquadWindow};
 use adapters::macroquad_keyboard::MacroquadKeyboard;
 use adapters::macroquad_picker::{Choice, Picker};
@@ -21,7 +22,7 @@ use adapters::win32;
 use application::preferences::Preferences;
 use application::session::{Flow, GameSession, SessionParts};
 use domain::keys::Key;
-use ports::{AudioOut, Keyboard, SettingsStore, ZoneProgressStore};
+use ports::{AudioOut, Keyboard, SaveStore, SettingsStore, ZoneProgressStore};
 use std::path::PathBuf;
 
 #[derive(Default)]
@@ -41,6 +42,14 @@ struct Args {
     /// With `level`: Mario's left x and feet y in the level, for this start only (the level
     /// editor's Play from here).
     start: Option<(u16, u16)>,
+    /// The editor's test game: no saves, Mario with `lives` and `coins` (the most when not given).
+    test: bool,
+    lives: Option<u8>,
+    coins: Option<u16>,
+    /// The project whose saves the game on the command line uses (none: the original's).
+    project: Option<String>,
+    /// With `--screenshot`: the start screen (a check picture of it).
+    start_screen: bool,
 }
 
 fn parse_args(v: &[String]) -> Args {
@@ -58,8 +67,15 @@ fn parse_args(v: &[String]) -> Args {
             "--rom" => a.rom = Some(next.into()),
             "--level" => a.level = next.parse().ok(),
             "--start" => a.start = next.split_once(',').and_then(|(x, y)| Some((x.trim().parse().ok()?, y.trim().parse().ok()?))),
-            "--cheats" => {
-                a.cheats = true;
+            "--project" => a.project = Some(next),
+            "--lives" => a.lives = next.parse().ok(),
+            "--coins" => a.coins = next.parse().ok(),
+            "--cheats" | "--test" | "--start-screen" => {
+                match v[i].as_str() {
+                    "--test" => a.test = true,
+                    "--start-screen" => a.start_screen = true,
+                    _ => a.cheats = true,
+                }
                 i += 1;
                 continue;
             }
@@ -142,30 +158,41 @@ fn main() {
     macroquad::Window::from_config(conf, run(args, found, checking, title));
 }
 
-/// Plug the adapters into a session, or keep the error to show it.
-fn start(args: &Args, found: Result<PathBuf, String>, checking: bool, audio: &dyn AudioOut) -> Result<GameSession, (Preferences, String)> {
+/// Plug the adapters into a session, or keep the error to show it. `saves`: the folder of the
+/// game's saves (none: nothing read or written, for checks and the editor's test games).
+fn start(args: &Args, found: Result<PathBuf, String>, saves: Option<PathBuf>, checking: bool, audio: &dyn AudioOut) -> Result<GameSession, (Preferences, String)> {
     let settings: Box<dyn SettingsStore> = if checking { Box::new(DefaultSettings) } else { Box::new(SettingsFile) };
     let prefs = Preferences::new(settings, Box::new(MacroquadWindow));
     let rom = match found {
         Ok(r) => r,
         Err(e) => return Err((prefs, e)),
     };
-    let gb = match host::load_gb(&rom, audio.sample_rate(), !checking) {
+    let battery = saves.as_deref().map(host::battery_file);
+    let gb = match host::load_gb(&rom, audio.sample_rate(), battery.as_deref()) {
         Ok(g) => g,
         Err(e) => return Err((prefs, e)),
     };
     let cheats = !checking && (args.cheats || prefs.settings.cheats);
-    let zones: Box<dyn ZoneProgressStore> = if checking { Box::new(NoZoneProgress) } else { Box::new(ZoneFile { rom: rom.clone() }) };
+    let (zones, store): (Box<dyn ZoneProgressStore>, Box<dyn SaveStore>) = match saves {
+        Some(saves) => (Box::new(ZoneFile { saves: saves.clone() }), Box::new(BatteryFile { saves })),
+        None => (Box::new(NoZoneProgress), Box::new(NoBattery)),
+    };
     let parts = SessionParts {
         prefs,
         zones,
-        saves: Box::new(BatteryFile { rom }),
+        saves: store,
         start_level: args.level,
         start_at: args.start,
         checking,
         cheats,
+        test: args.test.then(|| (args.lives.unwrap_or(99), args.coins.unwrap_or(999))),
     };
     Ok(GameSession::new(gb, parts))
+}
+
+/// Where the saves of the cartridge on the command line go.
+fn command_line_saves(args: &Args, checking: bool) -> Option<PathBuf> {
+    (!checking && !args.test).then(|| host::saves_dir(args.project.as_deref()))
 }
 
 /// What the window shows: the start screen, the game, or why it could not start.
@@ -180,11 +207,11 @@ async fn run(args: Args, found: Result<PathBuf, String>, checking: bool, title: 
     let audio = if checking { Audio::silent() } else { Audio::new() };
     let keyboard = MacroquadKeyboard;
     let mut display = MacroquadDisplay::new();
-    // no cartridge on the command line: choose one first (checks keep finding it themselves)
-    let mut app = if args.rom.is_none() && !checking {
+    // no cartridge on the command line: the start screen first (checks find it themselves)
+    let mut app = if args.rom.is_none() && (!checking || args.start_screen) {
         App::Pick(Picker::new(&SettingsFile.load()))
     } else {
-        match start(&args, found, checking, &audio) {
+        match start(&args, found, command_line_saves(&args, checking), checking, &audio) {
             Ok(s) => App::Run(s),
             Err((prefs, e)) => App::Fail(prefs, e),
         }
@@ -203,6 +230,17 @@ async fn run(args: Args, found: Result<PathBuf, String>, checking: bool, title: 
                     Choice::Wait => None,
                     Choice::Quit => break,
                     Choice::Play(p) => Some(p),
+                    Choice::Edit(project) => {
+                        let mut cmd = std::process::Command::new(host::editor_exe());
+                        match &project {
+                            Some(p) => cmd.arg("--project").arg(p),
+                            None => cmd.arg("--new-project"),
+                        };
+                        if let Err(e) = cmd.spawn() {
+                            picker.error = Some(format!("{}: {e}", host::editor_exe().display()));
+                        }
+                        None
+                    }
                     Choice::Cheats => {
                         picker.cheats = !picker.cheats;
                         let mut s = SettingsFile.load();
@@ -212,21 +250,36 @@ async fn run(args: Args, found: Result<PathBuf, String>, checking: bool, title: 
                     }
                     Choice::Browse => {
                         let (t, kind) = picker.dialog_texts();
-                        win32::pick_cartridge(&title, picker.start_dir().as_deref(), t, kind)
+                        if let Some(p) = win32::pick_cartridge(&title, picker.start_dir().as_deref(), t, kind) {
+                            let last = SettingsFile.load().last_play;
+                            match host::base_cartridge::choose(&p) {
+                                Ok(()) => {
+                                    picker.error = None;
+                                    picker.reload(&last);
+                                }
+                                Err(e) => picker.error = Some(e.text(picker.es())),
+                            }
+                        }
+                        None
                     }
                 };
-                if let Some(rom) = chosen {
-                    match start(&args, Ok(rom.clone()), checking, &audio) {
+                let chosen = chosen.and_then(|p| match picker.ready(&p) {
+                    Ok(p) => Some(p),
+                    Err(e) => {
+                        picker.error = Some(e);
+                        None
+                    }
+                });
+                if let Some(play) = chosen {
+                    match start(&args, Ok(play.rom.clone()), Some(play.saves()), checking, &audio) {
                         Ok(s) => {
-                            // it starts: remembered for next time
-                            let _ = host::remember_rom(&rom);
+                            // it starts: chosen first next time
+                            let mut settings = SettingsFile.load();
+                            settings.last_play = play.project.clone().unwrap_or_default();
+                            SettingsFile.save(&settings);
                             next = Some(App::Run(s));
                         }
-                        Err((_, e)) => {
-                            picker.offer = Some(rom);
-                            picker.remembered = false;
-                            picker.error = Some(e);
-                        }
+                        Err((_, e)) => picker.error = Some(e),
                     }
                 }
             }
