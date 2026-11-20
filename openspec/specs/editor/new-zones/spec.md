@@ -54,6 +54,9 @@ and kept in zone and project files. A zone with no name SHALL be shown as "New z
 The Restore button (formerly Original) SHALL put back, undoably, only the level or map shown
 as the game has it: a level's blocks and objects, a map's picture and points. A new level or
 new zone SHALL be restored as its base is in the game, keeping its name (and a zone its door).
+A new level or new zone that has a restore point (it was imported or replaced from a file)
+SHALL instead be restored as the file had it, keeping a zone's door, and the status bar SHALL
+say so with the file's origin.
 
 #### Scenario: Restore the world map
 - **WHEN** the world map has new points and a door into a new zone and the user chooses Restore
@@ -66,6 +69,18 @@ new zone SHALL be restored as its base is in the game, keeping its name (and a z
 #### Scenario: Restore a new zone
 - **WHEN** a new zone made from the Pumpkin Zone, with points added and a door on $07, is shown and the user chooses Restore
 - **THEN** its picture and points are the Pumpkin Zone's in the game, and its door is still $07
+
+#### Scenario: Restore an imported level
+- **WHEN** a level file exported from level 05 is imported as new level 33, level 33 is edited and the user chooses Restore
+- **THEN** level 33 is as the file had it (base, header, blocks, objects, name, tables, enemies, secret exit), not as base level 05 is in the game, and the status bar says it was restored as imported from level 05
+
+#### Scenario: Restore an imported zone
+- **WHEN** a zone file is imported as new zone 2, a door on $07 is set, its points are changed and the user chooses Restore
+- **THEN** new zone 2's picture and points are as the file had them, and its door is still $07
+
+#### Scenario: Restore point after reopening
+- **WHEN** a level imported from a file is saved, the editor is closed and opened again on the project, and the user chooses Restore on that level
+- **THEN** it is restored as the file had it
 
 ### Requirement: Choosing where a door or exit leads on the maps
 Where a door or an exit leads SHALL be chosen by looking, not by stepping through a list:

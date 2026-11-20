@@ -75,3 +75,14 @@ back); the controller's guide button, when it has one, SHALL open the menu anywh
 #### Scenario: Volume from the controller
 - **WHEN** Start is pressed on the controller in a level, then Sound is chosen and Right pressed
 - **THEN** the volume goes up, as with the keyboard
+
+### Requirement: A key to restart the level
+The game SHALL have a bindable Restart level key (F8 and the controller's north face button by default), shown in Controls; in a level, with the cheats mode on or in a test game, it SHALL restart the level at once as the menu's Restart level does, without asking.
+
+#### Scenario: F8 in a test game
+- **WHEN** a test game from Play from here is in its level and the player presses F8
+- **THEN** the level begins again at the chosen place, with no life lost
+
+#### Scenario: A plain game
+- **WHEN** the cheats mode is off in a game not started from the editor and the player presses F8
+- **THEN** nothing happens

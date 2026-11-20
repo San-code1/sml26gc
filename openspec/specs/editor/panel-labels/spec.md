@@ -32,3 +32,14 @@ editors, the choosers and the catalogue.
 #### Scenario: A point's value
 - **WHEN** the mouse is on the Points tab's Opens row whose level name is cut
 - **THEN** a tooltip shows it whole
+
+### Requirement: Level and zone actions always shown
+The level editor's Copy level, Blank level and Delete level, and the zone editor's Copy zone, Blank zone and Delete zone, SHALL always be shown under the level or map picker, whether its list is open or not; an action that does not apply to the level or map shown (copying the world map, deleting a game level or zone) SHALL be shown unavailable.
+
+#### Scenario: Picker closed
+- **WHEN** the level list is closed
+- **THEN** Copy level, Blank level and Delete level are shown under the level picker
+
+#### Scenario: A game level
+- **WHEN** level 05 of the game is shown
+- **THEN** Delete level is shown unavailable and does nothing

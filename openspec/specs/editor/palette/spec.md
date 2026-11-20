@@ -153,3 +153,71 @@ while an object is selected.
 #### Scenario: Changing the selected object
 - **WHEN** an object is selected and a type is Shift+clicked in the palette
 - **THEN** the selected object becomes that type
+
+### Requirement: Nothing chosen until the user chooses
+The block, tile and object palettes SHALL have nothing chosen when a project is opened and whenever another level or map is shown; painting on the level or map SHALL do nothing until the user chooses a block or tile (in the palette or by picking one from the grid), and clicking the level SHALL add no object until the user chooses a type.
+
+#### Scenario: Opening a project
+- **WHEN** the user opens a project and clicks on the level with the Pencil
+- **THEN** no block is painted, the palette outlines no block and its title says nothing is chosen
+
+#### Scenario: Another level or map
+- **WHEN** block $12 is chosen and the user shows another level, or another map in the zone editor
+- **THEN** no block or tile is chosen there until the user picks one
+
+### Requirement: The chosen cell stands out
+The chosen block, tile or object type SHALL be outlined in the palette with a bright mark colour framed in black, visible over light and dark cells alike.
+
+#### Scenario: A dark block chosen
+- **WHEN** the user chooses a dark block in the block palette
+- **THEN** its outline is bright and framed in black, plainly visible over it and the cells around
+
+### Requirement: Blocks and Objects show the palette
+In the level editor, choosing Blocks or Objects (button or key) SHALL show the Palette tab.
+
+#### Scenario: From the Level tab
+- **WHEN** the Level tab is shown and the user presses Objects
+- **THEN** the Palette tab is shown with the object palette
+
+### Requirement: Recently chosen
+The block, tile and object palettes SHALL show, above their cells, the last 8 single blocks, tiles or object types chosen in the level or map shown, newest first; a click on one chooses it again. The row SHALL be empty until something is chosen there.
+
+#### Scenario: Going back to a block
+- **WHEN** the user chooses block $12, then $30, then clicks $12 in the recent row
+- **THEN** $12 is chosen and the row shows $12 then $30
+
+### Requirement: A zone's tiles as its picture
+On a game zone or a new zone, the tile palette SHALL show the game's own picture of the zone (a new zone's base zone), 20 tiles per row as the game draws it, then under a rule the tiles that picture does not use; a click or a drag on it chooses those tiles as the brush. The world map's palette SHALL stay its 256 tiles in order.
+
+#### Scenario: Taking the tree's trunk
+- **WHEN** the Tree Zone is shown and the user drags over the trunk in the palette
+- **THEN** the brush is those tiles as the picture has them, and painting puts the trunk down
+
+#### Scenario: A tile the picture leaves out
+- **WHEN** the user clicks a tile under the rule
+- **THEN** that tile is the brush
+
+### Requirement: The world map's pieces
+On the world map, the tile palette SHALL show ready-made pieces of the game's own world map picture (the zones' landmarks, Wario's castle, the houses, the bridge, the ladder, the pipe), named by hand, side by side, then under a rule the tiles they leave out. The piece under the mouse SHALL be named in a tooltip; a drag SHALL stay inside the piece it starts in, so dragging past a piece takes all of it.
+
+#### Scenario: Taking Wario's castle
+- **WHEN** the user drags from the top left of Wario's castle in the palette to beyond its bottom right
+- **THEN** the brush is the whole castle as the game draws it
+
+#### Scenario: A loose tile
+- **WHEN** the user clicks a tile under the rule
+- **THEN** that tile is the brush
+
+### Requirement: The palette title names the piece
+When the brush was taken from a named piece of the map tile palette, the palette's title SHALL show the piece's name and the brush's size instead of the first tile's number.
+
+#### Scenario: Wario's castle
+- **WHEN** the user takes the whole of Wario's castle in the world map's palette
+- **THEN** the title reads TILES  Wario's castle  14x8
+
+### Requirement: Searching objects by name
+The object palette SHALL have a search field under its category filter: the types shown are those whose name (in the editor's language) holds the text typed, or whose number it is (12, #12, $12). While it is typed in it takes the keyboard; Esc or its x button clears it.
+
+#### Scenario: Looking for the bell
+- **WHEN** the user types bell in the search field (campana in Spanish)
+- **THEN** only the bells the level offers are shown

@@ -70,3 +70,26 @@ keep (the project's or the file's); the other SHALL be dropped.
 #### Scenario: Two starts
 - **WHEN** a zone file holding Mario's start is imported as a new zone into a project whose start is on the world map
 - **THEN** the editor asks which start to keep, and afterwards the project has exactly one
+
+### Requirement: A zone file's origin
+An exported zone file SHALL say where it came from: the project's name and the map exported
+(the game zone, or the new zone and its name). Files without it SHALL still be read, with an
+unknown origin. World map files are not concerned.
+
+#### Scenario: Export marks the origin
+- **WHEN** new zone 1 "Forest" of project "Demo" is exported
+- **THEN** the file says it comes from new zone 1 "Forest" of project "Demo"
+
+### Requirement: An imported zone's restore point
+A zone file imported as a new zone, or replacing a new zone, SHALL keep the file's zone and
+origin as that new zone's restore point (see Restore). The restore point SHALL be undone and
+redone with the import or replacement, SHALL follow the zone when other new zones are removed,
+and SHALL be kept with the project once saved. New zones made any other way SHALL have none.
+
+#### Scenario: Restore point kept on save
+- **WHEN** a zone file is imported as a new zone, the project is saved and opened again, and Restore is chosen on that zone
+- **THEN** the zone is as the file had it
+
+#### Scenario: A zone made from a game zone
+- **WHEN** a new zone is made from the Pumpkin Zone and Restore is chosen on it
+- **THEN** it is restored as the Pumpkin Zone is in the game

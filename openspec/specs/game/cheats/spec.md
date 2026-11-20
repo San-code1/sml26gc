@@ -162,3 +162,43 @@ places are in use.
 #### Scenario: Enemies labelled
 - **WHEN** Objects view is on and a Goomba walks on the screen
 - **THEN** its type number is drawn over it and moves with it
+
+### Requirement: Restart level
+In a level, the game's menu SHALL offer Restart level (just above Back to map when that is offered) when the cheats mode is on or the game is a test game started from the editor (Play or Play from here). After its confirmation it SHALL leave the level as the game's pause menu does (no life lost) and enter the same level again: in a test game at the place it was played from (the Play from here place while it is the level first entered), otherwise at the level's own start.
+
+#### Scenario: Play from here
+- **WHEN** level 03 is played from here at x 1280, Mario walks right and the user chooses Restart level
+- **THEN** level 03 begins again with Mario at x 1280 and the lives unchanged
+
+#### Scenario: A new level
+- **WHEN** new level 32 is played from the editor and the user chooses Restart level
+- **THEN** new level 32 begins again at its start
+
+#### Scenario: A plain game
+- **WHEN** the cheats mode is off and the game was not started from the editor
+- **THEN** the menu has no Restart level
+
+### Requirement: Mario's block in the info panel
+The info panel SHALL show, besides the level, position, map point and mode, the editor's column and row of the block Mario stands on (as the level editor and Play here count them).
+
+#### Scenario: Standing on a block
+- **WHEN** the info panel is on and Mario stands on the block at column 14, row 30
+- **THEN** the panel shows EDITOR 14,30
+
+### Requirement: No Back to map in a level tried from the editor
+In a test game started on a level from the editor (Play or Play from here), the game's menu SHALL not offer Back to map; the other ways of leaving (Restart level, finishing, Go to level, File select, Quit) stay.
+
+#### Scenario: Play from here
+- **WHEN** level 03 is played from here and the player opens the menu in the level
+- **THEN** Restart level is there and Back to map is not
+
+#### Scenario: Playing the copy's map
+- **WHEN** the zone editor's Play starts the game on the world map and the player enters a level
+- **THEN** the menu has Back to map as usual
+
+### Requirement: No File select in a test game
+In any test game started from the editor (a level's Play or Play from here, or the zone editor's Play on the copy's map), the game's menu SHALL not offer File select, in a level or on a map.
+
+#### Scenario: The zone editor's Play
+- **WHEN** the zone editor's Play starts the game and the player opens the menu on the world map
+- **THEN** File select is not there
