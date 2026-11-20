@@ -23,8 +23,10 @@ Layout and dependency rules: `docs/ARCHITECTURE.md`.
 
 ## OpenSpec
 
-OpenSpec files (`openspec/`: specs and changes) live in this repository, and the change is
-implemented here, on its feature branch.
+The specs (`openspec/specs/`) and the OpenSpec settings (`openspec/config.yaml`) are in the
+repository. Changes being planned or applied (`openspec/changes/`) stay on the developer's
+computer (`.gitignore`); archiving a change brings its result into the specs, which are
+committed. A change is implemented on its feature branch.
 
 ## Tests
 
