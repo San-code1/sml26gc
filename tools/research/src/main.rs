@@ -185,7 +185,7 @@ const COMMANDS: &[(&str, Run)] = &[
 const USAGE: &str = "research [--with-save]: disasm BANK ADDR N | table OFF LEN ROW | find SCRIPT | watch SCRIPT ADDRS FROM TO | trace SCRIPT ADDRS FROM TO\n\
                      \x20         poke | leave | cmpmap | diff | worldshot | looks | worldcheck | objcheck | objects | reads | free | storecheck | extracheck | routecheck | dragcheck | finishcheck | secretcheck | pointcheck | cheatcheck | walkprobe | ramfree | levels | modes ...\n\
                      RESEARCH_ROM=<file> uses that cartridge file\n\
-                     (menushots belongs to the game: game --research menushots DIR)";
+                     (menushots belongs to the game: sml26gc --research menushots DIR)";
 
 fn main() {
     let mut v: Vec<String> = std::env::args().skip(1).collect();

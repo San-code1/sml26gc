@@ -54,3 +54,9 @@ say each thing in one place and link to it.
 - Commit messages: a short summary line, then what changed and why when it is not obvious.
 - No AI attribution in commits or pull requests (no `Co-Authored-By` or "Generated with" lines).
 - Never commit cartridges or anything derived from them (see `.gitignore`).
+
+## Releases
+
+A package for another computer is only made with `cargo xtask package <target>` (README,
+"Package for another computer"), never by copying from `target/release`, which holds the
+developer's own cartridge choice, projects and saves.

@@ -1,5 +1,5 @@
 //! Where the game keeps things in memory while it runs (found by reverse engineering; see
-//! `legacy/gb_port/MECHANICS.md` for the routines each one comes from).
+//! `docs/MECHANICS.md` for the routines each one comes from).
 
 /// The game mode byte: which screen the program is on.
 pub const GAME_MODE: u16 = 0xFF9B;

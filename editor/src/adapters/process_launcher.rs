@@ -1,4 +1,4 @@
-//! Starts `game.exe` (next to the editor) on the project's cartridge, as a test game, and
+//! Starts the game (`sml26gc.exe`, next to the editor) on the project's cartridge, as a test game, and
 //! keeps its process to tell whether it is still open.
 use crate::ports::{GameLauncher, TestGame};
 use cart_model::start_point::Start;

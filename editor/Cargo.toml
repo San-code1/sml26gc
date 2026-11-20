@@ -5,8 +5,11 @@ version.workspace = true
 edition.workspace = true
 
 [[bin]]
-name = "editor"
+name = "sml26gc_editor"
 path = "src/main.rs"
+
+[build-dependencies]
+app-resources.workspace = true
 
 [dependencies]
 gb-core.workspace = true

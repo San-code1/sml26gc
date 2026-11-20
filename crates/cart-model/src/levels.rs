@@ -1,4 +1,4 @@
-//! Levels as the cartridge stores them, read from its code (see `legacy/gb_port/MECHANICS.md`, "Levels"):
+//! Levels as the cartridge stores them, read from its code (see `docs/MECHANICS.md`, "Levels"):
 //!
 //! * 32 level headers of 20 bytes, pointed to by the word table at bank 1 $55CB
 //!   (indexed by the level number at $A269, copied to $A800 by 01:5579).

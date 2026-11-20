@@ -35,11 +35,13 @@ fn lines(text: &str, x: f32, mut y: f32, w: f32, size: f32, c: Color) -> f32 {
 pub struct BaseScreen {
     lang: Lang,
     problem: BaseProblem,
+    /// The data folder cannot be written (the choice would not be kept).
+    unwritable: bool,
 }
 
 impl BaseScreen {
     pub fn new(lang: Lang, problem: BaseProblem) -> BaseScreen {
-        BaseScreen { lang, problem }
+        BaseScreen { lang, problem, unwritable: host::paths::data_dir_problem(lang).is_some() }
     }
 
     pub fn set_lang(&mut self, lang: Lang) {
@@ -53,7 +55,10 @@ impl BaseScreen {
         let x = r.x + 24.0;
         put_text(tr(lang, "BASE CARTRIDGE"), x, r.y + 40.0, 24.0, col(3));
         let c = if self.problem == BaseProblem::NotChosen { col(3) } else { Severity::Error.colour() };
-        lines(&self.problem.text(lang), x, r.y + 76.0, r.w - 48.0, 17.0, c);
+        let after = lines(&self.problem.text(lang), x, r.y + 76.0, r.w - 48.0, 17.0, c);
+        if let Some(problem) = self.unwritable.then(|| host::paths::data_dir_problem(lang)).flatten() {
+            lines(problem, x, after + 8.0, r.w - 48.0, 15.0, Severity::Error.colour());
+        }
         let note = tr(lang, "The editor and the game share it; the file may have any name.");
         lines(note, x, r.y + r.h - 76.0, r.w - 48.0, 15.0, col(2));
         if button(Rect::new(x, r.y + r.h - 50.0, r.w - 48.0, ROW), tr(lang, "Choose the cartridge file..."), true, 17.0) {
@@ -94,7 +99,8 @@ pub struct ProjectsScreen {
 
 impl ProjectsScreen {
     pub fn new(lang: Lang, base: PathBuf, chosen: Option<&str>) -> ProjectsScreen {
-        let mut s = ProjectsScreen { lang, base, names: Vec::new(), selected: 0, typing: None, deleting: false, message: None, scroll: 0 };
+        let message = host::paths::data_dir_problem(lang).map(|p| (p.to_string(), Severity::Error));
+        let mut s = ProjectsScreen { lang, base, names: Vec::new(), selected: 0, typing: None, deleting: false, message, scroll: 0 };
         s.reload(chosen);
         s
     }
