@@ -2211,3 +2211,194 @@ en: Witch's broom
 es: Escoba de bruja
 ja: 魔女のほうき
 
+en: a file
+es: un fichero
+ja: ファイル
+
+en: of project
+es: del proyecto
+ja: （プロジェクト）
+
+en: restored as imported from
+es: restaurado tal como se importo de
+ja: をインポートしたときの状態に戻しました。元:
+
+en: (save to keep it; undo brings it back).
+es: (guarda para conservarlo; deshacer lo trae de vuelta).
+ja: （保存すると確定。元に戻すで取り消し）
+
+en: Its restore points file is damaged: imported levels and zones restore to their base.
+es: Su fichero de puntos de restauracion esta danado: los niveles y zonas importados se restauran a su base.
+ja: 復元ポイントのファイルが壊れています。インポートしたコースとゾーンは元のコース・ゾーンに戻ります。
+
+en: Hidden mushroom
+es: Seta oculta
+ja: かくれキノコ
+
+en: Hidden fire flower
+es: Flor de fuego oculta
+ja: かくれファイアフラワー
+
+en: Hidden carrot
+es: Zanahoria oculta
+ja: かくれニンジン
+
+en: Hidden star
+es: Estrella oculta
+ja: かくれスター
+
+en: Hidden heart
+es: Corazon oculto
+ja: かくれハート
+
+en: Block contents
+es: Contenido de bloques
+ja: ブロックの中身
+
+en: block content
+es: contenido de bloque
+ja: ブロックの中身
+
+en: when Mario is big
+es: si Mario es grande
+ja: マリオが大きいとき
+
+en: Hidden in a block: hitting the block under it from below gives
+es: Oculto en un bloque: golpear desde abajo el bloque que tiene debajo da
+ja: ブロックに隠れています。下のブロックを下からたたくと出てくるもの:
+
+en: It only works on blocks
+es: Solo funciona sobre los bloques
+ja: 使えるブロック:
+
+en: (the plain block, the ? block and the invisible block among them); anywhere else it does nothing.
+es: (entre ellos el bloque liso, el bloque ? y el bloque invisible); en cualquier otro sitio no hace nada.
+ja: （ふつうのブロック、？ブロック、見えないブロックなど）。それ以外の場所では何も起きません。
+
+en: Original start
+es: Inicio original
+ja: 元のスタート
+
+en: Put Mario's start back where the original game begins (world map point 00)
+es: Devolver el inicio de Mario a donde empieza el juego original (punto 00 del mapa del mundo)
+ja: マリオのスタートを元のゲームの位置（ワールドマップの地点00）に戻す
+
+en: none chosen
+es: nada elegido
+ja: 未選択
+
+en: Hidden 50 coins
+es: 50 monedas ocultas
+ja: かくれ50コイン
+
+en: an item marked M:
+es: un objeto con una M:
+ja: Mマークのアイテム:
+
+en: Hidden object over a block that does not release it
+es: Objeto oculto sobre un bloque que no lo suelta
+ja: 出てこないブロックの上の隠しアイテム
+
+en: Recent
+es: Recientes
+ja: 最近
+
+en: This level has not been played from here yet: use Here first
+es: Este nivel aun no se ha jugado desde aqui: usa Aqui primero
+ja: このコースはまだ「ここから」で遊んでいません。先に「ここから」を使ってください
+
+en: again from this place
+es: otra vez desde este sitio
+ja: もう一度ここから
+
+en: Small
+es: Pequeno
+ja: ちび
+
+en: Big
+es: Grande
+ja: スーパー
+
+en: Fire
+es: Fuego
+ja: ファイア
+
+en: The game can begin on a point of the world map, a game zone or a new zone (not an added point).
+es: La partida puede empezar en un punto del mapa del mundo, de una zona del juego o de una zona nueva (no en un punto anadido).
+ja: ゲームはワールドマップ、ゲームのゾーン、新しいゾーンの地点から始められます（追加した地点は不可）。
+
+en: Play from a point
+es: Jugar desde un punto
+ja: 地点から遊ぶ
+
+en: Click the point to play from: the copy is saved and the game begins there. Esc: cancel.
+es: Haz clic en el punto desde el que jugar: se guarda la copia y la partida empieza ahi. Esc: cancelar.
+ja: 遊び始める地点をクリックしてください。コピーを保存し、そこからゲームが始まります。Esc：キャンセル
+
+en: The game is already open: close it to play again.
+es: El juego ya esta abierto: cierralo para volver a jugar.
+ja: ゲームはもう開いています。もう一度遊ぶには閉じてください。
+
+en: Zone picture, then unused tiles. Drag: several
+es: Dibujo de la zona y tiles sin usar. Arrastrar: varios
+ja: ゾーンの絵と未使用タイル。ドラッグ：複数
+
+en: Pieces of the world map, then unused tiles. Drag: several
+es: Piezas del mapa del mundo y tiles sin usar. Arrastrar: varios
+ja: ワールドマップの部品と未使用タイル。ドラッグ：複数
+
+en: Pumpkin Zone
+es: Zona Calabaza
+ja: パンプキンゾーン
+
+en: Wario's castle
+es: Castillo de Wario
+ja: ワリオの城
+
+en: Tree Zone tree
+es: Arbol de la Zona Arbol
+ja: ツリーゾーンの木
+
+en: Star and moon
+es: Estrella y luna
+ja: 星と月
+
+en: Hill with a door
+es: Colina con puerta
+ja: とびらのある丘
+
+en: Macro Zone house
+es: Casa de la Zona Macro
+ja: マクロゾーンの家
+
+en: Mushroom house
+es: Casa champinon
+ja: キノコの家
+
+en: Turtle Zone shell
+es: Caparazon de la Zona Tortuga
+ja: タートルゾーンのこうら
+
+en: Mario Zone
+es: Zona Mario
+ja: マリオゾーン
+
+en: Bridge
+es: Puente
+ja: 橋
+
+en: Ladder
+es: Escalera
+ja: はしご
+
+en: Pipe
+es: Tuberia
+ja: 土管
+
+en: Search
+es: Buscar
+ja: さがす
+
+en: name or number
+es: nombre o numero
+ja: 名前か番号

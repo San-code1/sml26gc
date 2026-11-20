@@ -13,6 +13,18 @@ use macroquad::prelude::*;
 /// New pictures between two writes of the cache.
 const LOOKS_SAVE_EVERY: usize = 16;
 
+/// The first level of the second object catalogue.
+const SECOND: usize = 10;
+
+/// A block content's mark over the picture of what it gives: a small ? in the corner `r` ends at.
+pub(super) fn hidden_mark(r: Rect) {
+    let s = (r.w.min(r.h) * 0.4).clamp(9.0, 14.0);
+    let (x, y) = (r.x + r.w - s, r.y + r.h - s);
+    draw_rectangle(x, y, s, s, col(3));
+    let d = text_size("?", s as u16);
+    put_text("?", x + (s - d.width) / 2.0, y + (s + d.offset_y) / 2.0, s, col(0));
+}
+
 impl Editor {
     /// Take the object pictures the background capture has made (asking for the shown
     /// level's first) and keep them in the cache now and then.
@@ -97,6 +109,44 @@ impl Editor {
 
     pub(super) fn look(&self, k: u8) -> Option<&(Texture2D, f32, f32)> {
         self.looks.get(&self.look_key(k)).and_then(|v| v.as_ref())
+    }
+
+    /// The block content at `key` (level, type): what it gives (`object_names::hidden`), if it
+    /// is one.
+    fn hidden_at(key: (usize, u8)) -> Option<object_names::Hidden> {
+        let (_, Category::BlockContent) = object_names::name(key.0, key.1)? else { return None };
+        object_names::hidden(key.1)
+    }
+
+    /// The picture of what the block content at `key` gives (its own draws nothing): a
+    /// captured power-up of that type, from its object catalogue first.
+    pub(super) fn hidden_look(&self, key: (usize, u8)) -> Option<&(Texture2D, f32, f32)> {
+        let object_names::Gives::Object(gives) = Self::hidden_at(key)?.gives else { return None };
+        let second = key.0 >= SECOND;
+        let power_up = |&(l, k): &(usize, u8)| k == gives && object_names::name(l, k).is_some_and(|n| n.1 == Category::PowerUp);
+        self.looks.iter().filter(|(k, v)| power_up(k) && v.is_some()).min_by_key(|(k, _)| ((k.0 >= SECOND) != second, k.0)).and_then(|(_, v)| v.as_ref())
+    }
+
+    /// What the block content at `key` gives and where it works, as the panels say it.
+    pub(super) fn hidden_note(&self, key: (usize, u8)) -> Option<String> {
+        let h = Self::hidden_at(key)?;
+        let lang = self.lang;
+        let other = if key.0 >= SECOND { 0 } else { SECOND };
+        let name = |k: u8| object_names::name(key.0, k).or_else(|| object_names::name(other, k)).map_or(format!("#{k:02X}"), |n| tr(lang, n.0).to_string());
+        let big = h.big_gives.map_or(String::new(), |b| format!(" ({} {})", name(b), tr(lang, "when Mario is big")));
+        let gives = match h.gives {
+            object_names::Gives::Object(k) => name(k),
+            object_names::Gives::Coins(n) => format!("{} {n} {}", tr(lang, "an item marked M:"), tr(lang, "coins")),
+        };
+        let blocks: Vec<String> = object_names::HIDDEN_IN.iter().map(|b| format!("${b:02X}")).collect();
+        Some(format!(
+            "{} {}{big}. {} {} {}",
+            tr(lang, "Hidden in a block: hitting the block under it from below gives"),
+            gives,
+            tr(lang, "It only works on blocks"),
+            blocks.join(", "),
+            tr(lang, "(the plain block, the ? block and the invisible block among them); anywhere else it does nothing.")
+        ))
     }
 
     /// The game's objects once each (`object_catalogue`), grouped again when more pictures
@@ -197,6 +247,7 @@ impl Editor {
     /// Type `k` chosen to place: the selected object is let go, or with `change` (Shift+click)
     /// it becomes that type and stays selected.
     pub(super) fn choose_kind(&mut self, k: u8, change: bool) {
+        self.remember(self.recent_key(true), k);
         if let (true, Some(i)) = (change, self.sel_obj) {
             self.kind = Some(k);
             self.doc.set_object_kind(self.cur, i, k);

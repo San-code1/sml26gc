@@ -14,7 +14,7 @@
 //! (from version 2) the new zones and (from version 4) all 256 point numbers and the game
 //! zones' added points (`zonepoints`: per zone, its number and its points as a new zone's),
 //! and (from version 5) the pad directions the world map's added points shut (`shuts`).
-use super::document::{EnemySet, StandIn};
+use super::document::{EnemySet, RestorePoint, StandIn};
 use cart_model::start_point::Start;
 use cart_model::enemy_sets::{Enemy, BLOCK};
 use cart_model::added_points::{self, ZoneAdded};
@@ -34,11 +34,13 @@ const WORLD_KIND: &str = "NMB world";
 /// Version 1 has no Mario's start.
 const WORLD_VERSION: u32 = 2;
 const ZONE_KIND: &str = "NMB zone";
+const RESTORE_KIND: &str = "NMB restore points";
+const RESTORE_VERSION: u32 = 1;
 /// Version 1 has no names, version 2 no secret exit target, version 3 no tables, version 4
-/// no enemy set.
-const LEVEL_VERSION: u32 = 5;
-/// Version 1 has no Mario's start.
-const ZONE_VERSION: u32 = 2;
+/// no enemy set, version 5 no origin.
+const LEVEL_VERSION: u32 = 6;
+/// Version 1 has no Mario's start, version 2 no origin.
+const ZONE_VERSION: u32 = 3;
 /// Version 1 has no new zones, version 2 no secret exit targets, version 5 no level tables,
 /// version 6 no enemy sets.
 /// Version 7 has no Mario's start (the game's own).
@@ -162,19 +164,71 @@ fn level_block(out: &mut String, l: &LevelFile) {
     };
 }
 
-pub fn level_text(l: &LevelFile) -> String {
+/// Where a level or zone file was exported from, as its `origin` line keeps it:
+/// `project|level|nn|name`, `project|zone|z` (a game zone, `zone_maps::ZONES`) or
+/// `project|newzone|k|name` (numbers in hex, k from 0).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Origin {
+    pub project: String,
+    pub of: OriginOf,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum OriginOf {
+    Level(usize, String),
+    Zone(usize),
+    NewZone(usize, String),
+}
+
+impl Origin {
+    pub fn text(&self) -> String {
+        match &self.of {
+            OriginOf::Level(l, name) => format!("{}|level|{l:02x}|{name}", self.project),
+            OriginOf::Zone(z) => format!("{}|zone|{z:02x}", self.project),
+            OriginOf::NewZone(k, name) => format!("{}|newzone|{k:02x}|{name}", self.project),
+        }
+    }
+
+    /// None for an empty or unknown origin.
+    pub fn parse(text: &str) -> Option<Origin> {
+        let f: Vec<&str> = text.splitn(4, '|').collect();
+        let n = |s: &str| usize::from_str_radix(s, 16).ok();
+        let of = match f[..] {
+            [_, "level", l, name] => OriginOf::Level(n(l)?, name.to_string()),
+            [_, "zone", z] => OriginOf::Zone(n(z)?),
+            [_, "newzone", k, name] => OriginOf::NewZone(n(k)?, name.to_string()),
+            _ => return None,
+        };
+        Some(Origin { project: f[0].to_string(), of })
+    }
+}
+
+/// A level file; `origin`: where it was exported from (`Origin::text`, empty: unknown).
+pub fn level_text(l: &LevelFile, origin: &str) -> String {
     let mut out = format!("{LEVEL_KIND} {LEVEL_VERSION}\n");
+    origin_line(&mut out, origin);
     level_block(&mut out, l);
     out.push_str("end\n");
     out
 }
 
-pub fn read_level(text: &str) -> Result<LevelFile, FileError> {
+/// A level file and its origin (empty: unknown).
+pub fn read_level(text: &str) -> Result<(LevelFile, String), FileError> {
     let mut r = Reader::new(text);
     let version = r.kind(LEVEL_KIND, LEVEL_VERSION, FileError::NotLevel)?;
+    let origin = if version >= 6 { r.origin()? } else { String::new() };
     let l = r.level(version, version >= 4, version >= 5)?;
     r.end()?;
-    Ok(l)
+    Ok((l, origin))
+}
+
+fn origin_line(out: &mut String, origin: &str) {
+    let _ = writeln!(out, "origin {}", clean_origin(origin));
+}
+
+/// An origin as files keep it: one line of at most 80 printable characters.
+fn clean_origin(origin: &str) -> String {
+    origin.chars().map(|c| if c.is_control() { ' ' } else { c }).take(80).collect::<String>().trim().to_string()
 }
 
 fn way_field(w: &Option<Way>) -> String {
@@ -212,23 +266,82 @@ fn point_lines(out: &mut String, points: &[ZonePoint]) {
     }
 }
 
-/// A zone file; `start`: Mario's start, when it is on this zone.
-pub fn zone_text(z: &NewZone, start: Option<u8>) -> String {
+/// A zone file; `start`: Mario's start, when it is on this zone; `origin`: where it was
+/// exported from (free text, empty: unknown).
+pub fn zone_text(z: &NewZone, start: Option<u8>, origin: &str) -> String {
     let mut out = format!("{ZONE_KIND} {ZONE_VERSION}\n");
+    origin_line(&mut out, origin);
     zone_block(&mut out, z);
     start_line(&mut out, start);
     out.push_str("end\n");
     out
 }
 
-/// A zone file and Mario's start, if the zone holds it.
-pub fn read_zone(text: &str) -> Result<(NewZone, Option<u8>), FileError> {
+/// A zone file, Mario's start if the zone holds it, and its origin (empty: unknown).
+pub fn read_zone(text: &str) -> Result<(NewZone, Option<u8>, String), FileError> {
     let mut r = Reader::new(text);
-    r.kind(ZONE_KIND, ZONE_VERSION, FileError::NotZone)?;
+    let version = r.kind(ZONE_KIND, ZONE_VERSION, FileError::NotZone)?;
+    let origin = if version >= 3 { r.origin()? } else { String::new() };
     let z = r.zone()?;
     let start = r.start_line()?;
     r.end()?;
-    Ok((z, start))
+    Ok((z, start, origin))
+}
+
+/// A project's restore points (`document::RestorePoint`), kept beside its cartridge: what its
+/// new levels (by number) and new zones (by index from 0) were imported or replaced from.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct RestorePoints {
+    pub levels: Vec<(usize, RestorePoint<LevelFile>)>,
+    pub zones: Vec<(usize, RestorePoint<NewZone>)>,
+}
+
+/// The restore points file: `level n` or `zone k` (hex), each followed by its level or zone
+/// file whole, then `end`.
+pub fn restore_points_text(p: &RestorePoints) -> String {
+    let mut out = format!("{RESTORE_KIND} {RESTORE_VERSION}
+");
+    for (l, point) in &p.levels {
+        let _ = writeln!(out, "level {l:02x}");
+        out.push_str(&level_text(&point.file, &point.origin));
+    }
+    for (k, point) in &p.zones {
+        let _ = writeln!(out, "zone {k:02x}");
+        out.push_str(&zone_text(&point.file, None, &point.origin));
+    }
+    out.push_str("end
+");
+    out
+}
+
+pub fn read_restore_points(text: &str) -> Result<RestorePoints, FileError> {
+    let mut r = Reader::new(text);
+    r.kind(RESTORE_KIND, RESTORE_VERSION, FileError::Damaged(1))?;
+    let mut points = RestorePoints::default();
+    loop {
+        let line = r.line()?;
+        let (what, n) = line.split_once(' ').unwrap_or((line, ""));
+        let n = usize::from_str_radix(n, 16);
+        match (what, n) {
+            ("end", _) => return Ok(points),
+            ("level", Ok(l)) => {
+                let version = r.kind(LEVEL_KIND, LEVEL_VERSION, r.damaged())?;
+                let origin = if version >= 6 { r.origin()? } else { String::new() };
+                let file = r.level(version, version >= 4, version >= 5)?;
+                r.end()?;
+                points.levels.push((l, RestorePoint { file, origin }));
+            }
+            ("zone", Ok(k)) => {
+                let version = r.kind(ZONE_KIND, ZONE_VERSION, r.damaged())?;
+                let origin = if version >= 3 { r.origin()? } else { String::new() };
+                let file = r.zone()?;
+                r.start_line()?;
+                r.end()?;
+                points.zones.push((k, RestorePoint { file, origin }));
+            }
+            _ => return Err(r.damaged()),
+        }
+    }
 }
 
 fn start_line(out: &mut String, start: Option<u8>) {
@@ -540,6 +653,11 @@ impl<'a> Reader<'a> {
         to.ok_or(self.damaged())
     }
 
+    fn origin(&mut self) -> Result<String, FileError> {
+        let v = self.field("origin")?;
+        Ok(clean_origin(v))
+    }
+
     fn name(&mut self) -> Result<String, FileError> {
         let v = self.field("name")?;
         Ok(cart_model::extra_levels::clean_name(v))
@@ -730,35 +848,40 @@ mod tests {
     #[test]
     fn a_zone_comes_back_as_it_was_written() {
         let z = zone();
-        let text = zone_text(&z, None);
-        assert!(text.starts_with("NMB zone 2\nbase 00\nname Big tree\n") && text.ends_with("end\n"));
-        assert_eq!(read_zone(&text), Ok((z.clone(), None)));
-        assert_eq!(read_zone(&zone_text(&z, Some(0x21))), Ok((z.clone(), Some(0x21))), "with Mario's start");
-        assert_eq!(read_zone(&text.replace("NMB zone 2", "NMB zone 1")), Ok((z, None)), "a version 1 file");
+        let text = zone_text(&z, None, "Demo|newzone 1 Big tree");
+        assert!(text.starts_with("NMB zone 3\norigin Demo|newzone 1 Big tree\nbase 00\nname Big tree\n") && text.ends_with("end\n"));
+        assert_eq!(read_zone(&text), Ok((z.clone(), None, "Demo|newzone 1 Big tree".into())));
+        assert_eq!(read_zone(&zone_text(&z, Some(0x21), "")), Ok((z.clone(), Some(0x21), String::new())), "with Mario's start");
+        let v2 = text.replace("NMB zone 3", "NMB zone 2").replace("origin Demo|newzone 1 Big tree\n", "");
+        assert_eq!(read_zone(&v2), Ok((z.clone(), None, String::new())), "a version 2 file has no origin");
+        assert_eq!(read_zone(&v2.replace("NMB zone 2", "NMB zone 1")), Ok((z, None, String::new())), "a version 1 file");
     }
 
     #[test]
     fn unusable_zone_files_are_refused() {
-        let text = zone_text(&zone(), None);
+        let text = zone_text(&zone(), None, "");
         assert!(matches!(read_zone(&text[..text.len() / 2]), Err(FileError::Damaged(_))));
         assert_eq!(read_zone(&text.replace("base 00", "base 04")), Err(FileError::NotABase(4)));
         assert!(matches!(read_zone(&text.replace("entry 23", "entry 24")), Err(FileError::Damaged(_))), "the entry is one of its points");
         assert!(matches!(read_zone(&text.replace("\n25 ", "\n32 ")), Err(FileError::Damaged(_))), "points stay in the base's numbers");
-        assert_eq!(read_zone(&text.replace("NMB zone 2", "NMB zone 3")), Err(FileError::Newer));
-        assert_eq!(read_zone(&level_text(&level(0))), Err(FileError::NotZone));
+        assert_eq!(read_zone(&text.replace("NMB zone 3", "NMB zone 4")), Err(FileError::Newer));
+        assert_eq!(read_zone(&level_text(&level(0), "")), Err(FileError::NotZone));
     }
 
     #[test]
     fn a_level_comes_back_as_it_was_written() {
         let l = level(13);
-        let text = level_text(&l);
-        assert!(text.starts_with("NMB level 5\nbase 0d\nname Cave 13\n") && text.contains("secret point 07\ntables 0801004d\nenemies 2 03 21 0d 09 0001"));
-        let v4 = text.replacen("NMB level 5", "NMB level 4", 1);
+        let text = level_text(&l, "Demo|level 05");
+        assert!(text.starts_with("NMB level 6\norigin Demo|level 05\nbase 0d\nname Cave 13\n") && text.contains("secret point 07\ntables 0801004d\nenemies 2 03 21 0d 09 0001"));
+        assert_eq!(read_level(&text), Ok((l.clone(), "Demo|level 05".into())));
+        let v5 = text.replacen("NMB level 6", "NMB level 5", 1).replacen("origin Demo|level 05\n", "", 1);
+        assert_eq!(read_level(&v5), Ok((l.clone(), String::new())), "version 5 has no origin");
+        let read_level = |t: &str| read_level(t).map(|f| f.0);
+        let v4 = v5.replacen("NMB level 5", "NMB level 4", 1);
         let v4 = format!("{}end\n", &v4[..v4.find("enemies").unwrap()]);
         assert_eq!(read_level(&v4), Ok(LevelFile { enemies: None, ..l.clone() }), "version 4 has no enemy set");
-        assert_eq!(read_level(&text), Ok(l.clone()));
         for b in [12, 14] {
-            assert_eq!(read_level(&level_text(&level(b))), Ok(level(b)));
+            assert_eq!(read_level(&level_text(&level(b), "")), Ok(level(b)));
         }
         let v3 = v4.replacen("NMB level 4", "NMB level 3", 1).replacen("tables 0801004d\n", "", 1);
         assert_eq!(read_level(&v3), Ok(LevelFile { tables: None, enemies: None, ..l.clone() }), "version 3 has no tables");
@@ -770,11 +893,34 @@ mod tests {
     }
 
     #[test]
+    fn restore_points_come_back_as_they_were_written() {
+        let points = RestorePoints {
+            levels: vec![(0x21, RestorePoint { file: level(13), origin: "Demo|level|05|".into() }), (0x23, RestorePoint { file: level(3), origin: String::new() })],
+            zones: vec![(1, RestorePoint { file: zone(), origin: "Demo|zone|00".into() })],
+        };
+        let text = restore_points_text(&points);
+        assert_eq!(read_restore_points(&text), Ok(points));
+        assert_eq!(read_restore_points(&restore_points_text(&RestorePoints::default())), Ok(RestorePoints::default()));
+        assert!(read_restore_points(&text[..text.len() / 2]).is_err());
+        assert!(read_restore_points(&level_text(&level(0), "")).is_err());
+    }
+
+    #[test]
+    fn origins_come_back_as_they_were_written() {
+        for of in [OriginOf::Level(0x21, "Ice|cave".into()), OriginOf::Zone(3), OriginOf::NewZone(1, String::new())] {
+            let o = Origin { project: "Demo".into(), of };
+            assert_eq!(Origin::parse(&o.text()), Some(o));
+        }
+        assert_eq!(Origin::parse(""), None);
+        assert_eq!(Origin::parse("Demo|door|05"), None);
+    }
+
+    #[test]
     fn unusable_level_files_are_refused() {
-        let text = level_text(&level(3));
+        let text = level_text(&level(3), "");
         assert!(matches!(read_level(&text[..text.len() / 2]), Err(FileError::Damaged(_))));
         assert_eq!(read_level(&text.replace("base 03", "base 20")), Err(FileError::BaseOutside(32)));
-        assert_eq!(read_level(&text.replace("NMB level 5", "NMB level 6")), Err(FileError::Newer));
+        assert_eq!(read_level(&text.replace("NMB level 6", "NMB level 7")), Err(FileError::Newer));
         assert_eq!(read_level("hello"), Err(FileError::NotLevel));
         assert_eq!(read_level(""), Err(FileError::NotLevel));
         let short_row = text.replacen("\n0001", "\n01", 1);
@@ -820,7 +966,7 @@ mod tests {
         let text = project_text(&project());
         let cut = &text[..text.find("zones").unwrap()];
         assert!(matches!(read_project(cut), Err(FileError::Damaged(_))));
-        assert_eq!(read_project(&level_text(&level(0))), Err(FileError::NotProject));
+        assert_eq!(read_project(&level_text(&level(0), "")), Err(FileError::NotProject));
         assert!(matches!(read_project(&text.replace("levels 34", "levels 3")), Err(FileError::Damaged(_))));
     }
 

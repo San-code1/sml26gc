@@ -16,9 +16,11 @@ pub enum Category {
     Marker,
     /// Boss rooms and other objects that act on their own script.
     Scripted,
+    /// Draws nothing: what the block under it gives when hit from below (`hidden`).
+    BlockContent,
 }
 
-pub const CATEGORIES: [Category; 7] = [Category::PowerUp, Category::Enemy, Category::Trap, Category::Platform, Category::Goal, Category::Marker, Category::Scripted];
+pub const CATEGORIES: [Category; 8] = [Category::PowerUp, Category::BlockContent, Category::Enemy, Category::Trap, Category::Platform, Category::Goal, Category::Marker, Category::Scripted];
 
 use Category::*;
 
@@ -41,16 +43,17 @@ const NAMES: &[(bool, u8, &[usize], &str, Category)] = &[
     (false, 0x1D, &[], "Carrot", PowerUp),
     (true, 0x1D, &[], "Carrot", PowerUp),
     (true, 0x1E, &[], "Star", PowerUp),
-    (false, 0x11, &[], "Invisible marker", Marker),
-    (true, 0x11, &[], "Invisible marker", Marker),
-    (false, 0x12, &[], "Invisible marker", Marker),
-    (true, 0x12, &[], "Invisible marker", Marker),
-    (false, 0x13, &[], "Invisible marker", Marker),
-    (true, 0x13, &[], "Invisible marker", Marker),
-    (false, 0x14, &[], "Invisible marker", Marker),
-    (true, 0x14, &[], "Invisible marker", Marker),
-    (false, 0x15, &[], "Invisible marker", Marker),
-    (true, 0x15, &[], "Invisible marker", Marker),
+    (false, 0x11, &[], "Hidden mushroom", BlockContent),
+    (true, 0x11, &[], "Hidden mushroom", BlockContent),
+    (false, 0x12, &[], "Hidden fire flower", BlockContent),
+    (true, 0x12, &[], "Hidden fire flower", BlockContent),
+    (false, 0x13, &[], "Hidden carrot", BlockContent),
+    (true, 0x13, &[], "Hidden carrot", BlockContent),
+    (false, 0x14, &[], "Hidden star", BlockContent),
+    (true, 0x14, &[], "Hidden star", BlockContent),
+    (false, 0x15, &[], "Hidden heart", BlockContent),
+    (true, 0x15, &[], "Hidden heart", BlockContent),
+    (false, 0x19, &[2], "Hidden 50 coins", BlockContent),
     (false, 0x19, &[], "Invisible marker", Marker),
     (true, 0x19, &[], "Invisible marker", Marker),
     // levels 0-9
@@ -177,6 +180,40 @@ const NAMES: &[(bool, u8, &[usize], &str, Category)] = &[
     (true, 0x6F, &[], "Spiked ball", Trap),
 ];
 
+/// What comes out of a block content's block: a power-up object type (for its picture and
+/// name), or coins (the item marked M, which no object type shows).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Gives {
+    Object(u8),
+    Coins(u16),
+}
+
+/// What a block content gives when the block under it is hit from below (research
+/// `blockprobe`, `cart_model::objects`), and the power-up Mario gets instead when he is big,
+/// if that differs. The same in both object catalogues.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Hidden {
+    pub gives: Gives,
+    pub big_gives: Option<u8>,
+}
+
+/// The blocks a block content works in (`cart_model::objects`): the plain block ($00, which a
+/// big Mario breaks), the ? block ($01), $02, $03 and the invisible block ($7E).
+pub const HIDDEN_IN: [u8; 5] = cart_model::objects::RELEASED_BY;
+
+pub fn hidden(kind: u8) -> Option<Hidden> {
+    let gives = |gives: u8| Some(Hidden { gives: Gives::Object(gives), big_gives: None });
+    match kind {
+        0x11 => Some(Hidden { gives: Gives::Object(0x1B), big_gives: Some(0x1C) }),
+        0x12 => gives(0x1C),
+        0x13 => gives(0x1D),
+        0x14 => gives(0x1E),
+        0x15 => gives(0x0F),
+        0x19 => Some(Hidden { gives: Gives::Coins(50), big_gives: None }),
+        _ => None,
+    }
+}
+
 /// The first level of the second object catalogue.
 const SECOND: usize = 10;
 
@@ -198,5 +235,11 @@ mod tests {
         assert_eq!(name(6, 0x4F), Some(("Spike ball", Trap)));
         assert_eq!(name(9, 0x4F), Some(("Spark", Enemy)));
         assert_eq!(name(3, 0x7F), None);
+        assert_eq!(name(0, 0x11), Some(("Hidden mushroom", BlockContent)), "level 00's $11 is a block content");
+        assert_eq!(hidden(0x11), Some(Hidden { gives: Gives::Object(0x1B), big_gives: Some(0x1C) }));
+        assert_eq!(hidden(0x15).map(|h| h.gives), Some(Gives::Object(0x0F)));
+        assert_eq!(name(5, 0x0F), Some(("Heart (extra life)", PowerUp)));
+        assert_eq!((name(2, 0x19), hidden(0x19).map(|h| h.gives)), (Some(("Hidden 50 coins", BlockContent)), Some(Gives::Coins(50))));
+        assert_eq!(name(4, 0x19), Some(("Invisible marker", Marker)), "a block content in level 02 only");
     }
 }

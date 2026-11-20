@@ -84,6 +84,12 @@ mod tests {
             if path.file_name().is_some_and(|n| n == "object_names.rs") {
                 found.extend(src.match_indices("], \"").filter_map(|(at, m)| literal(&src[at + m.len()..])));
             }
+            // names kept in lists and translated where they are shown: the world map's pieces,
+            // Mario's powers
+            found.extend(src.match_indices("piece(\"").filter_map(|(at, m)| literal(&src[at + m.len()..])));
+            for line in src.lines().filter(|l| l.trim_start().starts_with("const POWERS")) {
+                found.extend(line.split('"').skip(1).step_by(2).map(String::from));
+            }
             for (at, _) in src.match_indices("tr(") {
                 let before = src[..at].chars().next_back();
                 if before.is_some_and(|c| c.is_alphanumeric() || c == '_' || c == '.') || src[..at].ends_with("fn ") {

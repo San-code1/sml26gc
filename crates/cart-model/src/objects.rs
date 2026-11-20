@@ -9,12 +9,31 @@
 //!   - d bit 7: a flag the game keeps with the object
 //!   - type (0-127) = b.4→bit6, b.7→bit5, b.6→bit4, b.5→bit3, c bits 5-7 → bits 0-2
 //!   The game unpacks each one into 6 bytes at $AB06 (0, X page, X, flag, Y page, Y, type).
+//! * Block contents (research `blockprobe`): types $11-$15 draw nothing and sit half a block
+//!   above a block; hitting that block from below brings out an item (active object type
+//!   $10 + kind, +$12 = $80 | kind, its 32 bytes copied by 0:3CAA) instead of a coin: $11 a
+//!   mushroom (a fire flower when Mario is big), $12 a fire flower, $13 a carrot, $14 a star,
+//!   $15 a heart. Only blocks $00 (the plain block; a big Mario breaks it), $01 (the ? block),
+//!   $02, $03 and $7E (the invisible block) release it; on any other block it does nothing.
+//!   $19 is one only in level 02: kind 9, an item marked M that gives 50 coins when taken,
+//!   from the same blocks. Over the ? blocks of levels 04, 17 and 26 nothing comes out of it
+//!   (the block gives its coin): the type means something else there.
 use crate::error::{CartError, ObjectsUsage};
 use crate::levels::LEVELS;
 use crate::patch::objects_patched;
 use crate::rom::{set_word, BANK_SIZE};
 
 const TABLE: u16 = 0x6037;
+
+/// The block contents of every level (see above; $19 is one in level 02 only) and the
+/// blocks that release them.
+pub const BLOCK_CONTENTS: [u8; 5] = [0x11, 0x12, 0x13, 0x14, 0x15];
+pub const RELEASED_BY: [u8; 5] = [0x00, 0x01, 0x02, 0x03, 0x7E];
+
+/// The block (column, row) a block content at `o` sits on: half a block below its place.
+pub fn block_of(o: &Obj) -> (usize, usize) {
+    (o.x as usize / 16, (o.y as usize + 8) / 16)
+}
 
 /// The bank the object loader reads: 3, or its twin $23 in an expanded copy
 /// (see `patch::expand`).

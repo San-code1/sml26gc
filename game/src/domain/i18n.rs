@@ -8,8 +8,8 @@ pub const LANG_IDS: [&str; 3] = ["en", "es", "ja"];
 
 pub struct Texts {
     pub pause: &'static str,
-    /// Continue, Controls, Display, Sound, Language, Original pause, Quit, Back to map, File select, Debug / cheats.
-    pub main: [&'static str; 10],
+    /// Continue, Controls, Display, Sound, Language, Original pause, Quit, Back to map, File select, Debug / cheats, Restart level.
+    pub main: [&'static str; 11],
     pub sure: &'static str,
     /// The start-up tag: the menu, then what the cheats mode's keys do.
     pub hint_menu: &'static str,
@@ -19,7 +19,7 @@ pub struct Texts {
     pub footer_main: &'static str,
     pub controls: &'static str,
     /// The bindings, in `keys` order.
-    pub buttons: [&'static str; 13],
+    pub buttons: [&'static str; 14],
     pub restore: &'static str,
     pub back: &'static str,
     pub footer_controls: &'static str,
@@ -64,7 +64,7 @@ pub struct Texts {
 
 const EN: Texts = Texts {
     pause: "PAUSE",
-    main: ["CONTINUE", "CONTROLS", "DISPLAY", "SOUND", "LANGUAGE", "ORIGINAL PAUSE", "QUIT GAME", "BACK TO MAP", "FILE SELECT", "DEBUG / CHEATS"],
+    main: ["CONTINUE", "CONTROLS", "DISPLAY", "SOUND", "LANGUAGE", "ORIGINAL PAUSE", "QUIT GAME", "BACK TO MAP", "FILE SELECT", "DEBUG / CHEATS", "RESTART LEVEL"],
     sure: "ARE YOU SURE?",
     hint_menu: "MENU",
     hint_save: "SAVE",
@@ -72,7 +72,7 @@ const EN: Texts = Texts {
     hint_rewind: "REWIND",
     footer_main: "ENTER:OK  ESC:RESUME",
     controls: "CONTROLS",
-    buttons: ["UP", "DOWN", "LEFT", "RIGHT", "A BUTTON", "B BUTTON", "START", "SELECT", "SAVE STATE", "LOAD STATE", "REWIND", "FAST FORWARD", "MENU"],
+    buttons: ["UP", "DOWN", "LEFT", "RIGHT", "A BUTTON", "B BUTTON", "START", "SELECT", "SAVE STATE", "LOAD STATE", "REWIND", "FAST FORWARD", "MENU", "RESTART LEVEL"],
     restore: "RESTORE DEFAULTS",
     back: "BACK",
     footer_controls: "ENTER:CHANGE ESC:BACK",
@@ -113,7 +113,7 @@ const EN: Texts = Texts {
 
 const ES: Texts = Texts {
     pause: "PAUSA",
-    main: ["CONTINUAR", "CONTROLES", "PANTALLA", "SONIDO", "IDIOMA", "PAUSA ORIGINAL", "SALIR DEL JUEGO", "VOLVER AL MAPA", "ELEGIR PARTIDA", "DEBUG / TRUCOS"],
+    main: ["CONTINUAR", "CONTROLES", "PANTALLA", "SONIDO", "IDIOMA", "PAUSA ORIGINAL", "SALIR DEL JUEGO", "VOLVER AL MAPA", "ELEGIR PARTIDA", "DEBUG / TRUCOS", "REINICIAR NIVEL"],
     sure: "SEGURO?",
     hint_menu: "MENU",
     hint_save: "GUARDAR",
@@ -121,7 +121,7 @@ const ES: Texts = Texts {
     hint_rewind: "REBOBINAR",
     footer_main: "INTRO:OK  ESC:SEGUIR",
     controls: "CONTROLES",
-    buttons: ["ARRIBA", "ABAJO", "IZQUIERDA", "DERECHA", "BOTON A", "BOTON B", "START", "SELECT", "GUARDAR ESTADO", "CARGAR ESTADO", "REBOBINAR", "ACELERAR", "MENU"],
+    buttons: ["ARRIBA", "ABAJO", "IZQUIERDA", "DERECHA", "BOTON A", "BOTON B", "START", "SELECT", "GUARDAR ESTADO", "CARGAR ESTADO", "REBOBINAR", "ACELERAR", "MENU", "REINICIAR NIVEL"],
     restore: "RESTAURAR",
     back: "VOLVER",
     footer_controls: "INTRO:CAMBIAR ESC:VOLVER",
@@ -162,7 +162,7 @@ const ES: Texts = Texts {
 
 const JA: Texts = Texts {
     pause: "ポーズ",
-    main: ["ツヅケル", "キーセッテイ", "ガメン", "サウンド", "ゲンゴ", "モトノポーズ", "ゲームヲヤメル", "チズニモドル", "データセンタク", "デバッグ/チート"],
+    main: ["ツヅケル", "キーセッテイ", "ガメン", "サウンド", "ゲンゴ", "モトノポーズ", "ゲームヲヤメル", "チズニモドル", "データセンタク", "デバッグ/チート", "コースヲヤリナオス"],
     sure: "ホントニ?",
     hint_menu: "メニュー",
     hint_save: "セーブ",
@@ -170,7 +170,7 @@ const JA: Texts = Texts {
     hint_rewind: "リワインド",
     footer_main: "ENTER:OK ESC:ツヅケル",
     controls: "キーセッテイ",
-    buttons: ["ウエ", "シタ", "ヒダリ", "ミギ", "Aボタン", "Bボタン", "START", "SELECT", "クイックセーブ", "クイックロード", "リワインド", "ハヤオクリ", "メニュー"],
+    buttons: ["ウエ", "シタ", "ヒダリ", "ミギ", "Aボタン", "Bボタン", "START", "SELECT", "クイックセーブ", "クイックロード", "リワインド", "ハヤオクリ", "メニュー", "コースヲヤリナオス"],
     restore: "モトニモドス",
     back: "モドル",
     footer_controls: "ENTER:ヘンコウ ESC:モドル",

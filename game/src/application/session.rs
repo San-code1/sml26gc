@@ -8,6 +8,7 @@ use crate::domain::keys::{self, Key};
 use crate::domain::menu::{Action, CheatMenu, Menu};
 use crate::domain::i18n::texts;
 use crate::domain::overlay::draw_hint;
+use crate::domain::retry::{Entry, Retry};
 use crate::domain::settings::Settings;
 use crate::domain::bindings::Bindings;
 use crate::domain::menu::MenuInput;
@@ -16,7 +17,9 @@ use cart_model::cheats::{self as cheat_rules, Item};
 use cart_model::extra_levels;
 use cart_model::level_start::Start;
 use cart_model::secret_exits;
-use cart_model::ram_map::{GAME_MODE, LEVEL_NUMBER};
+use cart_model::ram_map::{GAME_MODE, LEVEL_NUMBER, LIVES, MAP_POINT, POWER, SPECIAL_MAP_POINTS};
+use cart_model::{map_routes, world};
+use cart_model::{checkpoint, levels, start_point};
 use cart_model::{GameDriver, GameMode};
 use gb_core::palette::{Palette, PALETTES};
 use gb_core::{Buttons, Gb, State, FRAME_SECONDS};
@@ -40,6 +43,77 @@ fn stand_in(g: &mut Gb, level: u8) -> Option<(u8, Option<Undo>)> {
     let mut writes = extra_levels::writes_for(g.cart().rom(), &e);
     writes.extend(secret_exits::stand_in(g.cart().rom(), level as usize, e.base as usize));
     Some((e.base, Some(extra_levels::apply(g.cart_mut().rom_mut(), &writes))))
+}
+
+/// Enter game level `level` (0-31) from the map, whatever the project's map opens: the point
+/// Mario stands on (or, when it can't take Start, another plain point) opens `level` while
+/// Start is pressed, then the map's own levels are back.
+fn enter_from_map(gb: &mut Gb, level: u8) -> bool {
+    let own = world::point_levels(gb.cart().rom());
+    let here = gb.read(MAP_POINT);
+    let others = (0..map_routes::POINTS as u8).filter(|&p| p != here);
+    for p in std::iter::once(here).chain(others).filter(|p| !SPECIAL_MAP_POINTS.contains(p)).take(4) {
+        let mut g = gb.clone();
+        g.write(MAP_POINT, p);
+        let mut opens = own.clone();
+        opens[p as usize] = level;
+        world::write_point_levels(g.cart_mut().rom_mut(), &opens);
+        let entered = g.enter_level(level);
+        world::write_point_levels(g.cart_mut().rom_mut(), &own);
+        if entered {
+            *gb = g;
+            return true;
+        }
+    }
+    false
+}
+
+/// Enter game level `level` (0-31) from the map; with `at`, Mario stands there (left x, feet
+/// y) for this entry only: the header's start and the level's restart entries (a midway bell
+/// rung before) are that place while it loads, then the game's again.
+fn enter_at(gb: &mut Gb, level: u8, at: Option<(u16, u16)>) -> bool {
+    let Some((x, feet)) = at else { return enter_from_map(gb, level) };
+    let l = level as usize;
+    let rom = gb.cart().rom();
+    let h = levels::header(rom, l).at;
+    let own_start = rom[h..h + 8].to_vec();
+    let bells: Vec<usize> = (0..checkpoint::MAX).filter(|&b| b == 0 || checkpoint::installed(rom)).collect();
+    let own_restarts: Vec<[u8; 8]> = bells.iter().map(|&b| checkpoint::bell_entry(rom, l, b)).collect();
+    let mut place = [0u8; 8];
+    Start::standing(x, feet).write(&mut place);
+    let rom = gb.cart_mut().rom_mut();
+    rom[h..h + 8].copy_from_slice(&place);
+    for &b in &bells {
+        checkpoint::set_bell_entry(rom, l, b, &place);
+    }
+    let entered = enter_from_map(gb, level);
+    let rom = gb.cart_mut().rom_mut();
+    rom[h..h + 8].copy_from_slice(&own_start);
+    for (&b, own) in bells.iter().zip(&own_restarts) {
+        checkpoint::set_bell_entry(rom, l, b, own);
+    }
+    entered
+}
+
+/// A test game on the map: the title, the file select and the new game's way onto the map
+/// run unseen (Start pressed now and then until the map is up, as `boot_to_map` does), the
+/// new zones following Mario as in play, until the map has been up a while with Mario on his
+/// start.
+fn to_map_at_start(gb: &mut Gb, zones: &mut ZoneSwap) {
+    let mut on_map = 0;
+    for f in 0..3000u32 {
+        let press = on_map == 0 && f % 50 < 5 && f > 120;
+        gb.run_frame_with(if press { Buttons::START } else { Buttons::NONE });
+        gb.clear_audio();
+        zones.update(gb);
+        if gb.mode() == GameMode::Map {
+            on_map += 1;
+            if on_map == 90 {
+                break;
+            }
+        }
+    }
+    gb.set_buttons(Buttons::NONE);
 }
 
 /// After each frame: when the game is about to load a level numbered 32 or more (a map
@@ -130,6 +204,16 @@ impl Rewind {
 }
 
 /// What a session is started with, besides the console itself.
+/// A test game from the editor: Mario gets these lives and coins once the game is on the map
+/// or in a level, and this power each time the tested level is entered.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TestGame {
+    pub lives: u8,
+    pub coins: u16,
+    /// `ram_map::POWER`'s value: 0 small, 1 big, 2 carrot, 3 fire.
+    pub power: u8,
+}
+
 pub struct SessionParts {
     pub prefs: Preferences,
     pub saves: Box<dyn SaveStore>,
@@ -142,9 +226,11 @@ pub struct SessionParts {
     pub checking: bool,
     /// The debug / cheats mode is on.
     pub cheats: bool,
-    /// A test game from the editor: Mario gets these lives and coins once the game is on the
-    /// map or in a level.
-    pub test: Option<(u8, u16)>,
+    /// A test game from the editor.
+    pub test: Option<TestGame>,
+    /// A test game on the map: Mario's start for this game only (the zone editor's Here);
+    /// None: the copy's own.
+    pub start_point: Option<start_point::Start>,
 }
 
 pub struct GameSession {
@@ -177,27 +263,37 @@ pub struct GameSession {
     note: Option<(&'static str, f32)>,
     /// A test game's lives and coins, until given.
     boost: Option<(u8, u16)>,
+    /// A test game started in a level: it is entered again after a lost life.
+    retry: Option<Retry>,
+    /// A test game's power for Mario, given at each entry from the map.
+    power: Option<u8>,
+    /// A test game from the editor (a level or the copy's map).
+    from_editor: bool,
 }
 
 impl GameSession {
     pub fn new(mut gb: Gb, parts: SessionParts) -> GameSession {
-        let zones = ZoneSwap::new(&mut gb, parts.zones);
+        // the zone editor's Here: a new game begins there (in the console's memory only)
+        if let Some(s) = parts.start_point.filter(|_| parts.test.is_some() && parts.start_level.is_none()) {
+            start_point::write(gb.cart_mut().rom_mut(), s);
+        }
+        let mut zones = ZoneSwap::new(&mut gb, parts.zones);
+        if parts.test.is_some() && parts.start_level.is_none() && !parts.checking {
+            to_map_at_start(&mut gb, &mut zones);
+        }
         let mut extra = None;
         if let Some(n) = parts.start_level {
             if gb.boot_to_map() {
                 if let Some((ask, undo)) = stand_in(&mut gb, n) {
                     extra = undo.map(|u| (n, u));
-                    // a start for this time only: in the header while the level loads
-                    let h = cart_model::levels::header(gb.cart().rom(), ask.min(31) as usize);
-                    let own = gb.cart().rom()[h.at..h.at + 8].to_vec();
-                    if let Some((x, feet)) = parts.start_at {
-                        Start::standing(x, feet).write(&mut gb.cart_mut().rom_mut()[h.at..h.at + 8]);
+                    if let Some(t) = parts.test {
+                        gb.write(POWER, t.power);
                     }
-                    gb.enter_level(ask.min(31));
-                    gb.cart_mut().rom_mut()[h.at..h.at + 8].copy_from_slice(&own);
+                    enter_at(&mut gb, ask.min(31), parts.start_at);
                 }
             }
         }
+        let retry = parts.test.and(parts.start_level).map(|level| Retry::new(Entry { level, at: parts.start_at }));
         let screen = gb.screen().to_vec();
         GameSession {
             gb,
@@ -220,7 +316,10 @@ impl GameSession {
             rewind: Rewind::default(),
             loads: 0,
             note: None,
-            boost: parts.test,
+            boost: parts.test.map(|t| (t.lives, t.coins)),
+            power: parts.test.map(|t| t.power),
+            from_editor: parts.test.is_some(),
+            retry,
         }
     }
 
@@ -293,9 +392,32 @@ impl GameSession {
         if let Some(p) = point {
             self.gb.show_map_at(p as u8);
         }
-        let Some((ask, undo)) = stand_in(&mut self.gb, level) else { return };
-        self.extra = undo.map(|u| (level, u));
-        self.gb.enter_level(ask.min(31));
+        self.enter(Entry { level, at: None });
+    }
+
+    /// Start the level being played again, as the game's pause menu leaves it (no life lost):
+    /// a test game's at the place it was played from, any other at its own start.
+    fn restart_level(&mut self) {
+        self.close_menu();
+        let playing = self.extra.as_ref().map_or_else(|| self.gb.read(LEVEL_NUMBER), |e| e.0);
+        let entry = self.retry.as_ref().map_or(Entry { level: playing, at: None }, |r| r.entry());
+        if !cheat_rules::to_map(&mut self.gb) {
+            return;
+        }
+        if let Some((_, undo)) = self.extra.take() {
+            extra_levels::apply(self.gb.cart_mut().rom_mut(), &undo);
+        }
+        self.enter(entry);
+    }
+
+    /// Enter `entry`'s level from the map (a new level: its base level with it in place).
+    fn enter(&mut self, entry: Entry) {
+        let Some((ask, undo)) = stand_in(&mut self.gb, entry.level) else { return };
+        self.extra = undo.map(|u| (entry.level, u));
+        if let Some(p) = self.power {
+            self.gb.write(POWER, p);
+        }
+        enter_at(&mut self.gb, ask.min(31), entry.at);
         self.acc = 0.0;
     }
 
@@ -343,15 +465,25 @@ impl GameSession {
             cart_model::cheats::set_coins(g, coins);
             self.boost = None;
         }
+        let playing = in_level.then(|| self.extra.as_ref().map_or_else(|| g.read(LEVEL_NUMBER), |e| e.0));
         // back on the map: the base level of a new level is itself again
         if mode == GameMode::Map {
             if let Some((_, undo)) = self.extra.take() {
                 extra_levels::apply(g.cart_mut().rom_mut(), &undo);
             }
         }
+        let lives = g.read(LIVES);
+        if let Some(again) = self.retry.as_mut().and_then(|r| r.step(mode, playing, lives)) {
+            self.enter(again);
+        }
 
         if self.menu.is_none() && !self.checking {
             self.save_states(input, pad);
+        }
+        // the Restart level key: at once, in a level of a test game or with the cheats mode on
+        let may_restart = self.cheats.is_some() || self.retry.is_some();
+        if self.menu.is_none() && !self.checking && in_level && !self.input_lock && may_restart && Bindings::new(input, pad, &self.prefs.settings).pressed(keys::RESTART) {
+            self.restart_level();
         }
         let g = &mut self.gb;
         if self.menu.is_none() {
@@ -366,6 +498,15 @@ impl GameSession {
                         let names = extra_levels::read(g.cart().rom());
                         let levels = (0..extra_levels::FIRST as u8).map(|l| (l, String::new())).chain(names.into_iter().enumerate().map(|(k, e)| ((extra_levels::FIRST + k) as u8, if e.name.is_empty() { format!("NEW {}", extra_levels::FIRST + k) } else { e.name }))).collect();
                         menu = menu.with_cheats(CheatMenu { state, icons, secret_exit, levels });
+                    }
+                    if self.cheats.is_some() || self.retry.is_some() {
+                        menu = menu.with_restart();
+                    }
+                    if self.retry.is_some() {
+                        menu = menu.without_back_to_map();
+                    }
+                    if self.from_editor {
+                        menu = menu.without_file_select();
                     }
                     self.menu = Some(menu);
                 }
@@ -388,6 +529,7 @@ impl GameSession {
                     self.close_menu();
                     self.gb.back_to_map();
                 }
+                Action::RestartLevel => self.restart_level(),
                 Action::FileSelect => {
                     self.close_menu();
                     self.gb.back_to_file_select();
@@ -540,6 +682,7 @@ mod tests {
     use super::*;
     use crate::domain::zone_progress::{MapKey, ZoneProgress};
     use crate::ports::{SettingsStore, Window};
+    use cart_model::ram_map::{PLAYER_X, PLAYER_Y};
     use std::cell::{Cell, RefCell};
     use std::rc::Rc;
 
@@ -630,6 +773,7 @@ mod tests {
             checking: false,
             cheats: false,
             test: None,
+            start_point: None,
         };
         let mut s = GameSession::new(gb, parts);
         let mut keys = FakeKeys::default();
@@ -697,6 +841,7 @@ mod tests {
             checking: false,
             cheats,
             test: None,
+            start_point: None,
         };
         Some((GameSession::new(gb, parts), rec))
     }
@@ -797,6 +942,7 @@ mod tests {
             checking: false,
             cheats: true,
             test: None,
+            start_point: None,
         };
         let mut s = GameSession::new(gb, parts);
         let mut keys = FakeKeys::default();
@@ -864,6 +1010,7 @@ mod tests {
             checking: false,
             cheats: false,
             test: None,
+            start_point: None,
         };
         let mut s = GameSession::new(gb, parts);
         let mut keys = FakeKeys::default();
@@ -916,6 +1063,7 @@ mod tests {
                 checking: false,
                 cheats: false,
                 test: None,
+                start_point: None,
             };
             GameSession::new(Gb::new(copy.clone(), 44100).unwrap(), parts)
         };
@@ -1010,6 +1158,7 @@ mod tests {
                 checking: false,
                 cheats: false,
                 test: None,
+                start_point: None,
             };
             GameSession::new(gb, parts)
         };
@@ -1129,6 +1278,7 @@ mod tests {
                 checking: false,
                 cheats: false,
                 test: None,
+                start_point: None,
             };
             GameSession::new(gb, parts)
         };
@@ -1177,5 +1327,83 @@ mod tests {
         assert_eq!(s.gb.read(MAP_POINT), p, "walked to the world map's added point");
         assert!(s.gb.cart().rom() == &copy[..], "the world map's added points are the copy's");
         assert_eq!(rec.zones.borrow().as_ref().unwrap().added[&(MapKey::Zone(0), 0)][0], 0x80, "the Tree Zone's progress is kept");
+    }
+
+    /// A test game from Play from here: Mario, made to lose a life after a midway bell is rung,
+    /// begins again at the chosen place; from Play, at the bell's restart place.
+    #[test]
+    fn a_test_game_enters_the_level_again_after_a_lost_life() {
+        let Some(rom) = host::find_rom(None) else {
+            eprintln!("no cartridge found: session test skipped");
+            return;
+        };
+        let pos = |s: &mut GameSession| (s.gb.read(PLAYER_X) as u16 | (s.gb.read(PLAYER_X + 1) as u16) << 8, s.gb.read(PLAYER_Y) as u16 | (s.gb.read(PLAYER_Y + 1) as u16) << 8);
+        let play = |at: Option<(u16, u16)>| {
+            let rec = Record::default();
+            let prefs = Preferences::new(Box::new(rec.clone()), Box::new(rec.clone()));
+            let parts = SessionParts { prefs, saves: Box::new(rec.clone()), zones: Box::new(rec.clone()), start_level: Some(3), start_at: at, checking: false, cheats: false, test: Some(TestGame { lives: 5, coins: 0, power: 0 }), start_point: None };
+            let mut s = GameSession::new(host::load_gb(&rom, 44100, None).unwrap(), parts);
+            let keys = FakeKeys::default();
+            for _ in 0..30 {
+                s.frame(FRAME_SECONDS as f32, &keys, &Silence);
+            }
+            assert_eq!(s.gb.mode(), GameMode::Playing);
+            let first = pos(&mut s);
+            s.gb.write(0xA2A0, 0xFF);
+            s.gb.write(0xA224, 0x80);
+            let mut lost = false;
+            for f in 0..2000 {
+                s.frame(FRAME_SECONDS as f32, &keys, &Silence);
+                lost |= s.gb.mode() == GameMode::LosingLife;
+                if lost && s.gb.mode() == GameMode::Playing {
+                    break;
+                }
+                assert!(f < 1999, "never back in the level (mode {:?})", s.gb.mode());
+            }
+            assert_eq!((s.gb.read(LEVEL_NUMBER), s.gb.read(LIVES)), (3, 4), "level 03 again, a life less");
+            (first, pos(&mut s))
+        };
+        let gb = host::load_gb(&rom, 44100, None).unwrap();
+        let h = levels::header(gb.cart().rom(), 3).at;
+        let own = Start::read(&gb.cart().rom()[h..h + 8]);
+        let (first, again) = play(Some((own.mario_x + 64, own.mario_y + cart_model::level_start::FEET)));
+        assert_eq!(again, first, "Play from here: the chosen place wins over the bell");
+        let restart = Start::read(checkpoint::entry(gb.cart().rom(), 3).unwrap());
+        let (_, again) = play(None);
+        assert_eq!(again.0, restart.mario_x, "Play: the bell's restart place");
+    }
+
+    /// The zone editor's Play and Play from point: a test game is on the map from its first
+    /// frame shown, a new game with Mario on his start, or on the point asked (a game zone's, a
+    /// new zone's) this time only.
+    #[test]
+    fn a_map_test_game_begins_on_the_point_asked() {
+        use cart_model::start_point::Start;
+        let Some(path) = host::find_rom(None) else { return };
+        let mut doc = project_model::document::EditorDocument::open(std::fs::read(path).unwrap(), None);
+        let k = doc.blank_zone(1).unwrap();
+        let entry = doc.new_zones[k].entry;
+        doc.commit().unwrap();
+        let rec = Record::default();
+        let asked = [(None, 0x00, None), (Some(Start { point: 0x29, new_zone: None }), 0x29, None), (Some(Start { point: entry, new_zone: Some(k) }), entry, Some(k))];
+        for (start_point, point, inside) in asked {
+            let parts = SessionParts {
+                prefs: Preferences::new(Box::new(rec.clone()), Box::new(rec.clone())),
+                saves: Box::new(rec.clone()),
+                zones: Box::new(rec.clone()),
+                start_level: None,
+                start_at: None,
+                checking: false,
+                cheats: false,
+                test: Some(TestGame { lives: 5, coins: 0, power: 0 }),
+                start_point,
+            };
+            let mut s = GameSession::new(Gb::new(doc.rom.clone(), 44100).unwrap(), parts);
+            assert_eq!(s.gb.mode(), GameMode::Map, "{start_point:?}: on the map from the first frame shown");
+            let mut keys = FakeKeys::default();
+            frames(&mut s, &mut keys, &[], 120);
+            assert_eq!((s.gb.read(MAP_POINT), s.zones.inside()), (point, inside), "{start_point:?}");
+        }
+        assert_eq!(cart_model::start_point::read(&doc.rom), Start::default(), "the copy keeps its own start");
     }
 }

@@ -2,7 +2,11 @@
 //! to the world map once (from the cartridge as it was when first needed), then each level
 //! is entered on a copy of that state to see its blocks; object pictures and the world
 //! map's tiles come from the same state, and each zone map's tiles from a copy taken there.
+//! The console runs a copy where a new game begins on the world map's point $00 and that
+//! point opens a level, whatever the project's start and map: the boot shows the world map,
+//! and Start there enters any level.
 use cart_model::art::{capture_mario, LevelArt, Look, WorldArt};
+use cart_model::{start_point, world};
 use cart_model::levels::LEVELS;
 use cart_model::zone_maps::ZONES;
 use cart_model::GameDriver;
@@ -16,6 +20,16 @@ pub enum Capture {
     NotLoaded,
     /// The console couldn't start.
     Failed(String),
+}
+
+/// `rom` with a new game beginning on the world map's point $00, which opens level 00.
+fn on_world_map(rom: &[u8]) -> Vec<u8> {
+    let mut copy = rom.to_vec();
+    start_point::write(&mut copy, start_point::Start::default());
+    let mut points = world::point_levels(&copy);
+    points[0] = 0;
+    world::write_point_levels(&mut copy, &points);
+    copy
 }
 
 pub struct ArtService {
@@ -43,7 +57,7 @@ impl ArtService {
             return Capture::Ready;
         }
         if self.boot.is_none() {
-            let mut g = match Gb::new(rom.to_vec(), 44100) {
+            let mut g = match Gb::new(on_world_map(rom), 44100) {
                 Ok(g) => g,
                 Err(e) => return Capture::Failed(e),
             };

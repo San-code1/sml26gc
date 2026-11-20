@@ -6,5 +6,6 @@ pub mod keys;
 pub mod menu;
 pub mod overlay;
 pub mod pad;
+pub mod retry;
 pub mod settings;
 pub mod zone_progress;

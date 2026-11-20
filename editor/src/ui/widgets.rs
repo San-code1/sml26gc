@@ -269,13 +269,24 @@ pub fn button(r: Rect, label: &str, active: bool, size: f32) -> bool {
 }
 
 /// A button set apart from the choices beside it (dark, with a thin frame): for the actions
-/// under a list of things to choose.
-pub fn action_button(r: Rect, label: &str, size: f32) -> bool {
+/// under a list of things to choose. Unavailable: faded, and a click does nothing.
+pub fn action_button(r: Rect, label: &str, size: f32, available: bool) -> bool {
     let hover = r.contains(mouse_position().into());
+    if !available {
+        framed_label(r, label, col(1), col(2), col(2), 1.0, size);
+        offer_cut_tip(r, label);
+        return false;
+    }
     let bg = if hover { col(3) } else { col(2) };
     framed_label(r, label, bg, col(0), col(3), 1.0, size);
     offer_cut_tip(r, label);
     hover && is_mouse_button_pressed(MouseButton::Left)
+}
+
+/// A button that does nothing now: faded, its label still readable.
+pub fn unavailable_button(r: Rect, label: &str, size: f32) {
+    framed_label(r, label, col(0), col(1), col(1), 2.0, size);
+    offer_cut_tip(r, label);
 }
 
 /// The text lands on whole pixels: the font blurs between them.

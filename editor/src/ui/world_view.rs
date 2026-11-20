@@ -15,6 +15,7 @@ use cart_model::doors::{self, Leads};
 use cart_model::map_routes::{self, Way, DIRS};
 use cart_model::original_notes::{self, Note};
 use cart_model::original_points::{self, OnMap};
+use cart_model::start_point::Start;
 use cart_model::world;
 use cart_model::zone_maps::ZONES;
 use macroquad::prelude::*;
@@ -427,6 +428,12 @@ impl Editor {
             Action::NewZone => self.new_zone(),
             Action::BlankZone => self.open_blank_zone_chooser(),
             Action::GoToStart => self.go_to_start(),
+            Action::GameStart if self.doc.start != Start::default() => {
+                self.doc.set_start(Start::default());
+                self.go_to_start();
+                self.status = format!("{} {} 00.", tr(self.lang, "Mario's start: every new game begins on"), self.map_name(OnMap::World));
+                self.mark(Severity::Done);
+            }
             Action::DeleteZone => self.delete_zone(),
             Action::PrevPoint | Action::NextPoint if zone.is_some() => {
                 let list: Vec<usize> = self.map_points().iter().map(|s| s.0 as usize).collect();
@@ -582,12 +589,40 @@ impl Editor {
         };
     }
 
+    /// Play from a point on or off: the Points tab, and the next click on a point starts the
+    /// game there.
+    pub(super) fn toggle_play_pick(&mut self) {
+        if !self.play_pick && self.game_open() {
+            return;
+        }
+        self.play_pick = !self.play_pick;
+        if !self.play_pick {
+            self.status.clear();
+            return;
+        }
+        self.world_tab = TAB_POINTS;
+        self.route_draw = None;
+        self.placing_point = false;
+        self.status = tr(self.lang, "Click the point to play from: the copy is saved and the game begins there. Esc: cancel.").into();
+    }
+
     /// Clicks on the map in the Points tab: choose a point, put a new one, draw a path, or
-    /// drag a new zone's point somewhere else.
+    /// drag a new zone's point somewhere else; with Play from a point, play from the one
+    /// clicked.
     fn points_clicks(&mut self, m: Vec2) {
         let clicked = is_mouse_button_pressed(MouseButton::Left) && m.x >= self.panel && m.y < screen_height() - STATUS_H;
         // keys typed into a name are not for the map
         let key = |k: KeyCode| self.naming.is_none() && is_key_pressed(k);
+        if self.play_pick {
+            if key(KeyCode::Escape) || is_mouse_button_pressed(MouseButton::Right) {
+                self.toggle_play_pick();
+            } else if let Some(s) = self.point_at(m).filter(|_| clicked) {
+                self.play_pick = false;
+                self.point = s.0 as usize;
+                self.play_map_here();
+            }
+            return;
+        }
         if self.placing_point {
             if key(KeyCode::Escape) || is_mouse_button_pressed(MouseButton::Right) {
                 self.placing_point = false;
@@ -788,11 +823,16 @@ impl Editor {
         self.clipboard = None;
         self.route_draw = None;
         self.placing_point = false;
+        let origin = match map {
+            OnMap::NewZone(k) => self.doc.zone_restore_origin(k).map(|o| self.origin_text(o)),
+            _ => None,
+        };
         if !self.doc.restore_map(map) {
             return;
         }
         self.choose_on_new_zone();
         let how = match map {
+            _ if origin.is_some() => format!("{} {}", tr(self.lang, "restored as imported from"), origin.unwrap_or_default()),
             OnMap::NewZone(k) => format!("{} {} {}", tr(self.lang, "restored as the"), self.map_name(OnMap::Zone(self.doc.new_zones[k].base)), tr(self.lang, "is in the game")),
             _ => tr(self.lang, "restored as it is in the game").to_string(),
         };
@@ -872,23 +912,33 @@ impl Editor {
             if !self.doc.new_zones.is_empty() {
                 y += user_tag_legend(PAD, y + 2.0, tr(lang, "made in the editor"));
             }
-            let copy = (self.world_map != OnMap::World).then_some((tr(lang, "Copy zone"), Action::NewZone));
-            let delete = self.new_zone_shown().map(|_| (tr(lang, "Delete zone"), Action::DeleteZone));
-            let (next, a) = self.picker_actions(y, [copy, Some((tr(lang, "Blank zone"), Action::BlankZone)), delete]);
-            y = next;
-            if let Some(a) = a {
-                pick(a, true);
-            }
         }
-        y += 4.0;
-        let (next, a) = self.toolbar(y, &[(tr(lang, "Save"), Action::Save, false), (tr(lang, "Play"), Action::Play, false)]);
+        let items = [(tr(lang, "Copy zone"), Action::NewZone, self.world_map != OnMap::World), (tr(lang, "Blank zone"), Action::BlankZone, true), (tr(lang, "Delete zone"), Action::DeleteZone, self.new_zone_shown().is_some())];
+        let (next, a) = self.picker_actions(y, self.maps_open, items);
         y = next;
         if let Some(a) = a {
             pick(a, true);
         }
+        let (next, a) = self.toolbar(y, &[(tr(lang, "Save"), Action::Save, false), (tr(lang, "Play"), Action::Play, false)]);
+        y = next - 6.0;
+        if let Some(a) = a {
+            pick(a, true);
+        }
+        pick(Action::PlayFromHere, self.play_button(Rect::new(PAD, y, w, ROW), tr(lang, "Play from a point"), Action::PlayFromHere, self.play_pick));
+        y += ROW + GAP + 6.0;
+        // Mario's start: go there, or put it back on the game's own
         let missing = !self.doc.start_ok();
         let go = if missing { tr(lang, "Mario's start is missing!") } else { tr(lang, "Go to Mario's start") };
-        pick(Action::GoToStart, self.tool_button(Rect::new(PAD, y, w, ROW), go, Action::GoToStart, missing));
+        let half = (w - GAP) / 2.0;
+        pick(Action::GoToStart, self.tool_button(Rect::new(PAD, y, half, ROW), go, Action::GoToStart, missing));
+        let game = Rect::new(PAD + half + GAP, y, half, ROW);
+        let tip = tr(lang, "Put Mario's start back where the original game begins (world map point 00)");
+        if self.doc.start == Start::default() {
+            self.tip_for(game, tip, Action::GameStart);
+            unavailable_button(game, tr(lang, "Original start"), 15.0);
+        } else {
+            pick(Action::GameStart, self.tip_button(game, tr(lang, "Original start"), tip, Action::GameStart, false));
+        }
         y += ROW + GAP + 6.0;
         if let Some(k) = self.new_zone_shown() {
             self.name_field(Rect::new(PAD, y, w, 24.0), Named::Zone(k));

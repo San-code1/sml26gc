@@ -147,6 +147,7 @@ trace, ROM views, and checks that play the edited data in the emulator (`routech
 | New zone and added point progress (game only) | `saves/vanilla/zones.txt`, `saves/<project>/zones.txt` |
 | Settings (the editor reads the language) | `settings.cfg` |
 | Editor settings (palette zoom, listening volume) | `editor.cfg` |
+| What imported new levels and zones restore to (editor only) | `editor/projects/<name>/restore_points.txt` |
 | Captured object pictures (editor only) | `cache/looks-<hash of the cartridge>.txt` |
 | Level, zone, world map and project files (editor only) | `exports/levels/*.nmblevel`, `exports/zones/*.nmbzone`, `exports/world/*.nmbworld`, `exports/projects/<name>/<name>.nmbproject` (any folder may be chosen) |
 

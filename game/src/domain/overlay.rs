@@ -231,6 +231,17 @@ impl Canvas<'_> {
             }
         }
     }
+    /// A small arrow (3 wide, 2 tall, its tip at `x`) saying a list goes on above (`up`) or
+    /// below.
+    pub fn more(&mut self, x: i32, y: i32, up: bool) {
+        for r in 0..2 {
+            let row = if up { r } else { 1 - r };
+            for dx in -r..=r {
+                self.set(x + dx, y + row, 3);
+            }
+        }
+    }
+
     pub fn footer(&mut self, x: i32, bottom: i32, w: i32, t: &str) {
         let tw = text_width(t);
         self.rect(x + (w - tw) / 2 - 3, bottom - 4, tw + 5, 9, 3);
