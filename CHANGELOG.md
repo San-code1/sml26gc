@@ -6,7 +6,7 @@ What each version of the programs brings, as a person using them notices it. The
 
 ## [Unreleased]
 
-## [0.1.0] - 2026-11-21
+## [1.0.0] - 2026-11-21
 
 ### Added
 
@@ -24,6 +24,3 @@ What each version of the programs brings, as a person using them notices it. The
   Russian, Simplified Chinese and Korean; the system's language until another is chosen.
 - A package for Windows 11 that runs without installing anything, with a read-me, the user
   manuals, the changelog, the licence and the legal notice.
-
-[Unreleased]: https://github.com/ogueta93/nmb/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/ogueta93/nmb/releases/tag/v0.1.0
