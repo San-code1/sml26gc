@@ -293,7 +293,7 @@ impl Editor {
             if self.tip_button(Rect::new(cx, y, place, ROW), tr(lang, "Choose"), tr(lang, "Choose on the map"), Action::ChooseTarget, false) {
                 act = Some(Action::ChooseTarget);
             }
-            put_text(&fit(&value, cw - place - 8.0, 14.0), cx + place + 8.0, y + 18.0, 14.0, col(2));
+            put_text(&fit(&value, cw - place - 8.0, 14.0), cx + place + 8.0, y + 18.0, 14.0, INFO);
             y += ROW + GAP;
         } else {
             for (k, i) in self.exit_sites().into_iter().enumerate().take(2) {
@@ -304,7 +304,7 @@ impl Editor {
                     act = Some(a);
                 }
                 let now = if at == doors::NONE { tr(lang, "on no point").to_string() } else { format!("{} {at:02X}", tr(lang, "now on")) };
-                put_text(&fit(&now, cw - place - 8.0, 14.0), cx + place + 8.0, y + 18.0, 14.0, col(2));
+                put_text(&fit(&now, cw - place - 8.0, 14.0), cx + place + 8.0, y + 18.0, 14.0, INFO);
                 y += ROW + GAP;
             }
         }
@@ -1251,7 +1251,7 @@ impl Editor {
             }
             y += 2.0 * (ROW + GAP);
             if self.doc.can_shut(zone, self.point as u8) {
-                put_text(tr(lang, "Shut until its level is cleared:"), PAD, y + 13.0, 14.0, col(2));
+                put_text(tr(lang, "Shut until its level is cleared:"), PAD, y + 13.0, 14.0, INFO);
                 y += 18.0;
                 let shut = self.doc.shut_of(zone, self.point as u8);
                 let qw = (w - 3.0 * GAP) / 4.0;
@@ -1305,7 +1305,7 @@ impl Editor {
         };
         let mut y = self.section(y, tr(lang, "HELP"), "");
         for line in wrap_px(note, w, 14.0) {
-            put_text(&line, PAD, y + 12.0, 14.0, col(2));
+            put_text(&line, PAD, y + 12.0, 14.0, INFO);
             y += 16.0;
         }
         (act, y + 8.0)

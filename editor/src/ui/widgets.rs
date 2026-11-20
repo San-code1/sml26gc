@@ -5,6 +5,8 @@ use cart_model::levels::{COLS, ROWS};
 use macroquad::prelude::*;
 
 pub const PAL: [u32; 4] = [0xC4CFA1, 0x8B956D, 0x4D533C, 0x1F1F1F];
+/// Explanations, notes and hints: a blue that reads well on the panels' light shade.
+pub const INFO: Color = Color::new(0.10, 0.30, 0.61, 1.0);
 /// The side panel's narrowest width; it can be dragged wider.
 pub const PANEL_MIN: f32 = 300.0;
 pub const STATUS_H: f32 = 26.0;
@@ -248,7 +250,7 @@ pub fn user_tag(r: Rect, active: bool) {
 /// The line under a picker that says what the tag means; returns its height.
 pub fn user_tag_legend(x: f32, y: f32, text: &str) -> f32 {
     user_tag(Rect::new(x, y, 22.0, 12.0), false);
-    put_text(text, x + 28.0, y + 11.0, 13.0, col(2));
+    put_text(text, x + 28.0, y + 11.0, 13.0, INFO);
     16.0
 }
 

@@ -60,7 +60,7 @@ impl Editor {
         let lang = self.lang;
         let w = self.panel - 2.0 * PAD - 8.0;
         put_text(tr(lang, "NEW BLANK LEVEL"), PAD, 25.0, 20.0, col(3));
-        put_text(tr(lang, "Plays as:"), PAD, 52.0, 15.0, col(2));
+        put_text(tr(lang, "Plays as:"), PAD, 52.0, 15.0, INFO);
         let mut y = 60.0;
         let per_row = ((w + 2.0) / (LEVEL_BUTTON.0 + 2.0)).floor().max(1.0) as usize;
         for l in 0..LEVELS {

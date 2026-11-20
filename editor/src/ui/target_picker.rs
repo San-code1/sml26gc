@@ -268,7 +268,7 @@ impl Editor {
             Picking::Secret(_) => tr(self.lang, "Click the point Mario is taken to; he stays there. A new zone's point becomes its entry."),
         };
         for line in wrap(note, 36) {
-            put_text(&line, 10.0, y + 12.0, 15.0, col(2));
+            put_text(&line, 10.0, y + 12.0, 15.0, INFO);
             y += 16.0;
         }
         y += 8.0;
