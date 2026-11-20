@@ -36,7 +36,8 @@ archive), run `cargo test --release --workspace` (it includes the golden fingerp
 ## Language
 
 Code, identifiers, comments, commit messages, READMEs and documentation are in English. Only
-the user-facing texts of the programs are translated (`tr(en, es)`, `i18n.rs`).
+the user-facing texts of the programs are translated, only in the catalogues `*/i18n/*.txt`
+read by `crates/i18n` (the code holds the English).
 
 ## Documentation
 

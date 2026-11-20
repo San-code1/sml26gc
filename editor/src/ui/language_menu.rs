@@ -39,7 +39,8 @@ mod tests {
     fn the_entries_give_their_choice() {
         assert_eq!(chosen(AUTOMATIC_ID), Some(None));
         assert_eq!(chosen(AUTOMATIC_ID + 3), Some(Some(Lang::Ja)));
-        assert_eq!(chosen(AUTOMATIC_ID + 4), None);
+        assert_eq!(chosen(AUTOMATIC_ID + 11), Some(Some(Lang::Ko)));
+        assert_eq!(chosen(AUTOMATIC_ID + 12), None);
         assert_eq!(chosen(1), None);
     }
 }

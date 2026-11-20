@@ -12,24 +12,33 @@
 //! ```
 use std::collections::HashMap;
 
+/// The languages, in the order the editor's and the game's lists show them (and the game's
+/// settings number them): the first three as before, then the others.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Default)]
 pub enum Lang {
     #[default]
     En,
     Es,
     Ja,
+    Pt,
+    Fr,
+    De,
+    It,
+    Id,
+    Ru,
+    Zh,
+    Ko,
 }
 
-impl Lang {
-    pub const ALL: [Lang; 3] = [Lang::En, Lang::Es, Lang::Ja];
+/// How many languages there are.
+pub const LANGS: usize = 11;
 
-    /// The id in settings files and catalogues.
+impl Lang {
+    pub const ALL: [Lang; LANGS] = [Lang::En, Lang::Es, Lang::Ja, Lang::Pt, Lang::Fr, Lang::De, Lang::It, Lang::Id, Lang::Ru, Lang::Zh, Lang::Ko];
+
+    /// The id in settings files and catalogues (ISO 639-1; `zh` is Simplified Chinese).
     pub fn id(self) -> &'static str {
-        match self {
-            Lang::En => "en",
-            Lang::Es => "es",
-            Lang::Ja => "ja",
-        }
+        ["en", "es", "ja", "pt", "fr", "de", "it", "id", "ru", "zh", "ko"][self as usize]
     }
 
     pub fn from_id(id: &str) -> Option<Lang> {
@@ -38,42 +47,38 @@ impl Lang {
 
     /// The language's name written in itself.
     pub fn name(self) -> &'static str {
-        match self {
-            Lang::En => "English",
-            Lang::Es => "Español",
-            Lang::Ja => "日本語",
-        }
+        ["English", "Español", "日本語", "Português", "Français", "Deutsch", "Italiano", "Bahasa Indonesia", "Русский", "简体中文", "한국어"][self as usize]
     }
 
-    /// The language of a locale tag ("es-MX", "ja_JP"): Spanish or Japanese, else English.
+    /// The language of a locale tag ("es-MX", "pt_BR", "zh-Hans"): its primary subtag, or
+    /// English when it is none of them.
     pub fn from_tag(tag: &str) -> Lang {
-        let primary = tag.split(['-', '_']).next().unwrap_or("").to_ascii_lowercase();
-        match primary.as_str() {
-            "es" => Lang::Es,
-            "ja" => Lang::Ja,
-            _ => Lang::En,
-        }
+        let primary = tag.split(['-', '_', '.']).next().unwrap_or("").to_ascii_lowercase();
+        // "in" is Indonesian's old code, still used by some systems
+        let primary = if primary == "in" { "id".to_string() } else { primary };
+        Lang::from_id(&primary).unwrap_or(Lang::En)
     }
 }
 
-/// The texts of a catalogue, looked up by their English.
+/// The texts of a catalogue, looked up by their English: each entry keeps a text per other
+/// language (`Lang` order, English left out).
 #[derive(Default, Debug)]
 pub struct Dictionary {
-    entries: HashMap<String, [Option<String>; 2]>,
+    entries: HashMap<String, Vec<Option<String>>>,
 }
 
 impl Dictionary {
     /// Read a catalogue; an error names the line that is not an entry's.
     pub fn parse(text: &str) -> Result<Dictionary, String> {
         let mut d = Dictionary::default();
-        let mut entry: [Option<String>; 3] = [None, None, None];
-        let mut close = |entry: &mut [Option<String>; 3], line: usize| -> Result<(), String> {
+        let mut entry: Vec<Option<String>> = vec![None; LANGS];
+        let mut close = |entry: &mut Vec<Option<String>>, line: usize| -> Result<(), String> {
             if entry.iter().all(Option::is_none) {
                 return Ok(());
             }
-            let [en, es, ja] = std::mem::take(entry);
-            let en = en.ok_or(format!("line {line}: an entry without its English"))?;
-            if d.entries.insert(en.clone(), [es, ja]).is_some() {
+            let mut texts = std::mem::replace(entry, vec![None; LANGS]);
+            let en = texts.remove(0).ok_or(format!("line {line}: an entry without its English"))?;
+            if d.entries.insert(en.clone(), texts).is_some() {
                 return Err(format!("line {line}: \"{en}\" twice"));
             }
             Ok(())
@@ -101,17 +106,21 @@ impl Dictionary {
 
     /// `en` in `lang`, or `en` itself when the catalogue has no such text.
     pub fn get<'a>(&'a self, lang: Lang, en: &'a str) -> &'a str {
-        let slot = match lang {
-            Lang::En => return en,
-            Lang::Es => 0,
-            Lang::Ja => 1,
-        };
-        self.entries.get(en).and_then(|t| t[slot].as_deref()).unwrap_or(en)
+        if lang == Lang::En {
+            return en;
+        }
+        self.entries.get(en).and_then(|t| t[lang as usize - 1].as_deref()).unwrap_or(en)
     }
 
-    /// Every entry: its English, and whether it has each other language.
-    pub fn entries(&self) -> impl Iterator<Item = (&str, Option<&str>, Option<&str>)> {
-        self.entries.iter().map(|(en, [es, ja])| (en.as_str(), es.as_deref(), ja.as_deref()))
+    /// Every entry: its English, and its text in `lang` if it has one (English: itself).
+    pub fn entries(&self, lang: Lang) -> impl Iterator<Item = (&str, Option<&str>)> {
+        self.entries.iter().map(move |(en, t)| (en.as_str(), if lang == Lang::En { Some(en.as_str()) } else { t[lang as usize - 1].as_deref() }))
+    }
+
+    /// The languages entry `en` has no text in (empty when it has all of them).
+    pub fn missing(&self, en: &str) -> Vec<Lang> {
+        let Some(t) = self.entries.get(en) else { return Lang::ALL[1..].to_vec() };
+        Lang::ALL[1..].iter().copied().filter(|&l| t[l as usize - 1].is_none()).collect()
     }
 }
 
@@ -148,6 +157,17 @@ mod tests {
     }
 
     #[test]
+    fn eleven_languages_by_id_name_and_tag() {
+        assert_eq!(Lang::ALL.len(), LANGS);
+        assert!(Lang::ALL.iter().enumerate().all(|(i, &l)| l as usize == i && Lang::from_id(l.id()) == Some(l)));
+        assert_eq!((Lang::from_tag("pt_BR.UTF-8"), Lang::from_tag("zh-Hans-CN"), Lang::from_tag("in_ID"), Lang::from_tag("ar-EG")), (Lang::Pt, Lang::Zh, Lang::Id, Lang::En));
+        assert_eq!((Lang::Ko.name(), Lang::Ru.id()), ("한국어", "ru"));
+        let d = Dictionary::parse("en: Save\nde: Speichern\nko: 저장\n").unwrap();
+        assert_eq!((d.get(Lang::De, "Save"), d.get(Lang::Ko, "Save"), d.get(Lang::Fr, "Save")), ("Speichern", "저장", "Save"));
+        assert_eq!(d.missing("Save").len(), LANGS - 3);
+    }
+
+    #[test]
     fn a_missing_text_shows_in_english() {
         let d = Dictionary::parse(CATALOGUE).unwrap();
         assert_eq!(d.get(Lang::Ja, "Two\nlines"), "Two\nlines", "no Japanese for it");
@@ -158,7 +178,7 @@ mod tests {
     fn bad_catalogues_are_refused() {
         assert!(Dictionary::parse("es: Guardar\n").is_err(), "no English");
         assert!(Dictionary::parse("en: A\n\nen: A\n").is_err(), "twice");
-        assert!(Dictionary::parse("en: A\nfr: B\n").is_err(), "unknown language");
+        assert!(Dictionary::parse("en: A\nar: B\n").is_err(), "unknown language");
         assert!(Dictionary::parse("en A\n").is_err(), "no colon");
     }
 
@@ -166,7 +186,8 @@ mod tests {
     fn locale_tags_give_the_language() {
         assert_eq!(Lang::from_tag("es-MX"), Lang::Es);
         assert_eq!(Lang::from_tag("ja-JP"), Lang::Ja);
-        assert_eq!(Lang::from_tag("fr-FR"), Lang::En);
+        assert_eq!(Lang::from_tag("fr-FR"), Lang::Fr);
+        assert_eq!(Lang::from_tag("hi-IN"), Lang::En);
         assert_eq!(Lang::from_tag("ES_es"), Lang::Es);
         assert_eq!(Lang::from_id("ja"), Some(Lang::Ja));
     }

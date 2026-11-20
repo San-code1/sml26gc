@@ -1,0 +1,943 @@
+# The game menu's texts: each entry's English (the text in `game/src/domain/i18n/en.rs`) and
+# its translations, in `i18n::Lang` order. See crates/i18n for the format. They are drawn with
+# the pixel font: capitals, the Latin languages without accents (Spanish keeps its N with
+# tilde), katakana for Japanese, Cyrillic capitals for Russian; the Chinese and Korean
+# characters must be in `game/src/domain/glyphs_cjk.rs` (`research glyphs` makes it). Only the
+# punctuation ! ( ) + - . / : < = > ? is drawn. The translations other than Spanish and
+# Japanese are machine-written and await review by native speakers.
+
+en: PAUSE
+es: PAUSA
+ja: ポーズ
+pt: PAUSA
+fr: PAUSE
+de: PAUSE
+it: PAUSA
+id: JEDA
+ru: ПАУЗА
+zh: 暂停
+ko: 일시정지
+
+en: CONTINUE
+es: CONTINUAR
+ja: ツヅケル
+pt: CONTINUAR
+fr: CONTINUER
+de: WEITER
+it: CONTINUA
+id: LANJUT
+ru: ПРОДОЛЖИТЬ
+zh: 继续
+ko: 계속하기
+
+en: CONTROLS
+es: CONTROLES
+ja: キーセッテイ
+pt: CONTROLES
+fr: COMMANDES
+de: STEUERUNG
+it: COMANDI
+id: KONTROL
+ru: УПРАВЛЕНИЕ
+zh: 按键设置
+ko: 조작 설정
+
+en: DISPLAY
+es: PANTALLA
+ja: ガメン
+pt: TELA
+fr: AFFICHAGE
+de: ANZEIGE
+it: SCHERMO
+id: TAMPILAN
+ru: ЭКРАН
+zh: 画面
+ko: 화면
+
+en: SOUND
+es: SONIDO
+ja: サウンド
+pt: SOM
+fr: SON
+de: TON
+it: SUONO
+id: SUARA
+ru: ЗВУК
+zh: 声音
+ko: 소리
+
+en: LANGUAGE
+es: IDIOMA
+ja: ゲンゴ
+pt: IDIOMA
+fr: LANGUE
+de: SPRACHE
+it: LINGUA
+id: BAHASA
+ru: ЯЗЫК
+zh: 语言
+ko: 언어
+
+en: ORIGINAL PAUSE
+es: PAUSA ORIGINAL
+ja: モトノポーズ
+pt: PAUSA ORIGINAL
+fr: PAUSE ORIGINALE
+de: ORIGINAL-PAUSE
+it: PAUSA ORIGINALE
+id: JEDA ASLI
+ru: ПАУЗА ИГРЫ
+zh: 原版暂停
+ko: 원래 일시정지
+
+en: QUIT GAME
+es: SALIR DEL JUEGO
+ja: ゲームヲヤメル
+pt: SAIR DO JOGO
+fr: QUITTER LE JEU
+de: SPIEL BEENDEN
+it: ESCI DAL GIOCO
+id: KELUAR GAME
+ru: ВЫЙТИ ИЗ ИГРЫ
+zh: 退出游戏
+ko: 게임 종료
+
+en: BACK TO MAP
+es: VOLVER AL MAPA
+ja: チズニモドル
+pt: VOLTAR AO MAPA
+fr: RETOUR A LA CARTE
+de: ZUR KARTE
+it: TORNA ALLA MAPPA
+id: KEMBALI KE PETA
+ru: НА КАРТУ
+zh: 返回地图
+ko: 지도로 돌아가기
+
+en: FILE SELECT
+es: ELEGIR PARTIDA
+ja: データセンタク
+pt: ESCOLHER ARQUIVO
+fr: CHOIX DU FICHIER
+de: DATEIAUSWAHL
+it: SCELTA FILE
+id: PILIH BERKAS
+ru: ВЫБОР ФАЙЛА
+zh: 选择存档
+ko: 파일 선택
+
+en: DEBUG / CHEATS
+es: DEBUG / TRUCOS
+ja: デバッグ/チート
+pt: DEBUG / TRAPACAS
+fr: DEBUG / TRICHES
+de: DEBUG / CHEATS
+it: DEBUG / TRUCCHI
+id: DEBUG / CURANG
+ru: ОТЛАДКА / ЧИТЫ
+zh: 调试/作弊
+ko: 디버그/치트
+
+en: RESTART LEVEL
+es: REINICIAR NIVEL
+ja: コースヲヤリナオス
+pt: REINICIAR FASE
+fr: RECOMMENCER
+de: LEVEL NEU
+it: RICOMINCIA
+id: ULANGI LEVEL
+ru: ЗАНОВО
+zh: 重新开始关卡
+ko: 코스 다시하기
+
+en: ARE YOU SURE?
+es: SEGURO?
+ja: ホントニ?
+pt: TEM CERTEZA?
+fr: SUR ?
+de: SICHER?
+it: SICURO?
+id: YAKIN?
+ru: ТОЧНО?
+zh: 确定吗?
+ko: 정말인가요?
+
+en: MENU
+es: MENU
+ja: メニュー
+pt: MENU
+fr: MENU
+de: MENUE
+it: MENU
+id: MENU
+ru: МЕНЮ
+zh: 菜单
+ko: 메뉴
+
+en: SAVE
+es: GUARDAR
+ja: セーブ
+pt: SALVAR
+fr: SAUVER
+de: SPEICHERN
+it: SALVA
+id: SIMPAN
+ru: СОХРАНИТЬ
+zh: 保存
+ko: 저장
+
+en: LOAD
+es: CARGAR
+ja: ロード
+pt: CARREGAR
+fr: CHARGER
+de: LADEN
+it: CARICA
+id: MUAT
+ru: ЗАГРУЗИТЬ
+zh: 读取
+ko: 불러오기
+
+en: REWIND
+es: REBOBINAR
+ja: リワインド
+pt: RETROCEDER
+fr: REMBOBINER
+de: ZURUECKSPULEN
+it: RIAVVOLGI
+id: MUNDUR
+ru: ПЕРЕМОТКА
+zh: 倒带
+ko: 되감기
+
+en: ENTER:OK  ESC:RESUME
+es: INTRO:OK  ESC:SEGUIR
+ja: ENTER:OK ESC:ツヅケル
+pt: ENTER:OK ESC:VOLTAR
+fr: ENTREE:OK ECHAP:JEU
+de: ENTER:OK ESC:WEITER
+it: INVIO:OK ESC:GIOCA
+id: ENTER:OK ESC:LANJUT
+ru: ENTER:OK ESC:ИГРА
+zh: ENTER:确定 ESC:继续
+ko: ENTER:확인 ESC:계속
+
+en: UP
+es: ARRIBA
+ja: ウエ
+pt: CIMA
+fr: HAUT
+de: OBEN
+it: SU
+id: ATAS
+ru: ВВЕРХ
+zh: 上
+ko: 위
+
+en: DOWN
+es: ABAJO
+ja: シタ
+pt: BAIXO
+fr: BAS
+de: UNTEN
+it: GIU
+id: BAWAH
+ru: ВНИЗ
+zh: 下
+ko: 아래
+
+en: LEFT
+es: IZQUIERDA
+ja: ヒダリ
+pt: ESQUERDA
+fr: GAUCHE
+de: LINKS
+it: SINISTRA
+id: KIRI
+ru: ВЛЕВО
+zh: 左
+ko: 왼쪽
+
+en: RIGHT
+es: DERECHA
+ja: ミギ
+pt: DIREITA
+fr: DROITE
+de: RECHTS
+it: DESTRA
+id: KANAN
+ru: ВПРАВО
+zh: 右
+ko: 오른쪽
+
+en: A BUTTON
+es: BOTON A
+ja: Aボタン
+pt: BOTAO A
+fr: BOUTON A
+de: A-KNOPF
+it: TASTO A
+id: TOMBOL A
+ru: КНОПКА A
+zh: A键
+ko: A 버튼
+
+en: B BUTTON
+es: BOTON B
+ja: Bボタン
+pt: BOTAO B
+fr: BOUTON B
+de: B-KNOPF
+it: TASTO B
+id: TOMBOL B
+ru: КНОПКА B
+zh: B键
+ko: B 버튼
+
+en: START
+es: START
+ja: START
+pt: START
+fr: START
+de: START
+it: START
+id: START
+ru: START
+zh: START
+ko: START
+
+en: SELECT
+es: SELECT
+ja: SELECT
+pt: SELECT
+fr: SELECT
+de: SELECT
+it: SELECT
+id: SELECT
+ru: SELECT
+zh: SELECT
+ko: SELECT
+
+en: SAVE STATE
+es: GUARDAR ESTADO
+ja: クイックセーブ
+pt: SALVAR
+fr: SAUVER ETAT
+de: SPEICHERN
+it: SALVA STATO
+id: SIMPAN KONDISI
+ru: СОХРАНЕНИЕ
+zh: 即时存档
+ko: 상태 저장
+
+en: LOAD STATE
+es: CARGAR ESTADO
+ja: クイックロード
+pt: CARREGAR
+fr: CHARGER ETAT
+de: LADEN
+it: CARICA STATO
+id: MUAT KONDISI
+ru: ЗАГРУЗКА
+zh: 即时读档
+ko: 상태 불러오기
+
+en: FAST FORWARD
+es: ACELERAR
+ja: ハヤオクリ
+pt: ACELERAR
+fr: AVANCE RAPIDE
+de: SCHNELL
+it: AVANTI VELOCE
+id: PERCEPAT
+ru: УСКОРЕНИЕ
+zh: 快进
+ko: 빨리 감기
+
+en: RESTORE DEFAULTS
+es: RESTAURAR
+ja: モトニモドス
+pt: RESTAURAR PADROES
+fr: PAR DEFAUT
+de: STANDARD
+it: PREDEFINITI
+id: KEMBALIKAN BAWAAN
+ru: ПО УМОЛЧАНИЮ
+zh: 恢复默认
+ko: 기본값으로
+
+en: ENTER:CHANGE ESC:BACK
+es: INTRO:CAMBIAR ESC:VOLVER
+ja: ENTER:ヘンコウ ESC:モドル
+pt: ENTER:MUDAR ESC:VOLTAR
+fr: ENTREE:CHANGER ECHAP:RET
+de: ENTER:AENDERN ESC:RUECK
+it: INVIO:CAMBIA ESC:ESCI
+id: ENTER:UBAH ESC:KEMBALI
+ru: ENTER:ИЗМЕНИТЬ ESC:НАЗАД
+zh: ENTER:更改 ESC:返回
+ko: ENTER:변경 ESC:돌아가기
+
+en: PRESS A KEY
+es: PULSA UNA TECLA
+ja: キーヲオシテ
+pt: APERTE UMA TECLA
+fr: PRESSEZ UNE TOUCHE
+de: TASTE DRUECKEN
+it: PREMI UN TASTO
+id: TEKAN SEBUAH TOMBOL
+ru: НАЖМИТЕ КЛАВИШУ
+zh: 请按一个键
+ko: 키를 누르세요
+
+en: PRESS A BUTTON
+es: PULSA UN BOTON
+ja: ボタンヲオシテ
+pt: APERTE UM BOTAO
+fr: PRESSEZ UN BOUTON
+de: KNOPF DRUECKEN
+it: PREMI UN PULSANTE
+id: TEKAN SEBUAH TOMBOL
+ru: НАЖМИТЕ КНОПКУ
+zh: 请按一个按钮
+ko: 버튼을 누르세요
+
+en: INPUT
+es: ENTRADA
+ja: ニュウリョク
+pt: ENTRADA
+fr: ENTREE
+de: EINGABE
+it: INGRESSO
+id: MASUKAN
+ru: ВВОД
+zh: 输入
+ko: 입력
+
+en: KEYBOARD
+es: TECLADO
+ja: キーボード
+pt: TECLADO
+fr: CLAVIER
+de: TASTATUR
+it: TASTIERA
+id: KEYBOARD
+ru: КЛАВИАТУРА
+zh: 键盘
+ko: 키보드
+
+en: CONTROLLER
+es: MANDO
+ja: コントローラー
+pt: CONTROLE
+fr: MANETTE
+de: CONTROLLER
+it: CONTROLLER
+id: KONTROLER
+ru: ГЕЙМПАД
+zh: 手柄
+ko: 컨트롤러
+
+en: NOW:
+es: AHORA:
+ja: イマ:
+pt: AGORA:
+fr: ACTUEL:
+de: JETZT:
+it: ORA:
+id: KINI:
+ru: СЕЙЧАС:
+zh: 当前:
+ko: 현재:
+
+en: ESC: CANCEL
+es: ESC: CANCELAR
+ja: ESC:キャンセル
+pt: ESC: CANCELAR
+fr: ECHAP: ANNULER
+de: ESC: ABBRECHEN
+it: ESC: ANNULLA
+id: ESC: BATAL
+ru: ESC: ОТМЕНА
+zh: ESC:取消
+ko: ESC:취소
+
+en: COLOURS
+es: COLORES
+ja: イロ
+pt: CORES
+fr: COULEURS
+de: FARBEN
+it: COLORI
+id: WARNA
+ru: ЦВЕТА
+zh: 颜色
+ko: 색
+
+en: CLASSIC
+es: CLASICA
+ja: クラシック
+pt: CLASSICA
+fr: RETRO
+de: KLASSIK
+it: CLASSICO
+id: KLASIK
+ru: КЛАССИКА
+zh: 经典
+ko: 클래식
+
+en: GREEN
+es: VERDE
+ja: ミドリ
+pt: VERDE
+fr: VERT
+de: GRUEN
+it: VERDE
+id: HIJAU
+ru: ЗЕЛЕНЫЙ
+zh: 绿色
+ko: 초록
+
+en: GREY
+es: GRIS
+ja: グレー
+pt: CINZA
+fr: GRIS
+de: GRAU
+it: GRIGIO
+id: ABU-ABU
+ru: СЕРЫЙ
+zh: 灰色
+ko: 회색
+
+en: FULL SCREEN
+es: COMPLETA
+ja: ゼンガメン
+pt: TELA CHEIA
+fr: PLEIN ECRAN
+de: VOLLBILD
+it: INTERO
+id: LAYAR PENUH
+ru: ПОЛНЫЙ
+zh: 全屏
+ko: 전체 화면
+
+en: YES
+es: SI
+ja: ハイ
+pt: SIM
+fr: OUI
+de: JA
+it: SI
+id: YA
+ru: ДА
+zh: 是
+ko: 예
+
+en: NO
+es: NO
+ja: イイエ
+pt: NAO
+fr: NON
+de: NEIN
+it: NO
+id: TIDAK
+ru: НЕТ
+zh: 否
+ko: 아니요
+
+en: SCALE
+es: ESCALA
+ja: スケール
+pt: ESCALA
+fr: ECHELLE
+de: SKALA
+it: SCALA
+id: SKALA
+ru: МАСШТАБ
+zh: 缩放
+ko: 배율
+
+en: SHARP
+es: NITIDA
+ja: シャープ
+pt: NITIDA
+fr: NETTE
+de: SCHARF
+it: NITIDA
+id: TAJAM
+ru: ЧЕТКИЙ
+zh: 清晰
+ko: 선명
+
+en: FITTED
+es: AJUSTADA
+ja: フィット
+pt: AJUSTADA
+fr: AJUSTEE
+de: PASSEND
+it: ADATTATA
+id: PAS
+ru: ВПИСАТЬ
+zh: 适应
+ko: 맞춤
+
+en: </>:CHANGE ESC:BACK
+es: </>:CAMBIAR ESC:VOLVER
+ja: </>:ヘンコウ ESC:モドル
+pt: </>:MUDAR ESC:VOLTAR
+fr: </>:CHANGER ECHAP:RET
+de: </>:AENDERN ESC:ZURUECK
+it: </>:CAMBIA ESC:INDIETRO
+id: </>:UBAH ESC:KEMBALI
+ru: </>:ИЗМЕНИТЬ ESC:НАЗАД
+zh: </>:更改 ESC:返回
+ko: </>:변경 ESC:돌아가기
+
+en: VOLUME
+es: VOLUMEN
+ja: オンリョウ
+pt: VOLUME
+fr: VOLUME
+de: LAUTST.
+it: VOLUME
+id: VOLUME
+ru: ГРОМКОСТЬ
+zh: 音量
+ko: 음량
+
+en: ENTER:OK ESC:BACK
+es: INTRO:OK ESC:VOLVER
+ja: ENTER:OK ESC:モドル
+pt: ENTER:OK ESC:VOLTAR
+fr: ENTREE:OK ECHAP:RET
+de: ENTER:OK ESC:RUECK
+it: INVIO:OK ESC:ESCI
+id: ENTER:OK ESC:BALIK
+ru: ENTER:OK ESC:НАЗАД
+zh: ENTER:确定 ESC:返回
+ko: ENTER:확인 ESC:뒤로
+
+en: INVINCIBLE
+es: INVENCIBLE
+ja: ムテキ
+pt: INVENCIVEL
+fr: INVINCIBLE
+de: UNVERWUNDBAR
+it: INVINCIBILE
+id: KEBAL
+ru: НЕУЯЗВИМОСТЬ
+zh: 无敌
+ko: 무적
+
+en: FINISH LEVEL
+es: TERMINAR NIVEL
+ja: コースクリア
+pt: TERMINAR FASE
+fr: FINIR LE NIVEAU
+de: LEVEL BEENDEN
+it: FINISCI LIVELLO
+id: SELESAIKAN LEVEL
+ru: ПРОЙТИ УРОВЕНЬ
+zh: 完成关卡
+ko: 코스 클리어
+
+en: SECRET EXIT
+es: SALIDA SECRETA
+ja: ヒミツノデグチ
+pt: SAIDA SECRETA
+fr: SORTIE SECRETE
+de: GEHEIMAUSGANG
+it: USCITA SEGRETA
+id: JALAN RAHASIA
+ru: ТАЙНЫЙ ВЫХОД
+zh: 秘密出口
+ko: 비밀 출구
+
+en: GO TO LEVEL
+es: IR A NIVEL
+ja: コースセンタク
+pt: IR PARA FASE
+fr: ALLER AU NIVEAU
+de: ZU LEVEL
+it: VAI AL LIVELLO
+id: KE LEVEL
+ru: НА УРОВЕНЬ
+zh: 前往关卡
+ko: 코스 이동
+
+en: SUMMON ITEM
+es: INVOCAR OBJETO
+ja: アイテム
+pt: INVOCAR ITEM
+fr: INVOQUER OBJET
+de: ITEM RUFEN
+it: EVOCA OGGETTO
+id: PANGGIL ITEM
+ru: ВЫЗВАТЬ ПРЕДМЕТ
+zh: 召唤道具
+ko: 아이템 소환
+
+en: FREEZE TIMER
+es: PARAR TIEMPO
+ja: タイムストップ
+pt: PARAR TEMPO
+fr: FIGER LE TEMPS
+de: ZEIT ANHALTEN
+it: FERMA IL TEMPO
+id: HENTIKAN WAKTU
+ru: СТОП ТАЙМЕР
+zh: 冻结时间
+ko: 시간 정지
+
+en: 99 LIVES
+es: 99 VIDAS
+ja: ライフ 99
+pt: 99 VIDAS
+fr: 99 VIES
+de: 99 LEBEN
+it: 99 VITE
+id: 99 NYAWA
+ru: 99 ЖИЗНЕЙ
+zh: 99条命
+ko: 목숨 99
+
+en: 999 COINS
+es: 999 MONEDAS
+ja: コイン 999
+pt: 999 MOEDAS
+fr: 999 PIECES
+de: 999 MUENZEN
+it: 999 MONETE
+id: 999 KOIN
+ru: 999 МОНЕТ
+zh: 999金币
+ko: 코인 999
+
+en: 6 GOLDEN COINS
+es: 6 MONEDAS DORADAS
+ja: ゴールドコイン 6
+pt: 6 MOEDAS DE OURO
+fr: 6 PIECES D OR
+de: 6 GOLDMUENZEN
+it: 6 MONETE D ORO
+id: 6 KOIN EMAS
+ru: 6 ЗОЛОТЫХ МОНЕТ
+zh: 6枚金币
+ko: 금화 6개
+
+en: OPEN THE WHOLE MAP
+es: ABRIR TODO EL MAPA
+ja: チズヲヒラク
+pt: ABRIR O MAPA TODO
+fr: OUVRIR LA CARTE
+de: KARTE OEFFNEN
+it: APRI LA MAPPA
+id: BUKA SELURUH PETA
+ru: ОТКРЫТЬ ВСЮ КАРТУ
+zh: 打开整个地图
+ko: 지도 모두 열기
+
+en: INFO PANEL
+es: PANEL DE INFO
+ja: ジョウホウ
+pt: PAINEL DE INFO
+fr: INFOS
+de: INFO
+it: PANNELLO INFO
+id: PANEL INFO
+ru: ИНФО
+zh: 信息面板
+ko: 정보 패널
+
+en: OBJECTS VIEW
+es: VER OBJETOS
+ja: オブジェクト
+pt: VER OBJETOS
+fr: VOIR LES OBJETS
+de: OBJEKTE ZEIGEN
+it: VEDI OGGETTI
+id: LIHAT OBJEK
+ru: ОБЪЕКТЫ
+zh: 显示物体
+ko: 오브젝트 보기
+
+en: LEVEL
+es: NIVEL
+ja: コース
+pt: FASE
+fr: NIVEAU
+de: LEVEL
+it: LIVELLO
+id: LEVEL
+ru: УРОВЕНЬ
+zh: 关卡
+ko: 코스
+
+en: SAVED (F7 LOADS)
+es: GUARDADO (F7 CARGA)
+ja: セーブ (F7:ロード)
+pt: SALVO (F7 CARREGA)
+fr: SAUVE (F7 CHARGE)
+de: GESPEICHERT (F7 LAEDT)
+it: SALVATO (F7 CARICA)
+id: TERSIMPAN (F7 MUAT)
+ru: СОХРАНЕНО (F7)
+zh: 已保存 (F7读取)
+ko: 저장됨 (F7 불러오기)
+
+en: LOADED
+es: CARGADO
+ja: ロード
+pt: CARREGADO
+fr: CHARGE
+de: GELADEN
+it: CARICATO
+id: DIMUAT
+ru: ЗАГРУЖЕНО
+zh: 已读取
+ko: 불러옴
+
+en: NOTHING SAVED (F6)
+es: NADA GUARDADO (F6)
+ja: セーブナシ (F6)
+pt: NADA SALVO (F6)
+fr: RIEN DE SAUVE (F6)
+de: NICHTS GESPEICHERT (F6)
+it: NIENTE SALVATO (F6)
+id: BELUM ADA SIMPANAN (F6)
+ru: НЕТ СОХРАНЕНИЯ (F6)
+zh: 没有存档 (F6)
+ko: 저장 없음 (F6)
+
+en: STAR
+es: ESTRELLA
+ja: スター
+pt: ESTRELA
+fr: ETOILE
+de: STERN
+it: STELLA
+id: BINTANG
+ru: ЗВЕЗДА
+zh: 星星
+ko: 스타
+
+en: MUSHROOM
+es: CHAMPIÑON
+ja: キノコ
+pt: COGUMELO
+fr: CHAMPIGNON
+de: PILZ
+it: FUNGO
+id: JAMUR
+ru: ГРИБ
+zh: 蘑菇
+ko: 버섯
+
+en: FIRE FLOWER
+es: FLOR DE FUEGO
+ja: フラワー
+pt: FLOR DE FOGO
+fr: FLEUR DE FEU
+de: FEUERBLUME
+it: FIORE DI FUOCO
+id: BUNGA API
+ru: ОГНЕННЫЙ ЦВЕТОК
+zh: 火焰花
+ko: 파이어 플라워
+
+en: CARROT
+es: ZANAHORIA
+ja: ニンジン
+pt: CENOURA
+fr: CAROTTE
+de: KAROTTE
+it: CAROTA
+id: WORTEL
+ru: МОРКОВЬ
+zh: 胡萝卜
+ko: 당근
+
+en: HEART
+es: CORAZON
+ja: ハート
+pt: CORACAO
+fr: COEUR
+de: HERZ
+it: CUORE
+id: HATI
+ru: СЕРДЦЕ
+zh: 爱心
+ko: 하트
+
+en: ON
+es: ON
+ja: ON
+pt: SIM
+fr: OUI
+de: AN
+it: SI
+id: NYALA
+ru: ВКЛ
+zh: 开
+ko: 켬
+
+en: OFF
+es: OFF
+ja: OFF
+pt: NAO
+fr: NON
+de: AUS
+it: NO
+id: MATI
+ru: ВЫКЛ
+zh: 关
+ko: 끔
+
+en: OK
+es: OK
+ja: OK
+pt: OK
+fr: OK
+de: OK
+it: OK
+id: OK
+ru: OK
+zh: OK
+ko: OK
+
+en: ONLY IN A LEVEL
+es: SOLO EN UN NIVEL
+ja: コースノナカダケ
+pt: SO EM UMA FASE
+fr: DANS UN NIVEAU
+de: NUR IM LEVEL
+it: SOLO IN UN LIVELLO
+id: HANYA DI LEVEL
+ru: ТОЛЬКО НА УРОВНЕ
+zh: 仅在关卡中
+ko: 코스 안에서만
+
+en: NO SECRET EXIT HERE
+es: SIN SALIDA SECRETA
+ja: ヒミツノデグチハナイ
+pt: SEM SAIDA SECRETA
+fr: PAS DE SORTIE SECRETE
+de: KEIN GEHEIMAUSGANG
+it: NESSUNA USCITA SEGRETA
+id: TIDAK ADA JALAN RAHASIA
+ru: ТАЙНОГО ВЫХОДА НЕТ
+zh: 这里没有秘密出口
+ko: 비밀 출구 없음
+
+en: </>:CHOOSE ENTER:OK
+es: </>:ELEGIR INTRO:OK
+ja: </>:エラブ ENTER:OK
+pt: </>:ESCOLHA ENTER:OK
+fr: </>:CHOIX ENTREE:OK
+de: </>:WAEHLEN ENTER:OK
+it: </>:SCEGLI INVIO:OK
+id: </>:PILIH ENTER:OK
+ru: </>:ВЫБОР ENTER:OK
+zh: </>:选择 ENTER:确定
+ko: </>:선택 ENTER:확인

@@ -1,0 +1,112 @@
+# The messages of the shared adapters (base cartridge, projects): each entry's English (the
+# text in the code) and its translations. See crates/i18n for the format. The Latin languages
+# are written without accents (the editor's built-in font has none). The translations other
+# than Spanish and Japanese are machine-written and await review by native speakers.
+
+en: Choose your Super Mario Land 2 - 6 Golden Coins (USA, Europe) cartridge file.
+es: Elige tu fichero de cartucho de Super Mario Land 2 - 6 Golden Coins (USA, Europe).
+ja: Super Mario Land 2 - 6 Golden Coins (USA, Europe) のカートリッジファイルを選んでください。
+pt: Escolha o seu arquivo de cartucho de Super Mario Land 2 - 6 Golden Coins (USA, Europe).
+fr: Choisissez votre fichier de cartouche Super Mario Land 2 - 6 Golden Coins (USA, Europe).
+de: Wahle deine Moduldatei von Super Mario Land 2 - 6 Golden Coins (USA, Europe).
+it: Scegli il tuo file della cartuccia di Super Mario Land 2 - 6 Golden Coins (USA, Europe).
+id: Pilih berkas kartrid Super Mario Land 2 - 6 Golden Coins (USA, Europe) milikmu.
+ru: Выберите файл картриджа Super Mario Land 2 - 6 Golden Coins (USA, Europe).
+zh: 请选择你的 Super Mario Land 2 - 6 Golden Coins (USA, Europe) 卡带文件。
+ko: Super Mario Land 2 - 6 Golden Coins (USA, Europe) 카트리지 파일을 선택하세요.
+
+en: The cartridge file is not there any more:
+es: El fichero del cartucho ya no esta:
+ja: カートリッジファイルが見つかりません:
+pt: O arquivo do cartucho nao esta mais la:
+fr: Le fichier de la cartouche n'est plus la :
+de: Die Moduldatei ist nicht mehr da:
+it: Il file della cartuccia non c'e piu:
+id: Berkas kartrid sudah tidak ada:
+ru: Файла картриджа больше нет:
+zh: 卡带文件已不在原处:
+ko: 카트리지 파일이 더 이상 없습니다:
+
+en: The cartridge file could not be read:
+es: No se pudo leer el fichero del cartucho:
+ja: カートリッジファイルを読み込めませんでした:
+pt: Nao foi possivel ler o arquivo do cartucho:
+fr: Impossible de lire le fichier de la cartouche :
+de: Die Moduldatei konnte nicht gelesen werden:
+it: Impossibile leggere il file della cartuccia:
+id: Berkas kartrid tidak dapat dibaca:
+ru: Не удалось прочитать файл картриджа:
+zh: 无法读取卡带文件:
+ko: 카트리지 파일을 읽을 수 없습니다:
+
+en: This file is not Super Mario Land 2 - 6 Golden Coins (USA, Europe), the cartridge the tools work with:
+es: Este fichero no es Super Mario Land 2 - 6 Golden Coins (USA, Europe), el cartucho con el que trabajan las herramientas:
+ja: このファイルはツールが対応している Super Mario Land 2 - 6 Golden Coins (USA, Europe) ではありません:
+pt: Este arquivo nao e Super Mario Land 2 - 6 Golden Coins (USA, Europe), o cartucho com que as ferramentas trabalham:
+fr: Ce fichier n'est pas Super Mario Land 2 - 6 Golden Coins (USA, Europe), la cartouche avec laquelle les outils fonctionnent :
+de: Diese Datei ist nicht Super Mario Land 2 - 6 Golden Coins (USA, Europe), das Modul, mit dem die Werkzeuge arbeiten:
+it: Questo file non e Super Mario Land 2 - 6 Golden Coins (USA, Europe), la cartuccia con cui lavorano gli strumenti:
+id: Berkas ini bukan Super Mario Land 2 - 6 Golden Coins (USA, Europe), kartrid yang dipakai alat-alat ini:
+ru: Этот файл не Super Mario Land 2 - 6 Golden Coins (USA, Europe), картридж, с которым работают инструменты:
+zh: 此文件不是工具所支持的卡带 Super Mario Land 2 - 6 Golden Coins (USA, Europe):
+ko: 이 파일은 도구가 지원하는 카트리지인 Super Mario Land 2 - 6 Golden Coins (USA, Europe)가 아닙니다:
+
+en: The project has no project file.
+es: El proyecto no tiene fichero de proyecto.
+ja: プロジェクトにプロジェクトファイルがありません。
+pt: O projeto nao tem arquivo de projeto.
+fr: Le projet n'a pas de fichier de projet.
+de: Das Projekt hat keine Projektdatei.
+it: Il progetto non ha un file di progetto.
+id: Proyek ini tidak punya berkas proyek.
+ru: У проекта нет файла проекта.
+zh: 该项目没有项目文件。
+ko: 프로젝트에 프로젝트 파일이 없습니다.
+
+en: The project's files could not be read or written:
+es: No se pudieron leer o escribir los ficheros del proyecto:
+ja: プロジェクトのファイルを読み書きできませんでした:
+pt: Nao foi possivel ler ou gravar os arquivos do projeto:
+fr: Impossible de lire ou d'ecrire les fichiers du projet :
+de: Die Dateien des Projekts konnten nicht gelesen oder geschrieben werden:
+it: Impossibile leggere o scrivere i file del progetto:
+id: Berkas proyek tidak dapat dibaca atau ditulis:
+ru: Не удалось прочитать или записать файлы проекта:
+zh: 无法读取或写入项目文件:
+ko: 프로젝트 파일을 읽거나 쓸 수 없습니다:
+
+en: The project was made over another cartridge.
+es: El proyecto se hizo sobre otro cartucho.
+ja: このプロジェクトは別のカートリッジで作られています。
+pt: O projeto foi feito sobre outro cartucho.
+fr: Le projet a ete fait sur une autre cartouche.
+de: Das Projekt wurde mit einem anderen Modul erstellt.
+it: Il progetto e stato fatto su un'altra cartuccia.
+id: Proyek ini dibuat di atas kartrid lain.
+ru: Проект сделан на основе другого картриджа.
+zh: 该项目是基于另一个卡带制作的。
+ko: 이 프로젝트는 다른 카트리지로 만들어졌습니다.
+
+en: The project file is damaged or not a project file.
+es: El fichero de proyecto esta danado o no es un fichero de proyecto.
+ja: プロジェクトファイルが壊れているか、プロジェクトファイルではありません。
+pt: O arquivo de projeto esta danificado ou nao e um arquivo de projeto.
+fr: Le fichier de projet est endommage ou n'est pas un fichier de projet.
+de: Die Projektdatei ist beschadigt oder keine Projektdatei.
+it: Il file di progetto e danneggiato o non e un file di progetto.
+id: Berkas proyek rusak atau bukan berkas proyek.
+ru: Файл проекта повреждён или не является файлом проекта.
+zh: 项目文件已损坏或不是项目文件。
+ko: 프로젝트 파일이 손상되었거나 프로젝트 파일이 아닙니다.
+
+en: The project does not fit the cartridge:
+es: El proyecto no cabe en el cartucho:
+ja: プロジェクトがカートリッジに収まりません:
+pt: O projeto nao cabe no cartucho:
+fr: Le projet ne tient pas dans la cartouche :
+de: Das Projekt passt nicht in das Modul:
+it: Il progetto non entra nella cartuccia:
+id: Proyek tidak muat di kartrid:
+ru: Проект не помещается в картридж:
+zh: 项目放不进卡带:
+ko: 프로젝트가 카트리지에 들어가지 않습니다:
