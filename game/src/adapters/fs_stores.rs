@@ -10,8 +10,13 @@ use std::path::PathBuf;
 pub struct SettingsFile;
 
 impl SettingsStore for SettingsFile {
+    /// An automatic language is the system's (English when it is none of the game's).
     fn load(&self) -> Settings {
-        host::settings_file::read().map(|t| Settings::from_text(&t)).unwrap_or_default()
+        let mut s = host::settings_file::read().map(|t| Settings::from_text(&t)).unwrap_or_default();
+        if s.lang_auto {
+            s.lang = host::system_language::system_language() as usize;
+        }
+        s
     }
     fn save(&self, settings: &Settings) {
         let _ = host::settings_file::write(&settings.to_text());

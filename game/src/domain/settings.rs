@@ -1,6 +1,6 @@
 //! What the player chose: key bindings, colours, volume, screen and language, and their
 //! `key=value` text form. Where the text is kept is a port (`SettingsStore`).
-use super::i18n::{LANG_EN, LANG_IDS};
+use super::i18n::{LANGS, LANG_EN, LANG_IDS};
 use super::keys::{Key, DEFAULT_KEYS, KEYS};
 use super::pad::{Input, PadButton, DEFAULT_PAD};
 
@@ -18,6 +18,9 @@ pub struct Settings {
     pub fullscreen: bool,
     pub integer_scale: bool,
     pub lang: usize,
+    /// No language chosen yet: `lang` is the system's (`SettingsFile` sets it), and the file
+    /// keeps `language=auto`.
+    pub lang_auto: bool,
     /// The debug / cheats mode for games started from the start screen.
     pub cheats: bool,
     /// What the start screen played last: a project's name, or empty for the original.
@@ -26,7 +29,7 @@ pub struct Settings {
 
 impl Default for Settings {
     fn default() -> Self {
-        Settings { keys: DEFAULT_KEYS, input: Input::Keyboard, pad: DEFAULT_PAD, palette: 0, volume: 8, fullscreen: false, integer_scale: true, lang: LANG_EN, cheats: false, last_play: String::new() }
+        Settings { keys: DEFAULT_KEYS, input: Input::Keyboard, pad: DEFAULT_PAD, palette: 0, volume: 8, fullscreen: false, integer_scale: true, lang: LANG_EN, lang_auto: true, cheats: false, last_play: String::new() }
     }
 }
 
@@ -55,7 +58,10 @@ impl Settings {
                 "volume" => s.volume = v.parse::<u8>().unwrap_or(8).min(10),
                 "fullscreen" => s.fullscreen = v == "1",
                 "integer_scale" => s.integer_scale = v != "0",
-                "language" => s.lang = LANG_IDS.iter().position(|&id| id == v).unwrap_or(LANG_EN),
+                "language" => {
+                    s.lang_auto = v == "auto";
+                    s.lang = LANG_IDS.iter().position(|&id| id == v).unwrap_or(LANG_EN);
+                }
                 "cheats" => s.cheats = v == "1",
                 "last_play" => s.last_play = v.to_string(),
                 _ => {}
@@ -79,7 +85,7 @@ impl Settings {
             self.volume,
             self.fullscreen as u8,
             self.integer_scale as u8,
-            LANG_IDS[self.lang.min(2)],
+            if self.lang_auto { "auto" } else { LANG_IDS[self.lang.min(LANGS - 1)] },
             self.cheats as u8,
             self.last_play
         );
@@ -99,6 +105,15 @@ mod tests {
         assert_eq!((s.palette, s.fullscreen, s.lang, s.volume), (1, true, 1, 10));
         assert_eq!(Settings::from_text(&s.to_text()), s);
         assert_eq!(Settings::from_text(""), Settings::default());
+    }
+
+    #[test]
+    fn the_language_is_automatic_until_chosen() {
+        assert!(Settings::from_text("palette=1\n").lang_auto, "an old file without a language");
+        assert!(Settings::default().to_text().contains("language=auto\n"));
+        let chosen = Settings::from_text("language=ko\n");
+        assert_eq!((chosen.lang, chosen.lang_auto), (10, false));
+        assert!(chosen.to_text().contains("language=ko\n"));
     }
 
     #[test]

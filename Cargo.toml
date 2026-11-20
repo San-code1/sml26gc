@@ -5,6 +5,7 @@ members = [
     "crates/cart-model",
     "crates/host",
     "crates/i18n",
+    "crates/fonts",
     "crates/project-model",
     "game",
     "editor",
@@ -23,6 +24,7 @@ gb-core = { path = "crates/gb-core" }
 cart-model = { path = "crates/cart-model" }
 host = { path = "crates/host" }
 i18n = { path = "crates/i18n" }
+fonts = { path = "crates/fonts" }
 project-model = { path = "crates/project-model" }
 macroquad = "0.4"
 cpal = "0.15"

@@ -239,7 +239,7 @@ impl Editor {
         y = next;
         act = a.or(act);
         let here = self.placing == Some(Placing::PlayHere);
-        let (next, a) = self.toolbar(y, &[(tr(lang, "Save"), Action::Save, false), (tr(lang, "Play"), Action::Play, false), (tr(lang, "Here"), Action::PlayFromHere, here)]);
+        let (next, a) = self.toolbar(y, &[(tr(lang, "Save"), Action::Save, false), (tr(lang, "Play"), Action::Play, false), (tr(lang, "Play here"), Action::PlayFromHere, here)]);
         y = next;
         act = a.or(act);
         // Blocks / Objects, then the mode's tools

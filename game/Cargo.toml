@@ -12,6 +12,7 @@ path = "src/main.rs"
 gb-core.workspace = true
 cart-model.workspace = true
 i18n.workspace = true
+fonts.workspace = true
 gilrs.workspace = true
 host.workspace = true
 macroquad.workspace = true

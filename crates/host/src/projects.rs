@@ -1,6 +1,7 @@
 //! A project's cartridge, made from its project file over the base cartridge when it is missing
 //! or older than the file (copied in, or written by another editor), for the editor and the game.
 use crate::paths::{project_file, project_rom, project_rom_in};
+use crate::texts::tr;
 use i18n::Lang;
 use project_model::build::{self, BuildError};
 use project_model::files::FileError;
@@ -22,17 +23,12 @@ pub enum ProjectRomError {
 
 impl ProjectRomError {
     pub fn text(&self, lang: Lang) -> String {
-        let t = |en: &str, es: &str, ja: &str| match lang {
-            Lang::En => en.to_string(),
-            Lang::Es => es.to_string(),
-            Lang::Ja => ja.to_string(),
-        };
         match self {
-            ProjectRomError::Missing => t("The project has no project file.", "El proyecto no tiene fichero de proyecto.", "プロジェクトにプロジェクトファイルがありません。"),
-            ProjectRomError::Unreadable(e) => format!("{} {e}", t("The project's files could not be read or written:", "No se pudieron leer o escribir los ficheros del proyecto:", "プロジェクトのファイルを読み書きできませんでした:")),
-            ProjectRomError::OtherCartridge => t("The project was made over another cartridge.", "El proyecto se hizo sobre otro cartucho.", "このプロジェクトは別のカートリッジで作られています。"),
-            ProjectRomError::Damaged => t("The project file is damaged or not a project file.", "El fichero de proyecto esta danado o no es un fichero de proyecto.", "プロジェクトファイルが壊れているか、プロジェクトファイルではありません。"),
-            ProjectRomError::TooBig(e) => format!("{} {e}", t("The project does not fit the cartridge:", "El proyecto no cabe en el cartucho:", "プロジェクトがカートリッジに収まりません:")),
+            ProjectRomError::Missing => tr(lang, "The project has no project file.").to_string(),
+            ProjectRomError::Unreadable(e) => format!("{} {e}", tr(lang, "The project's files could not be read or written:")),
+            ProjectRomError::OtherCartridge => tr(lang, "The project was made over another cartridge.").to_string(),
+            ProjectRomError::Damaged => tr(lang, "The project file is damaged or not a project file.").to_string(),
+            ProjectRomError::TooBig(e) => format!("{} {e}", tr(lang, "The project does not fit the cartridge:")),
         }
     }
 }

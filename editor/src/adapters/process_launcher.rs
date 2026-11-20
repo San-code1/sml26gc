@@ -16,6 +16,7 @@ impl GameLauncher for GameProcess {
         let exe = host::game_exe();
         let mut cmd = std::process::Command::new(&exe);
         cmd.arg(rom).arg("--cheats");
+        cmd.arg("--lang").arg(game.lang.id());
         cmd.arg("--test").arg("--lives").arg(game.lives.to_string()).arg("--coins").arg(game.coins.to_string()).arg("--power").arg(game.power.to_string());
         if let Some(l) = level {
             cmd.arg("--level").arg(l.to_string());

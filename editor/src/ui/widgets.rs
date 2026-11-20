@@ -76,8 +76,9 @@ pub fn wrap_px(t: &str, width: f32, size: f32) -> Vec<String> {
 }
 
 /// Is `c` written without spaces between words (Japanese), so a line may break before it?
+/// A character as wide as two Latin ones: Japanese, Chinese and Korean.
 fn wide(c: char) -> bool {
-    ('\u{3000}'..='\u{9FFF}').contains(&c) || ('\u{FF00}'..='\u{FFEF}').contains(&c)
+    ('\u{3000}'..='\u{9FFF}').contains(&c) || ('\u{FF00}'..='\u{FFEF}').contains(&c) || ('\u{AC00}'..='\u{D7AF}').contains(&c) || ('\u{1100}'..='\u{11FF}').contains(&c)
 }
 
 /// Japanese punctuation that never begins a line: it stays with what comes before it.
@@ -148,6 +149,7 @@ pub fn marked_text(t: &str, x: f32, y: f32, size: f32, c: Color) {
 
 pub use crate::texts::{tr, zone_name, zone_short};
 pub use i18n::Lang;
+use fonts::Face;
 
 /// Split text into lines of at most `n` characters at spaces.
 pub fn wrap(t: &str, n: usize) -> Vec<String> {
@@ -156,24 +158,28 @@ pub fn wrap(t: &str, n: usize) -> Vec<String> {
 }
 
 thread_local! {
-    /// The font for Japanese, loaded the first time it is needed.
-    static JAPANESE_FONT: std::cell::OnceCell<Option<Font>> = const { std::cell::OnceCell::new() };
-    static JAPANESE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// The font of the language in use (`fonts::Face`), and the fonts loaded so far: each the
+    /// first time a language needs it.
+    static FACE: std::cell::Cell<Face> = const { std::cell::Cell::new(Face::BuiltIn) };
+    static FONTS: std::cell::RefCell<Vec<(Face, Option<Font>)>> = const { std::cell::RefCell::new(Vec::new()) };
 }
 
-/// The texts from now on are in `lang` (Japanese is drawn with its own font).
+/// The texts from now on are in `lang`, drawn with its font (Japanese, Chinese, Korean and
+/// Russian have their own).
 pub fn set_text_language(lang: Lang) {
-    JAPANESE.with(|j| j.set(lang == Lang::Ja));
+    FACE.with(|f| f.set(Face::of(lang)));
 }
 
 /// The font texts are drawn with: None, the built-in one.
 fn with_font<R>(f: impl FnOnce(Option<&Font>) -> R) -> R {
-    if !JAPANESE.with(|j| j.get()) {
-        return f(None);
-    }
-    JAPANESE_FONT.with(|cell| {
-        let font = cell.get_or_init(|| load_ttf_font_from_bytes(include_bytes!("../../fonts/BIZUDGothic-Regular.ttf")).ok());
-        f(font.as_ref())
+    let face = FACE.with(|f| f.get());
+    let Some(bytes) = face.bytes() else { return f(None) };
+    FONTS.with(|fonts| {
+        let mut fonts = fonts.borrow_mut();
+        if !fonts.iter().any(|e| e.0 == face) {
+            fonts.push((face, load_ttf_font_from_bytes(bytes).ok()));
+        }
+        f(fonts.iter().find(|e| e.0 == face).and_then(|e| e.1.as_ref()))
     })
 }
 
@@ -295,7 +301,7 @@ fn framed_label(r: Rect, label: &str, bg: Color, fg: Color, frame: Color, thick:
     draw_rectangle_lines(r.x, r.y, r.w, r.h, thick, frame);
     let mut size = size;
     let mut dim = text_size(label, size as u16);
-    while dim.width > r.w - 6.0 && size > 10.0 {
+    while dim.width > r.w - 6.0 && size > 8.0 {
         size -= 1.0;
         dim = text_size(label, size as u16);
     }

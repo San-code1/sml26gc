@@ -312,9 +312,10 @@ fn saved_when(lang: Lang, t: std::time::SystemTime) -> String {
         3600..=86399 => (ago / 3600, 1),
         _ => (ago / 86400, 2),
     };
-    match lang {
-        Lang::En => format!("saved {n} {} ago", ["min", "h", "days"][unit]),
-        Lang::Es => format!("guardado hace {n} {}", ["min", "h", "dias"][unit]),
-        Lang::Ja => format!("{n}{}前に保存", ["分", "時間", "日"][unit]),
-    }
+    let pattern = match unit {
+        0 => tr(lang, "saved %n min ago"),
+        1 => tr(lang, "saved %n h ago"),
+        _ => tr(lang, "saved %n days ago"),
+    };
+    pattern.replace("%n", &n.to_string())
 }
