@@ -54,6 +54,8 @@ pub enum Action {
     SecretLeads,
     PlaceCheckpoint,
     PlayFromHere,
+    /// Play again from the last place Play here was used in the level shown.
+    PlayHereAgain,
     DeleteObject,
     PrevPoint,
     NextPoint,
@@ -78,6 +80,8 @@ pub enum Action {
     SetStart,
     /// Show the map and point of Mario's start.
     GoToStart,
+    /// Mario's start back where the original game begins.
+    GameStart,
     NewZone,
     /// An empty new zone: its graphics chosen from a base zone.
     BlankZone,
@@ -143,7 +147,8 @@ pub const TABLE: &[Shortcut] = &[
     s(PlaceSecret, LEVEL, false, true, &[K::F], "Shift+F"),
     s(SecretLeads, LEVEL, false, false, &[K::U], "U"),
     s(PlaceCheckpoint, LEVEL, false, false, &[K::K], "K"),
-    s(PlayFromHere, LEVEL, false, true, &[K::F5], "Shift+F5"),
+    s(PlayFromHere, ALL, false, true, &[K::F5], "Shift+F5"),
+    s(PlayHereAgain, LEVEL, true, false, &[K::F5], "Ctrl+F5"),
     s(ZoomOut, PALETTES, true, false, &[K::Minus, K::Slash, K::KpSubtract], "Ctrl+-"),
     s(ZoomIn, PALETTES, true, false, &[K::Equal, K::RightBracket, K::KpAdd], "Ctrl++"),
     s(ExportProject, ALL, true, true, &[K::E], "Ctrl+Shift+E"),

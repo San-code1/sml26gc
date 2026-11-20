@@ -36,6 +36,8 @@ pub enum Action {
     PressStart,
     Quit,
     BackToMap,
+    /// Start the level being played again (no life lost).
+    RestartLevel,
     FileSelect,
     /// Turn a lasting cheat on or off, or do a one-time one.
     Cheat(Cheat),
@@ -54,10 +56,13 @@ const IT_QUIT: usize = 6;
 const IT_MAP: usize = 7;
 const IT_FILES: usize = 8;
 const IT_CHEATS: usize = 9;
+const IT_RESTART: usize = 10;
 /// Rows of the level list shown at once (Left and Right move by a page).
 const LEVEL_ROWS: usize = 10;
 /// The Controls screen's rows before the bindings (the Input row).
 const CONTROLS_FIRST: usize = 1;
+/// Controls rows on the screen at once (the rest scroll into view).
+const CONTROLS_SHOWN: usize = 15;
 
 /// What the menu reads in one frame: the keyboard, and the controller when it plays.
 #[derive(Default)]
@@ -160,6 +165,29 @@ impl Menu {
         self
     }
 
+    /// In a level of a test game or with the cheats mode on: "Restart level", just above
+    /// "Back to map".
+    pub fn with_restart(mut self) -> Menu {
+        if self.in_level {
+            let at = self.pos(IT_MAP);
+            self.items.insert(at, IT_RESTART);
+        }
+        self
+    }
+
+    /// A test game of a level from the editor: no "Back to map" (the level is what is tried;
+    /// Restart level starts it again).
+    pub fn without_back_to_map(mut self) -> Menu {
+        self.items.retain(|&i| i != IT_MAP);
+        self
+    }
+
+    /// A test game from the editor: no "File select" (it keeps no saves to choose from).
+    pub fn without_file_select(mut self) -> Menu {
+        self.items.retain(|&i| i != IT_FILES);
+        self
+    }
+
     fn usable(&self, c: Cheat) -> bool {
         let secret = c != Cheat::SecretExit || self.cheats.as_ref().is_some_and(|m| m.secret_exit);
         (self.in_level || !c.needs_level()) && secret
@@ -192,7 +220,7 @@ impl Menu {
             "levels" => Screen::Levels,
             _ => Screen::Main,
         };
-        let mut m = Menu::new(GameMode::Playing).with_cheats(CheatMenu { state: Cheats { invincible: true, ..Cheats::default() }, icons, secret_exit: true, levels: (0..40).map(|l| (l, if l >= 32 { "MY LEVEL".to_string() } else { String::new() })).collect() });
+        let mut m = Menu::new(GameMode::Playing).with_restart().with_cheats(CheatMenu { state: Cheats { invincible: true, ..Cheats::default() }, icons, secret_exit: true, levels: (0..40).map(|l| (l, if l >= 32 { "MY LEVEL".to_string() } else { String::new() })).collect() });
         m.screen = screen;
         m
     }
@@ -301,6 +329,7 @@ impl Menu {
                     if self.sel == 0 {
                         return match item {
                             IT_MAP => Action::BackToMap,
+                            IT_RESTART => Action::RestartLevel,
                             IT_FILES => Action::FileSelect,
                             _ => Action::Quit,
                         };
@@ -441,11 +470,15 @@ impl Menu {
                 c.frame(x, y, w, h);
                 c.title(x, y, w, t.controls);
                 // the input, every binding of it, then Restore, between the title and the footer
-                // (the footer says how to go back)
-                for i in 0..CONTROLS_FIRST + keys::KEYS {
-                    let ty = y + 9 + i as i32 * 8;
+                // (the footer says how to go back); the rows scroll with the cursor, a small
+                // arrow at the side showing there are more above or below
+                let rows = CONTROLS_FIRST + keys::KEYS + 1;
+                let top = (self.sel + 1).saturating_sub(CONTROLS_SHOWN).min(rows - CONTROLS_SHOWN);
+                for i in top..top + CONTROLS_SHOWN {
+                    let ty = y + 9 + (i - top) as i32 * 8;
                     let (name, value) = match i {
                         0 => (t.input, if st.input == Input::Controller { t.controller } else { t.keyboard }),
+                        i if i == rows - 1 => (t.restore, ""),
                         i => (t.buttons[i - CONTROLS_FIRST], binding_label(st, i - CONTROLS_FIRST)),
                     };
                     c.text(x + 16, ty, name, shade(i));
@@ -454,11 +487,11 @@ impl Menu {
                         c.cursor(x + 8, ty, 3);
                     }
                 }
-                let last = CONTROLS_FIRST + keys::KEYS;
-                let ty = y + 9 + last as i32 * 8;
-                c.text(x + 16, ty, t.restore, shade(last));
-                if last == self.sel {
-                    c.cursor(x + 8, ty, 3);
+                if top > 0 {
+                    c.more(x + 5, y + 10, true);
+                }
+                if top + CONTROLS_SHOWN < rows {
+                    c.more(x + 5, y + 9 + (CONTROLS_SHOWN as i32 - 1) * 8 + 4, false);
                 }
                 c.footer(x, y + h - 2, w, t.footer_controls);
             }

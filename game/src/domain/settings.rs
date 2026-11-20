@@ -7,7 +7,7 @@ use super::pad::{Input, PadButton, DEFAULT_PAD};
 #[derive(Clone, PartialEq, Debug)]
 pub struct Settings {
     /// Up, Down, Left, Right, A, B, Start, Select, save state, load state, rewind, fast forward,
-    /// menu.
+    /// menu, restart level.
     pub keys: [Key; KEYS],
     /// What plays: the keyboard or the controller.
     pub input: Input,

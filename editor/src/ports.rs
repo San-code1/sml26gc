@@ -1,4 +1,5 @@
 //! What the editor needs from the computer. `main.rs` plugs in the implementations.
+use cart_model::start_point::Start;
 use crate::domain::prefs::Prefs;
 use std::path::{Path, PathBuf};
 
@@ -11,6 +12,10 @@ pub trait EditedCopyStore {
     /// Where the editor was when the project was last saved (`place` text), if anywhere.
     fn read_place(&self) -> Option<String>;
     fn write_place(&self, text: &str) -> std::io::Result<()>;
+    /// What imported levels and zones restore to (`files::restore_points_text`), if kept.
+    fn read_restore_points(&self) -> Option<String>;
+    /// None: there are none (the file is removed).
+    fn write_restore_points(&self, text: Option<&str>) -> std::io::Result<()>;
 }
 
 /// The editor's own settings.
@@ -19,12 +24,23 @@ pub trait PrefsStore {
     fn save(&self, prefs: &Prefs);
 }
 
+/// What a test game gives Mario: lives, coins and power (0 small, 1 big, 2 carrot, 3 fire).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TestGame {
+    pub lives: u32,
+    pub coins: u32,
+    pub power: u32,
+}
+
 /// Starting the game on the edited copy.
 pub trait GameLauncher {
-    /// A test game (no saves) with Mario's `lives` and `coins`; `level`: go straight into that
-    /// level; `start`: with Mario there (his left x and feet y) this time only. The error names
-    /// the program that failed.
-    fn launch(&self, rom: &Path, level: Option<usize>, start: Option<(u16, u16)>, lives: u32, coins: u32) -> Result<(), String>;
+    /// A test game (no saves) with Mario as `game` says. `level`: go straight into that level;
+    /// `start`: with Mario there (his left x and feet y) this time only. Without a level the
+    /// game goes straight to the map, Mario on `point` this time only (None: his start). The
+    /// error names the program that failed.
+    fn launch(&self, rom: &Path, level: Option<usize>, start: Option<(u16, u16)>, point: Option<Start>, game: TestGame) -> Result<(), String>;
+    /// The last game started is still open (one test game at a time).
+    fn running(&self) -> bool;
 }
 
 /// Where the captured object pictures are kept between starts (`look_cache` text).

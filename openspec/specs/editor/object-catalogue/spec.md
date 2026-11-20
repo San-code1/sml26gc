@@ -84,3 +84,37 @@ added those that fit now. The two filters SHALL be shown as labelled sections.
 #### Scenario: Traps that can be added
 - **WHEN** Can be added and the trap category are chosen
 - **THEN** only traps of other levels of the level's catalogue that fit its set now are shown
+
+### Requirement: Block contents
+The hidden objects that make a block give something when hit SHALL be named for what they give
+(e.g. "Hidden mushroom"), under a "Block contents" category, not as invisible markers. The
+catalogue SHALL say, for each, the blocks it works on and that it does nothing elsewhere; the
+object palette SHALL say the same when one is chosen. What each gives and where it works SHALL
+come from research in the emulator, not guesses.
+
+#### Scenario: Level 00's hidden mushroom
+- **WHEN** the catalogue is opened and level 00's object $11 is shown
+- **THEN** it is named for what it gives (a mushroom, or what the research finds), its category is Block contents, and the panel says it only works on a block like the ? block
+
+#### Scenario: Chosen in the palette
+- **WHEN** a block content object is chosen in the object palette
+- **THEN** the palette says what it gives and which blocks it must be placed on
+
+#### Scenario: Filter
+- **WHEN** the category filter is set to Block contents
+- **THEN** only block content objects are shown
+
+### Requirement: Block contents pictured as what they give
+A block content object SHALL be pictured, in the catalogue and the object palette, with the
+picture of the object it gives, marked as hidden in a block.
+
+#### Scenario: Pictured as what it gives
+- **WHEN** a block content object that gives a mushroom is shown in the catalogue or the object palette
+- **THEN** its picture is the mushroom's, with a mark saying it is hidden in a block
+
+### Requirement: The hidden 50 coins
+Object type $19 SHALL be named Hidden 50 coins in the Block contents category in level 02, where hitting the block under it from below brings out an item marked M that gives 50 coins when taken (only on blocks $00, $01, $02, $03 and $7E, like the other block contents); in the other levels it SHALL stay an invisible marker, as nothing comes out of their blocks.
+
+#### Scenario: In the catalogue
+- **WHEN** the user filters the catalogue by Block contents
+- **THEN** $19 of level 02 is listed as Hidden 50 coins with the note that it gives 50 coins and where it works

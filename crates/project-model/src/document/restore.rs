@@ -1,10 +1,11 @@
 //! Restore: the map being edited as the original cartridge has it, its picture and its points
 //! (the levels they open, their paths, places, doors and exits); a new zone, as its base is
-//! there (it keeps its name and its door). Undoable in both tabs.
-use super::{zones::ZonePoints, EditorDocument};
+//! there (it keeps its name and its door), or as the zone file it was imported from had it (it
+//! keeps its door). Undoable in both tabs.
+use super::{zones::{self, ZonePoints}, EditorDocument};
 use cart_model::doors::{self, NONE};
 use cart_model::map_routes::{self, ZONE_EXITS};
-use cart_model::new_zones;
+use cart_model::new_zones::{self, NewZone};
 use cart_model::original_points::{OnMap, SPOTS};
 use cart_model::{world, zone_maps};
 
@@ -33,6 +34,17 @@ impl EditorDocument {
         let original = map_routes::read(&self.original);
         let levels = world::point_levels(&self.original);
         let restored = match map {
+            OnMap::NewZone(k) if k < self.new_zones.len() && self.new_zones[k].restore.is_some() => {
+                let point = self.new_zones[k].restore.clone();
+                let door = self.new_zones[k].door;
+                let file = point.as_ref().map(|p| p.file.clone()).unwrap_or_else(|| self.new_zone(k));
+                self.map_snapshot();
+                let (points, picture) = ZonePoints::from(NewZone { door, ..zones::settled(file, self.new_zones.len()) });
+                self.new_zones[k] = ZonePoints { restore: point, ..points };
+                self.zones[zone_maps::ZONES.len() + k] = picture;
+                self.new_zones_dirty = true;
+                true
+            }
             OnMap::NewZone(k) if k < self.new_zones.len() => {
                 let base = self.new_zones[k].base;
                 let picture = zone_maps::read(&self.original, base);

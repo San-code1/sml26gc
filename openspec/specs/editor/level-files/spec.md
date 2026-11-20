@@ -94,3 +94,34 @@ level imported as a new level or replacing one SHALL be part of the open project
 #### Scenario: Default folder
 - **WHEN** a level is exported
 - **THEN** the Save dialog opens in `exports/levels`
+
+### Requirement: A level file's origin
+An exported level file SHALL say where it came from: the project's name and the level
+exported (its number, and its name when it has one). Files without it SHALL still be read, with
+an unknown origin.
+
+#### Scenario: Export marks the origin
+- **WHEN** level 05 of project "Demo" is exported
+- **THEN** the file says it comes from level 05 of project "Demo"
+
+#### Scenario: Old file
+- **WHEN** a level file written before this change is imported
+- **THEN** it is imported as before, with an unknown origin
+
+### Requirement: An imported level's restore point
+A level imported as a new level, or replacing a new level, SHALL keep the file's content and
+origin as its restore point (see Restore). The restore point SHALL be undone and redone with
+the import or replacement, SHALL follow the level when other new levels are removed, and SHALL
+be kept with the project once saved. Levels added any other way SHALL have none.
+
+#### Scenario: Undo an import's replacement
+- **WHEN** new level 33 imported from file A is replaced from file B and the user presses Undo
+- **THEN** level 33 is file A's again and Restore puts back file A's level
+
+#### Scenario: Another level removed
+- **WHEN** new levels 33 and 34 exist, 34 was imported from a file, and level 33 is removed
+- **THEN** the imported level, now 33, still restores as the file had it
+
+#### Scenario: A copied level
+- **WHEN** a new level is added as a copy of level 05 and Restore is chosen on it
+- **THEN** it is restored as base level 05 is in the game

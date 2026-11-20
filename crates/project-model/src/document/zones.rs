@@ -3,7 +3,7 @@
 //! they open, their exits and the world point that is their door. A new zone's picture is
 //! `zones[ZONES.len() + k]`, in the world history with the other pictures; the rest is in the
 //! points history. Making or deleting one empties both histories.
-use super::{first_dir, EditorDocument, ZONE_POINTS};
+use super::{first_dir, EditorDocument, RestorePoint, ZONE_POINTS};
 use cart_model::added_points;
 use cart_model::doors::{self, Leads, NONE};
 use cart_model::map_routes::{Place, Way};
@@ -25,11 +25,13 @@ pub struct ZonePoints {
     pub door: u8,
     /// Empty: none.
     pub name: String,
+    /// The zone file it was imported or replaced from, if it was.
+    pub restore: Option<Box<RestorePoint<NewZone>>>,
 }
 
 impl ZonePoints {
     pub fn from(z: NewZone) -> (ZonePoints, Vec<u8>) {
-        (ZonePoints { base: z.base, points: z.points, entry: z.entry, exits: z.exits, door: z.door, name: z.name }, z.picture)
+        (ZonePoints { base: z.base, points: z.points, entry: z.entry, exits: z.exits, door: z.door, name: z.name, restore: None }, z.picture)
     }
 
     pub fn point(&self, p: u8) -> Option<&ZonePoint> {
@@ -205,21 +207,33 @@ impl EditorDocument {
         Some(NewZone { door: NONE, ..settled(z, 0) })
     }
 
-    /// A new zone from a zone file, after the others, with no door.
-    pub fn import_zone(&mut self, f: NewZone) -> Result<usize, ZoneRefusal> {
+    /// A new zone from a zone file exported from `origin`, after the others, with no door;
+    /// Restore puts the file's zone back.
+    pub fn import_zone(&mut self, f: NewZone, origin: &str) -> Result<usize, ZoneRefusal> {
         let count = self.new_zones.len() + 1;
-        self.push_zone(NewZone { door: NONE, ..settled(f, count) })
+        let z = NewZone { door: NONE, ..settled(f, count) };
+        let k = self.push_zone(z.clone())?;
+        self.new_zones[k].restore = Some(Box::new(RestorePoint { file: z, origin: origin.to_string() }));
+        Ok(k)
     }
 
-    /// Replace new zone `k` with a zone file; it keeps its door. The game's zones are never
-    /// replaced. Empties the map undo histories.
-    pub fn replace_zone(&mut self, k: usize, f: NewZone) -> bool {
+    /// Where new zone `k` was imported from, when Restore puts it back as its file had it
+    /// (`files::Origin::text`, empty: unknown).
+    pub fn zone_restore_origin(&self, k: usize) -> Option<&str> {
+        self.new_zones.get(k)?.restore.as_ref().map(|r| r.origin.as_str())
+    }
+
+    /// Replace new zone `k` with a zone file exported from `origin`, which Restore then puts
+    /// back; it keeps its door. The game's zones are never replaced. Empties the map undo
+    /// histories.
+    pub fn replace_zone(&mut self, k: usize, f: NewZone, origin: &str) -> bool {
         if k >= self.new_zones.len() || new_zones::base_of(f.base).is_none() {
             return false;
         }
         let door = self.new_zones[k].door;
-        let (points, picture) = ZonePoints::from(NewZone { door, ..settled(f, self.new_zones.len()) });
-        self.new_zones[k] = points;
+        let z = settled(f, self.new_zones.len());
+        let (points, picture) = ZonePoints::from(NewZone { door, ..z.clone() });
+        self.new_zones[k] = ZonePoints { restore: Some(Box::new(RestorePoint { file: NewZone { door: NONE, ..z }, origin: origin.to_string() })), ..points };
         self.zones[Self::zone_picture(k)] = picture;
         self.zones_changed();
         true
@@ -451,16 +465,37 @@ mod tests {
         };
         assert_eq!(doc.zone_file(OnMap::World), None);
         let tree = doc.zone_file(OnMap::Zone(0)).unwrap();
-        assert_eq!(doc.import_zone(tree.clone()), Ok(0));
+        assert_eq!(doc.import_zone(tree.clone(), ""), Ok(0));
         assert_eq!(doc.new_zone(0), tree);
         doc.set_zone_door(0x07, Some(0));
         doc.zone_set_exit(0, 0, 0x23, Leads::NewZone(0));
-        let (f, _) = super::super::files::read_zone(&super::super::files::zone_text(&doc.zone_file(OnMap::NewZone(0)).unwrap(), None)).unwrap();
+        let (f, _, _) = super::super::files::read_zone(&super::super::files::zone_text(&doc.zone_file(OnMap::NewZone(0)).unwrap(), None, "")).unwrap();
         assert_eq!((f.door, f.exits[0].1), (NONE, Leads::World(NONE)), "a file has no door and no new zones to go to");
         let pumpkin = doc.zone_file(OnMap::Zone(1)).unwrap();
-        assert!(doc.replace_zone(0, pumpkin.clone()));
+        assert!(doc.replace_zone(0, pumpkin.clone(), ""));
         assert_eq!(doc.new_zone(0), NewZone { door: 0x07, ..pumpkin }, "it keeps its door");
-        assert!(!doc.replace_zone(1, tree), "only new zones are replaced");
+        assert!(!doc.replace_zone(1, tree, ""), "only new zones are replaced");
+    }
+
+    #[test]
+    fn an_imported_zone_restores_as_its_file_had_it() {
+        let Some(mut doc) = open() else {
+            eprintln!("no cartridge found: document test skipped");
+            return;
+        };
+        let made = doc.add_zone(OnMap::Zone(1)).unwrap();
+        let tree = doc.zone_file(OnMap::Zone(0)).unwrap();
+        let k = doc.import_zone(tree.clone(), "Demo|zone|00").unwrap();
+        assert_eq!(doc.zone_restore_origin(made), None, "a zone made from a game zone has none");
+        doc.set_zone_door(0x07, Some(k));
+        doc.zone_add_point(k, 40, 40).unwrap();
+        assert!(doc.restore_map(OnMap::NewZone(k)));
+        assert_eq!(doc.new_zone(k), NewZone { door: 0x07, ..tree.clone() }, "the file's zone, keeping its door");
+        assert!(doc.remove_zone(made));
+        let k = k - 1;
+        doc.zone_add_point(k, 40, 40).unwrap();
+        assert!(doc.restore_map(OnMap::NewZone(k)));
+        assert_eq!((doc.new_zone(k).points, doc.zone_restore_origin(k)), (tree.points, Some("Demo|zone|00")), "it follows the zone when an earlier one is removed");
     }
 
     #[test]

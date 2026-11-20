@@ -12,6 +12,8 @@ pub const PLAYER_Y: u16 = 0xFFC0;
 pub const PLAYER_X: u16 = 0xFFC2;
 /// Lives left (BCD).
 pub const LIVES: u16 = 0xA22C;
+/// Mario's power-up: 0 small, 1 big, 2 carrot, 3 fire (kept from level to level).
+pub const POWER: u16 = 0xA216;
 
 /// Cartridge RAM starts here on the bus.
 pub const CART_RAM: u16 = 0xA000;

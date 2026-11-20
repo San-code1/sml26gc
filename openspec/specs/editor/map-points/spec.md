@@ -160,3 +160,36 @@ saved; the editor SHALL say so and point to where to set it.
 #### Scenario: Start deleted
 - **WHEN** the new zone holding Mario's start is deleted and the project is saved
 - **THEN** it is not saved and the editor says Mario's start is missing
+
+### Requirement: The game's own start for Mario
+The zone editor SHALL offer, beside going to Mario's start, a button that puts Mario's start back where the original game begins (point $00 of the world map), as one undo step; it SHALL be available only when the start is elsewhere.
+
+#### Scenario: Back to the game's start
+- **WHEN** Mario's start is on a Pumpkin Zone point and the user presses the game's start button
+- **THEN** every new game begins on point $00 of the world map, the map shows it there, and Undo brings the Pumpkin Zone start back
+
+#### Scenario: Already there
+- **WHEN** Mario's start is the game's own
+- **THEN** the button is shown unavailable and does nothing
+
+### Requirement: The zone editor's Play begins on Mario's start
+The zone editor's Play SHALL start a test game that is on the map from its first frame shown, a new game with Mario on the project's start (on the world map, a game zone or a new zone): the title, the file select and the new game's way onto the map run unseen.
+
+#### Scenario: A start in the Pumpkin Zone
+- **WHEN** Mario's start is on a Pumpkin Zone point and the user presses Play in the zone editor
+- **THEN** the game window opens on the Pumpkin Zone with Mario on that point, with no title, file select or walk onto the map shown
+
+### Requirement: Play from a point
+The zone editor SHALL have a Play from a point button on its own row under Save and Play, with the level editor's Play here key (Shift+F5). It SHALL show the Points tab and wait; the next click on a point of the map shown saves the copy and starts the test game there, for this game only. Esc, a right click or the button again SHALL cancel it; an added point SHALL be refused.
+
+#### Scenario: A new zone's point
+- **WHEN** the user presses Shift+F5 in the Picture tab of a new zone and clicks one of its points
+- **THEN** the Points tab is shown, then the game starts in that new zone with Mario on the point, and the project's start is unchanged
+
+#### Scenario: Cancelled
+- **WHEN** Play from a point is on and the user presses Esc
+- **THEN** it is off and a click on a point only chooses it
+
+#### Scenario: An added point
+- **WHEN** Play from a point is on and the user clicks an added point of the world map
+- **THEN** no game starts and the status says the game can only begin on a game or new zone point

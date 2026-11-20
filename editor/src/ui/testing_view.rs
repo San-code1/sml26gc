@@ -24,7 +24,8 @@ impl Editor {
         true
     }
 
-    /// In "Play here", Mario's outline where a click would start him.
+    /// In "Play here", Mario's outline where a click would start him, and the band whose
+    /// objects would not appear then.
     pub(super) fn draw_play_here(&self) {
         let m: Vec2 = mouse_position().into();
         if self.placing != Some(Placing::PlayHere) || self.cell_at(m).is_none() {
@@ -32,11 +33,24 @@ impl Editor {
         }
         let k = self.scale();
         let s = Self::start_at(self.world_pos(m));
-        let (sx, sy) = s.sprite_at();
-        let (x, y) = (self.panel + (sx as f32 - self.cam.x) * k, (sy as f32 - self.cam.y) * k);
+        self.draw_passed_band(&s, true);
         let ok = !s.blocked(&self.doc.levels[self.cur].content.map);
         let c = if ok { Color::new(1.0, 0.85, 0.1, 1.0) } else { warn_col() };
-        marker(Rect::new(x, y, SPRITE_W as f32 * k, (SPRITE_H - SPRITE_TOP) as f32 * k), 2.0, c);
+        // Mario as the game draws him there (his outline until his picture is captured)
+        let (x, y) = match self.mario.as_ref().and_then(|m| m.as_ref()) {
+            Some((t, dx, dy)) => {
+                let (x, y) = (self.panel + (s.mario_x as f32 + dx - self.cam.x) * k, (s.mario_y as f32 + dy - self.cam.y) * k);
+                draw_texture_ex(t, x, y, WHITE, DrawTextureParams { dest_size: Some(vec2(t.width(), t.height()) * k), ..Default::default() });
+                marker(Rect::new(x - 2.0, y - 2.0, t.width() * k + 4.0, t.height() * k + 4.0), 2.0, c);
+                (x, y)
+            }
+            None => {
+                let (sx, sy) = s.sprite_at();
+                let (x, y) = (self.panel + (sx as f32 - self.cam.x) * k, (sy as f32 - self.cam.y) * k);
+                marker(Rect::new(x, y, SPRITE_W as f32 * k, (SPRITE_H - SPRITE_TOP) as f32 * k), 2.0, c);
+                (x, y)
+            }
+        };
         let t = tr(self.lang, "PLAY HERE");
         put_text(t, x + 1.0, y - 5.0, 16.0, BLACK);
         put_text(t, x, y - 6.0, 16.0, c);
@@ -98,8 +112,8 @@ impl Editor {
         self.prefs_store.save(&self.prefs);
     }
 
-    pub(super) fn set_test_game(&mut self, lives: u32, coins: u32) {
-        (self.prefs.test_lives, self.prefs.test_coins) = (lives, coins);
+    pub(super) fn set_test_game(&mut self, lives: u32, coins: u32, power: u32) {
+        (self.prefs.test_lives, self.prefs.test_coins, self.prefs.test_power) = (lives, coins, power);
         self.prefs_store.save(&self.prefs);
     }
 
@@ -115,6 +129,7 @@ impl Editor {
             Warning::RestartBlocked(_) => tr(lang, "Checkpoint restart inside blocks").into(),
             Warning::MissingLevel(p, l) => format!("{} {p:02X} {} {l:02}", tr(lang, "Point"), tr(lang, "opens missing level")),
             Warning::OnFirstScreen(_, n) => format!("{n} {}", tr(lang, "objects that do not appear at the start")),
+            Warning::IdleBlockContent(_) => tr(lang, "Hidden object over a block that does not release it").into(),
         }
     }
 }

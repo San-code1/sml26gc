@@ -66,6 +66,19 @@ impl Editor {
         }
     }
 
+    /// A button that starts the test game: faded while one is open (one at a time), its
+    /// tooltip saying so.
+    pub(super) fn play_button(&mut self, r: Rect, name: &str, a: Action, on: bool) -> bool {
+        if !self.launcher.running() {
+            return self.tool_button(r, name, a, on);
+        }
+        if r.contains(mouse_position().into()) {
+            self.tip = Some(tr(self.lang, "The game is already open: close it to play again.").into());
+        }
+        unavailable_button(r, name, 15.0);
+        false
+    }
+
     /// A button whose name and keys show in a tooltip while the mouse is on it.
     pub(super) fn tool_button(&mut self, r: Rect, name: &str, a: Action, on: bool) -> bool {
         self.tip_button(r, name, name, a, on)
@@ -89,19 +102,22 @@ impl Editor {
         }
     }
 
-    /// Up to three actions under a picker's grid, set apart from it by a rule and their own
-    /// style. Returns where the panel continues and the action clicked.
-    pub(super) fn picker_actions(&mut self, y: f32, items: [Option<(&str, Action)>; 3]) -> (f32, Option<Action>) {
+    /// The three actions under a picker (copy, blank, delete), always shown in their own
+    /// style, the unavailable ones faded; set apart by a rule from the picker's grid when it is
+    /// open. Returns where the panel continues and the action clicked.
+    pub(super) fn picker_actions(&mut self, y: f32, open: bool, items: [(&str, Action, bool); 3]) -> (f32, Option<Action>) {
         let w = self.inner_w();
         let third = (w - 2.0 * GAP) / 3.0;
-        let y = y + 4.0;
-        draw_rectangle(PAD, y, w, 1.0, col(2));
-        let y = y + 6.0;
+        let mut y = y;
+        if open {
+            draw_rectangle(PAD, y + 4.0, w, 1.0, col(2));
+            y += 10.0;
+        }
         let mut act = None;
-        for (i, (name, a)) in items.into_iter().enumerate().filter_map(|(i, it)| it.map(|it| (i, it))) {
+        for (i, (name, a, available)) in items.into_iter().enumerate() {
             let r = Rect::new(PAD + i as f32 * (third + GAP), y, third, ROW);
             self.tip_for(r, name, a);
-            if action_button(r, name, 15.0) {
+            if action_button(r, name, 15.0, available) {
                 act = Some(a);
             }
         }
@@ -125,7 +141,8 @@ impl Editor {
                     r.w -= SPLIT_W - 2.0;
                     self.test_game_button(Rect::new(r.x + r.w - 2.0, y, SPLIT_W, ROW));
                 }
-                if self.tool_button(r, name, a, on) {
+                let clicked = if matches!(a, Action::Play | Action::PlayFromHere) { self.play_button(r, name, a, on) } else { self.tool_button(r, name, a, on) };
+                if clicked {
                     act = Some(a);
                 }
             }
@@ -216,12 +233,11 @@ impl Editor {
             if count > LEVELS {
                 y += user_tag_legend(PAD, y + 2.0, tr(lang, "made in the editor"));
             }
-            let delete = (self.cur >= LEVELS).then_some((tr(lang, "Delete level"), Action::DeleteLevel));
-            let (next, a) = self.picker_actions(y, [Some((tr(lang, "Copy level"), Action::NewLevel)), Some((tr(lang, "Blank level"), Action::NewBlankLevel)), delete]);
-            y = next;
-            act = a.or(act);
         }
-        y += 4.0;
+        let items = [(tr(lang, "Copy level"), Action::NewLevel, true), (tr(lang, "Blank level"), Action::NewBlankLevel, true), (tr(lang, "Delete level"), Action::DeleteLevel, self.cur >= LEVELS)];
+        let (next, a) = self.picker_actions(y, self.levels_open, items);
+        y = next;
+        act = a.or(act);
         let here = self.placing == Some(Placing::PlayHere);
         let (next, a) = self.toolbar(y, &[(tr(lang, "Save"), Action::Save, false), (tr(lang, "Play"), Action::Play, false), (tr(lang, "Here"), Action::PlayFromHere, here)]);
         y = next;

@@ -25,4 +25,6 @@ r leave    leave "$SC" 1000 map 1100 "$OUT/leave.png"
 r cmpmap   cmpmap "$SC" 1100 "$SC" 1000 1100
 r wshot    worldshot 10000 4096 64 "$OUT/wshot.png"
 r looks    looks 0 "$OUT/looks.png"
+r blocks   blockprobe 0
+r blockv   blockview 0 680 440
 r usage    nonsense

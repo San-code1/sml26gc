@@ -13,13 +13,11 @@ pub struct Brush {
     pub stamp: Stamp,
     /// The palette cells it came from (columns and rows of the palette), to outline them.
     pub in_palette: Option<Area>,
+    /// The named piece of the map tile palette it was taken from (`tile_palette::PIECES`).
+    pub piece: Option<&'static str>,
 }
 
 impl Brush {
-    pub fn new() -> Brush {
-        Brush { stamp: Stamp::single(0), in_palette: Some(Area::between((0, 0), (0, 0))) }
-    }
-
     /// The first value of the stamp (the one named in the panel).
     pub fn first(&self) -> u8 {
         self.stamp.cells[0]
@@ -45,15 +43,16 @@ impl Editor {
         }
     }
 
-    pub(super) fn brush(&self) -> &Brush {
+    /// The block or tile chosen to paint with (None until the user chooses one).
+    pub(super) fn brush(&self) -> Option<&Brush> {
         if self.in_world {
-            &self.tiles
+            self.tiles.as_ref()
         } else {
-            &self.blocks
+            self.blocks.as_ref()
         }
     }
 
-    pub(super) fn brush_mut(&mut self) -> &mut Brush {
+    pub(super) fn brush_mut(&mut self) -> &mut Option<Brush> {
         if self.in_world {
             &mut self.tiles
         } else {
@@ -68,11 +67,12 @@ impl Editor {
         }
     }
 
-    /// What the tool paints: the clipboard while pasting, otherwise the brush.
-    fn paint_stamp(&self) -> Stamp {
+    /// What the tool paints: the clipboard while pasting, otherwise the brush (None: nothing
+    /// chosen yet).
+    fn paint_stamp(&self) -> Option<Stamp> {
         match (&self.clipboard, self.tool.kind()) {
-            (Some((_, s)), ToolKind::Paste) => s.clone(),
-            _ => self.brush().stamp.clone(),
+            (Some((_, s)), ToolKind::Paste) => Some(s.clone()),
+            _ => self.brush().map(|b| b.stamp.clone()),
         }
     }
 
@@ -91,13 +91,15 @@ impl Editor {
                     stamp.cells.iter_mut().for_each(|b| *b &= 0x7F);
                 }
                 let in_palette = stamp.is_single().then(|| self.palette_cell(stamp.cells[0])).map(|c| Area::between(c, c));
-                *self.brush_mut() = Brush { stamp, in_palette };
+                *self.brush_mut() = Some(Brush { stamp, in_palette, piece: None });
+                self.remember_brush();
             }
         }
         if self.pick_from.is_some() {
             return;
         }
-        let stamp = self.paint_stamp();
+        // nothing chosen: only the Select tool works
+        let Some(stamp) = self.paint_stamp().or_else(|| (self.tool.kind() == ToolKind::Select).then(|| Stamp::single(0))) else { return };
         let mut changed = false;
         let mut canvas = DocCanvas { doc: &mut self.doc, grid: g, changed: &mut changed };
         self.tool.handle(&mut canvas, cell, left_button(), &stamp);
@@ -108,8 +110,8 @@ impl Editor {
 
     /// Where value `v` sits in the shown palette (column, row).
     pub(super) fn palette_cell(&self, v: u8) -> (i32, i32) {
-        let cols = if self.in_world { 16 } else { 8 };
-        ((v % cols) as i32, (v / cols) as i32)
+        let cells = if self.in_world { self.tile_cells() } else { crate::domain::tile_palette::TileCells::blocks() };
+        cells.cell_of(v).unwrap_or((0, 0))
     }
 
     pub(super) fn copy_selection(&mut self, cut: bool) {
@@ -199,11 +201,10 @@ impl Editor {
             self.outline(Area::between(a, c), 2.0, WHITE);
             return;
         }
-        if self.tool.kind() == ToolKind::Select {
+        let Some(stamp) = self.paint_stamp().filter(|_| self.tool.kind() != ToolKind::Select) else {
             self.outline(Area::between(c, c), 2.0, WHITE);
             return;
-        }
-        let stamp = self.paint_stamp();
+        };
         let px = self.cell_px();
         let s = px * self.scale();
         for dy in 0..stamp.h as i32 {

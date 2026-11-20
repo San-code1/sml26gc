@@ -6,7 +6,7 @@ use super::widgets::Severity;
 use super::Editor;
 use crate::application::exchange::{self, ExchangeError};
 use crate::domain::document::ZoneRefusal;
-use crate::domain::files::FileError;
+use crate::domain::files::{FileError, Origin, OriginOf};
 use cart_model::levels::LEVELS;
 use cart_model::original_points::OnMap;
 use macroquad::prelude::*;
@@ -54,6 +54,21 @@ impl Editor {
         }
     }
 
+    /// Where a file was exported from, as the status bar says it (`Origin::text`; "a file"
+    /// when unknown).
+    pub(super) fn origin_text(&self, origin: &str) -> String {
+        let lang = self.lang;
+        let Some(o) = Origin::parse(origin) else { return tr(lang, "a file").to_string() };
+        let named = |n: &str| if n.is_empty() { String::new() } else { format!(" {n}") };
+        let what = match &o.of {
+            OriginOf::Level(l, n) => format!("{} {l:02}{}", tr(lang, "level"), named(n)),
+            OriginOf::Zone(z) if *z < cart_model::zone_maps::ZONES.len() => crate::texts::zone_name(lang, *z).to_string(),
+            OriginOf::Zone(_) => tr(lang, "a file").to_string(),
+            OriginOf::NewZone(k, n) => format!("{} {}{}", tr(lang, "New zone"), k + 1, named(n)),
+        };
+        format!("{what} {} {}", tr(lang, "of project"), o.project)
+    }
+
     /// The project's name, to suggest file names.
     fn cartridge_name(&self) -> String {
         self.project.clone()
@@ -76,7 +91,7 @@ impl Editor {
         let (dialogs, files) = (&*self.dialogs, &*self.text_files);
         let l = self.cur;
         let status = match a {
-            Action::ExportLevel => exchange::export_level(&self.doc, l, &Self::export_name(self.doc.level_name(l), format!("{} {} {l:02}", self.cartridge_name(), tr(lang, "level"))), dialogs, files)
+            Action::ExportLevel => exchange::export_level(&self.doc, l, &self.project, &Self::export_name(self.doc.level_name(l), format!("{} {} {l:02}", self.cartridge_name(), tr(lang, "level"))), dialogs, files)
                 .map(|p| p.map(|p| format!("{} {l:02} {} {}", tr(lang, "Level"), tr(lang, "exported to"), p.display()))),
             Action::ImportLevel => match exchange::import_level(&mut self.doc, dialogs, files) {
                 Ok(Some(n)) => {
@@ -102,7 +117,7 @@ impl Editor {
                     _ => "",
                 };
                 let name = Self::export_name(named, format!("{} {}", self.cartridge_name(), self.map_name(self.world_map)));
-                exchange::export_zone(&self.doc, self.world_map, &name, dialogs, files).map(|p| p.map(|p| format!("{} {}", tr(lang, "Zone exported to"), p.display())))
+                exchange::export_zone(&self.doc, self.world_map, &self.project, &name, dialogs, files).map(|p| p.map(|p| format!("{} {}", tr(lang, "Zone exported to"), p.display())))
             }
             Action::ImportZone => match exchange::import_zone(&mut self.doc, dialogs, files) {
                 Ok(Some((k, start))) => {

@@ -7,7 +7,8 @@
 //!   editor.cfg                        the editor's own settings
 //!   editor\projects\<name>\           a project: its file `<name>.nmbproject` and the cartridge
 //!                                     made from it over the base cartridge, `<base> - <name>.gb`,
-//!                                     and editor_place.txt, where the editor was when it saved
+//!                                     editor_place.txt, where the editor was when it saved, and
+//!                                     restore_points.txt, what imported levels and zones restore to
 //!   saves\vanilla\, saves\<project>\  battery save (game.sav) and new zone progress (zones.txt)
 //!   exports\                          level, zone, world map and project files the editor writes
 use std::path::{Path, PathBuf};
@@ -72,6 +73,11 @@ pub fn project_file(name: &str) -> PathBuf {
 /// Where the editor was in project `name` when it was last saved.
 pub fn project_place(name: &str) -> PathBuf {
     project_dir(name).join("editor_place.txt")
+}
+
+/// What project `name`'s imported levels and zones restore to (the editor's only).
+pub fn project_restore_points(name: &str) -> PathBuf {
+    project_dir(name).join("restore_points.txt")
 }
 
 /// The cartridge file in project `name`'s folder, whatever it is called.

@@ -14,6 +14,8 @@ mod names_view;
 mod objects_view;
 mod palette;
 mod projects_view;
+mod recent_view;
+mod search_view;
 mod shortcuts;
 mod goal_view;
 pub mod language_menu;
@@ -38,7 +40,7 @@ use crate::domain::place::Place as SavedPlace;
 use crate::domain::prefs::{Prefs, PALETTE_ZOOMS};
 use crate::domain::stamp::Stamp;
 use crate::domain::tools::{self, GridCanvas, Pointer, Tool, ToolKind};
-use crate::ports::{EditedCopyStore, FileDialogs, GameLauncher, LookStore, MenuBar, PrefsStore, SoundOut, TextFiles};
+use crate::ports::{EditedCopyStore, FileDialogs, GameLauncher, LookStore, MenuBar, PrefsStore, SoundOut, TestGame, TextFiles};
 use grid_edit::Brush;
 use palette::PaletteView;
 use shortcuts::{Action, Ctx};
@@ -87,7 +89,8 @@ pub struct Editor {
     /// relative to the object's position. None = draws nothing.
     looks: HashMap<(usize, u8), Option<(Texture2D, f32, f32)>>,
     pub(crate) cur: usize,
-    blocks: Brush,
+    /// The block and the map tile chosen to paint with: none until the user chooses.
+    blocks: Option<Brush>,
     cam: Vec2,
     zoom: usize,
     tool: Box<dyn Tool>,
@@ -106,7 +109,7 @@ pub struct Editor {
     sel_obj: Option<usize>,
     drag_obj: Option<(usize, Vec2)>,
     in_world: bool,
-    tiles: Brush,
+    tiles: Option<Brush>,
     /// A palette selection being dragged: where it started (column, row).
     palette_drag: Option<(i32, i32)>,
     /// A right-button drag on the grid picking a brush: where it started.
@@ -186,6 +189,14 @@ pub struct Editor {
     captured: HashMap<(usize, u8), cart_model::art::Look>,
     /// The object palette shows every type, not only those the level draws right.
     show_all_objects: bool,
+    /// Play from a point is on: a click on a point of the map starts the game there.
+    play_pick: bool,
+    /// The last place each level was played from (Play here again).
+    played_here: Vec<(usize, Vec2)>,
+    /// The object palette's search: the text, and whether it is being typed (`search_view`).
+    search: search_view::Search,
+    /// Each palette's last chosen values (`recent_view`).
+    recent: Vec<(recent_view::Recent, Vec<u8>)>,
     /// The world map editor's Points panel: how far it is scrolled, and its height.
     points_scroll: f32,
     points_content: f32,
@@ -265,13 +276,24 @@ fn left_button() -> Pointer {
 }
 
 impl Editor {
-    pub fn new(doc: EditorDocument, ports: Ports, project: String, lang: Lang) -> Editor {
+    pub fn new(mut doc: EditorDocument, ports: Ports, project: String, lang: Lang) -> Editor {
         let Ports { store, launcher, prefs: prefs_store, dialogs, text_files, menu, sound, looks: look_store } = ports;
+        let restore_damaged = match store.read_restore_points().map(|t| crate::domain::files::read_restore_points(&t)) {
+            Some(Ok(points)) => {
+                doc.attach_restore_points(points);
+                false
+            }
+            Some(Err(_)) => true,
+            None => false,
+        };
         let (cached, cached_tiles) = look_store.load().map(|t| look_cache::from_text(&t)).unwrap_or_default();
         let known = cached.iter().map(|e| (e.0, e.1)).collect();
         let known_tiles = cached_tiles.iter().map(|e| (e.0, e.1)).collect();
         let look_loader = LookLoader::start(doc.rom.clone(), doc.original.clone(), &known, &known_tiles);
-        let status = format!("{} {project}", tr(lang, "Project"));
+        let mut status = format!("{} {project}", tr(lang, "Project"));
+        if restore_damaged {
+            status = format!("{status}. {}", tr(lang, "Its restore points file is damaged: imported levels and zones restore to their base."));
+        }
         let saved_project = crate::domain::files::project_text(&doc.project_file());
 
         let mut ed = Editor {
@@ -292,7 +314,7 @@ impl Editor {
             zone_atlases: ZONES.iter().map(|_| None).collect(),
             looks: HashMap::new(),
             cur: 0,
-            blocks: Brush::new(),
+            blocks: None,
             cam: Vec2::ZERO,
             zoom: 3,
             tool: tools::make(ToolKind::Pencil),
@@ -310,7 +332,7 @@ impl Editor {
             sel_obj: None,
             drag_obj: None,
             in_world: false,
-            tiles: Brush::new(),
+            tiles: None,
             palette_drag: None,
             pick_from: None,
             clipboard: None,
@@ -358,6 +380,10 @@ impl Editor {
             offered: HashMap::new(),
             captured: HashMap::new(),
             show_all_objects: false,
+            recent: Vec::new(),
+            search: Default::default(),
+            played_here: Vec::new(),
+            play_pick: false,
             points_scroll: 0.0,
             points_content: 0.0,
             tip: None,
@@ -424,7 +450,7 @@ impl Editor {
             self.draw_tip();
             return;
         }
-        if !self.update_naming() {
+        if !self.update_naming() && !self.update_search() {
             for a in shortcuts::pressed(self.ctx()) {
                 self.run(a);
             }
@@ -516,6 +542,7 @@ impl Editor {
                 self.save();
             }
             Action::Play if self.in_world => self.play_map(),
+            Action::PlayFromHere if self.in_world => self.toggle_play_pick(),
             Action::Play => self.play(),
             Action::Grid => self.grid = !self.grid,
             Action::Pencil => self.set_tool(ToolKind::Pencil),
@@ -556,6 +583,13 @@ impl Editor {
                 _ => self.toggle_placing(start_view::Placing::Checkpoint),
             },
             Action::PlayFromHere => self.toggle_placing(start_view::Placing::PlayHere),
+            Action::PlayHereAgain => match self.played_here.iter().find(|p| p.0 == self.cur).map(|p| p.1) {
+                Some(w) => self.play_from_here(w),
+                None => {
+                    self.status = format!("{} ({})", tr(self.lang, "This level has not been played from here yet: use Here first"), shortcuts::keys(Action::PlayFromHere));
+                    self.mark(Severity::Warning);
+                }
+            },
             Action::SecretLeads => self.start_secret_picking(),
             Action::DeleteObject => self.delete_selected_object(),
             a if a.uses_files() => self.queue_file(a),
@@ -563,8 +597,10 @@ impl Editor {
         }
     }
 
+    /// Blocks or Objects, with its palette shown.
     pub fn set_mode(&mut self, mode: Mode) {
         self.mode = mode;
+        self.side_tab = level_panel::SideTab::Palette;
         self.sel_obj = None;
         self.leave_grid();
     }
@@ -695,6 +731,7 @@ impl Editor {
             return;
         }
         self.world_map = map;
+        self.tiles = None;
         self.doc.show_added(map);
         self.cam = Vec2::ZERO;
         self.leave_grid();
@@ -716,6 +753,10 @@ impl Editor {
     pub fn select_level(&mut self, l: usize) {
         if l != self.cur {
             self.music.stop();
+            // its blocks and objects are its own: nothing chosen there yet
+            self.blocks = None;
+            self.kind = None;
+            self.sel_obj = None;
         }
         self.cur = l;
         self.leave_grid();
@@ -841,11 +882,14 @@ impl Editor {
     }
 
     fn restore_original(&mut self) {
+        let origin = self.doc.level_restore_origin(self.cur).map(|o| self.origin_text(o));
         self.doc.restore_level(self.cur);
         self.sel_obj = None;
         self.overview_stale = true;
         let l = self.cur;
-        self.status = if l >= LEVELS {
+        self.status = if let Some(origin) = origin {
+            format!("{} {l:02} {} {origin} {}", tr(self.lang, "Level"), tr(self.lang, "restored as imported from"), tr(self.lang, "(save to keep it; undo brings it back)."))
+        } else if l >= LEVELS {
             format!("{} {l:02} {} {:02} {}", tr(self.lang, "Level"), tr(self.lang, "restored as its base level"), self.doc.base_of(l), tr(self.lang, "is in the game (save to keep it; undo brings it back)."))
         } else {
             format!("{} {l:02} {}", tr(self.lang, "Level"), tr(self.lang, "restored as it is in the game (save to keep it; undo brings it back)."))
@@ -1004,14 +1048,34 @@ impl Editor {
             return;
         }
         self.placing = None;
-        self.play_level(Some((start.mario_x, start.mario_y + cart_model::level_start::FEET)));
+        self.played_here.retain(|p| p.0 != self.cur);
+        self.played_here.push((self.cur, w));
+        if self.play_level(Some((start.mario_x, start.mario_y + cart_model::level_start::FEET))) {
+            self.status = format!("{}  ({}: {})", self.status, shortcuts::keys(Action::PlayHereAgain), tr(self.lang, "again from this place"));
+        }
     }
 
-    fn play_level(&mut self, start: Option<(u16, u16)>) {
-        if !self.save() {
-            return;
+    /// A test game is still open: another is not started (the status says so).
+    pub(super) fn game_open(&mut self) -> bool {
+        if !self.launcher.running() {
+            return false;
         }
-        let started = self.launcher.launch(self.store.path(), Some(self.cur), start, self.prefs.test_lives, self.prefs.test_coins);
+        self.status = tr(self.lang, "The game is already open: close it to play again.").into();
+        self.mark(Severity::Warning);
+        true
+    }
+
+    /// The test game Play and Here start.
+    fn test_game(&self) -> TestGame {
+        TestGame { lives: self.prefs.test_lives, coins: self.prefs.test_coins, power: self.prefs.test_power }
+    }
+
+    /// Save and start the game in the level shown. True when it started.
+    fn play_level(&mut self, start: Option<(u16, u16)>) -> bool {
+        if self.game_open() || !self.save() {
+            return false;
+        }
+        let started = self.launcher.launch(self.store.path(), Some(self.cur), start, None, self.test_game());
         self.status = match &started {
             Ok(()) if self.cur >= LEVELS => format!("{} {:02} ({} {:02})", tr(self.lang, "Playing level"), self.cur, tr(self.lang, "as"), self.doc.base_of(self.cur)),
             Ok(()) => format!("{} {:02}", tr(self.lang, "Playing level"), self.cur),
@@ -1020,14 +1084,31 @@ impl Editor {
         if started.is_err() {
             self.mark(Severity::Error);
         }
+        started.is_ok()
     }
 
-    /// Save, then start the game on the edited copy (its world map, to try the points).
+    /// Save, then start the game on the edited copy's map, Mario on his start (to try the
+    /// points).
     fn play_map(&mut self) {
-        if !self.save() {
+        self.play_map_at(None);
+    }
+
+    /// Play from a point: the game on the map, Mario on the chosen point this time only.
+    pub(super) fn play_map_here(&mut self) {
+        match self.doc.start_at(self.world_map, self.point as u8) {
+            Some(s) => self.play_map_at(Some(s)),
+            None => {
+                self.status = tr(self.lang, "The game can begin on a point of the world map, a game zone or a new zone (not an added point).").into();
+                self.mark(Severity::Warning);
+            }
+        }
+    }
+
+    fn play_map_at(&mut self, point: Option<cart_model::start_point::Start>) {
+        if self.game_open() || !self.save() {
             return;
         }
-        let started = self.launcher.launch(self.store.path(), None, None, self.prefs.test_lives, self.prefs.test_coins);
+        let started = self.launcher.launch(self.store.path(), None, None, point, self.test_game());
         self.status = match &started {
             Ok(()) => tr(self.lang, "Game started with the edited copy.").into(),
             Err(e) => e.clone(),
