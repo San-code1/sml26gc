@@ -45,14 +45,30 @@ read by `crates/i18n` (the code holds the English).
 
 Only what is needed to understand, build, run and change the project. It is not a development
 diary: no history, plans or progress notes. Keep it short, current and without repetition;
-say each thing in one place and link to it.
+say each thing in one place and link to it. The one record of history is `CHANGELOG.md`: per
+released version, what a person using the programs notices.
 
 ## Git workflow
 
-- `main`: releases. `develop`: integration. Work happens on `feature/<name>` branched from
-  `develop`.
-- A finished feature is merged into `develop` with `git merge --no-ff` and pushed. `develop` is
-  merged into `main` (`--no-ff`) only when the user asks.
+Why each step: `docs/DEVELOPMENT.md`, "Workflow and releases".
+
+- `main` holds released versions only; `develop` integrates. Every change, however urgent,
+  happens on `feature/<name>` branched from `develop`, with its OpenSpec change.
+- Finishing a feature, on its branch: archive its OpenSpec change (the specs follow), add what a
+  person using the programs notices to `CHANGELOG.md` under "Unreleased", run the tests, commit.
+  Then merge it into `develop` with `git merge --no-ff`, push, and delete the branch locally and
+  on GitHub.
+- A release, only when the user asks. The tag is always the version, `vX.Y.Z`: the user gives
+  it, or the agent proposes it from "Unreleased" (only fixes: PATCH; new features: MINOR;
+  project or save files of an earlier version no longer work: MAJOR) and waits for the user's
+  yes. Then:
+  1. On `develop`, in one commit "Release X.Y.Z": set `version` in the workspace `Cargo.toml`
+     (and `Cargo.lock`, by building), turn "Unreleased" into `[X.Y.Z] - <date>`; run the tests.
+     This is the only time the version changes.
+  2. Merge `develop` into `main` with `--no-ff`; tag that merge `vX.Y.Z`; push `main`, the tag
+     and `develop`.
+  3. Build the package from `main` (`cargo xtask package <target>`) and publish it as the
+     GitHub release of the tag: the zip of each platform, the changelog's section as its text.
 - Commit messages: a short summary line, then what changed and why when it is not obvious.
 - No AI attribution in commits or pull requests (no `Co-Authored-By` or "Generated with" lines).
 - Never commit cartridges or anything derived from them (see `.gitignore`).
@@ -67,5 +83,6 @@ Nothing of the game or of Nintendo goes in (`LEGAL.md`).
 ## Releases
 
 A package for another computer is only made with `cargo xtask package <target>`
-(`docs/DEVELOPMENT.md`, "Building for Windows"), never by copying from `target/release`, which holds the
-developer's own cartridge choice, projects and saves.
+(`docs/DEVELOPMENT.md`, "Building for Windows"), never by copying from `target/release`, which
+holds the developer's own cartridge choice, projects and saves. It is published only as part of
+a release (Git workflow).

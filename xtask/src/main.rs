@@ -6,7 +6,7 @@
 //!   check-portable        checks the platform-independent crates for Linux
 //!
 //! A package holds the two executables, the read-me and the cartridge notice (`packaging/`),
-//! the licence (`LICENSE`) and the legal notice (`LEGAL.md`), the manuals (`docs/GAME.md`,
+//! the licence (`LICENSE`), the legal notice (`LEGAL.md`) and the changelog, the manuals (`docs/GAME.md`,
 //! `docs/EDITOR.md`) and the other licences, and nothing else: it is built into its own folder under `target/`, apart
 //! from the developer's `target/release` and the files the programs write there.
 mod licences;
@@ -118,14 +118,14 @@ fn package(t: &Target) -> Result<(), String> {
     }
 
     let fill = |text: &str| {
-        let text = text.replace("{product}", name).replace("{version}", &version).replace("{game}", &programs[0]).replace("{editor}", &programs[1]).replace("{source}", env!("PRODUCT_SOURCE"));
+        let text = text.replace("{product}", name).replace("{game}", &programs[0]).replace("{editor}", &programs[1]).replace("{source}", env!("PRODUCT_SOURCE"));
         if suffix.is_empty() { text } else { text.replace("\r\n", "\n").replace('\n', "\r\n") }
     };
     for f in ["README.txt", "NO-CARTRIDGE.txt"] {
         let text = std::fs::read_to_string(root().join("packaging").join(f)).map_err(|e| format!("packaging/{f}: {e}"))?;
         std::fs::write(folder.join(f), fill(&text)).map_err(|e| format!("{f}: {e}"))?;
     }
-    for (from, to) in [("LICENSE", "LICENSE.txt"), ("LEGAL.md", "LEGAL.md")] {
+    for (from, to) in [("LICENSE", "LICENSE.txt"), ("LEGAL.md", "LEGAL.md"), ("CHANGELOG.md", "CHANGELOG.md")] {
         let text = std::fs::read_to_string(root().join(from)).map_err(|e| format!("{from}: {e}"))?;
         std::fs::write(folder.join(to), fill(&text)).map_err(|e| format!("{to}: {e}"))?;
     }

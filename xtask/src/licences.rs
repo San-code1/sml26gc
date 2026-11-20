@@ -47,7 +47,7 @@ pub fn third_party(meta: &Value, programs: &[&str]) -> Result<String, String> {
     let mut crates: Vec<&Value> = seen.iter().filter(|id| !members.contains(*id)).filter_map(|id| packages.get(id).copied()).collect();
     crates.sort_by_key(|p| (p["name"].as_str().unwrap_or("").to_lowercase(), p["version"].as_str().unwrap_or("").to_string()));
 
-    let mut out = format!("{{product}} {{version}} includes these Rust crates, each under its own licence.\n\n{} crates:\n", crates.len());
+    let mut out = format!("{{product}} includes these Rust crates, each under its own licence.\n\n{} crates:\n", crates.len());
     for p in &crates {
         out += &format!("  {} {} ({})\n", p["name"].as_str().unwrap_or("?"), p["version"].as_str().unwrap_or("?"), p["license"].as_str().unwrap_or("licence not declared"));
     }

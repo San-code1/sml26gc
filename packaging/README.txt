@@ -1,8 +1,9 @@
-{product} {version}
+{product}
 
 An emulator that plays Super Mario Land 2: 6 Golden Coins from your own cartridge file, and a
 level editor that makes edited copies of it (levels, objects, the world map, new zones).
-No game is included: see NO-CARTRIDGE.txt. The manuals are in the manuals folder.
+No game is included: see NO-CARTRIDGE.txt. The manuals are in the manuals folder; what each
+version brings, in CHANGELOG.md.
 
 Not affiliated with or endorsed by Nintendo.
 
