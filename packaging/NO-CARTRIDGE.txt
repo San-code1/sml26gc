@@ -1,4 +1,4 @@
-{product} {version}
+{product}
 
 NO GAME IS INCLUDED
 

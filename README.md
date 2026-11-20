@@ -35,6 +35,8 @@ program does not start: [`packaging/README.txt`](packaging/README.txt), the read
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | The code's layout, dependencies and the contract between the two programs |
 | [`docs/MECHANICS.md`](docs/MECHANICS.md) | The game's rules, read from its program |
 | [`AGENTS.md`](AGENTS.md) | Rules for changing the repository |
+| [`CHANGELOG.md`](CHANGELOG.md) | What each version brings |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md) | Contributing: where the rules are |
 | [`LEGAL.md`](LEGAL.md) | Licence, what is and is not included, legal grounds, responsibility |
 
 ## Licence

@@ -18,7 +18,7 @@ A single command run from the repository, naming a platform target (`windows-x64
 - **THEN** it says which targets it knows and writes nothing
 
 ### Requirement: The package holds only what runs
-The package folder SHALL hold exactly: the game and editor executables, a read-me, the cartridge notice, the licence text, the legal notice, the user manuals of the game and the editor, and the licences folder. It SHALL NOT hold source files, build output (debug symbols, intermediate files, other binaries such as the research tool), cartridges or anything made from one, projects, saves, settings files, caches or exports.
+The package folder SHALL hold exactly: the game and editor executables, a read-me, the cartridge notice, the licence text, the legal notice, the changelog, the user manuals of the game and the editor, and the licences folder. It SHALL NOT hold source files, build output (debug symbols, intermediate files, other binaries such as the research tool), cartridges or anything made from one, projects, saves, settings files, caches or exports.
 
 #### Scenario: The developer's own files stay out
 - **WHEN** the package is built on a computer whose `target/release` holds projects, saves, `settings.cfg`, `editor.cfg`, `base_cartridge.txt` and `.pdb` files
@@ -26,7 +26,7 @@ The package folder SHALL hold exactly: the game and editor executables, a read-m
 
 #### Scenario: Listing the package
 - **WHEN** the Windows package folder is listed
-- **THEN** it holds `sml26gc.exe`, `sml26gc_editor.exe`, `README.txt`, `NO-CARTRIDGE.txt`, `LICENSE.txt`, `LEGAL.md`, `manuals/` (`GAME.md`, `EDITOR.md`) and `licenses/`, and nothing else
+- **THEN** it holds `sml26gc.exe`, `sml26gc_editor.exe`, `README.txt`, `NO-CARTRIDGE.txt`, `LICENSE.txt`, `LEGAL.md`, `CHANGELOG.md`, `manuals/` (`GAME.md`, `EDITOR.md`) and `licenses/`, and nothing else
 
 ### Requirement: No cartridge is included
 The package SHALL NOT contain any cartridge or data taken from one, and SHALL say so: `NO-CARTRIDGE.txt` (and the read-me) SHALL state that the programs include no game, that the person uses a cartridge file from their own backup of a cartridge they own, that the authors take no responsibility for where it was obtained, and that the product is not affiliated with or endorsed by Nintendo. The programs SHALL keep asking for the cartridge on first run, as they do now.
@@ -61,11 +61,11 @@ The product SHALL be named "SML2 6GC Emulator and Level Editor" (saying it is an
 - **THEN** `sml26gc.exe` from the same folder starts on that level
 
 ### Requirement: Product name and version in one place
-The product name, the short id, the version and the list of platform targets SHALL each be defined once (the version is the workspace's); the package's folder and zip names, the executables' version details and the read-me SHALL take them from there.
+The product name, the short id, the version and the list of platform targets SHALL each be defined once (the version is the workspace's); the package's folder and zip names and the executables' version details SHALL take them from there. The package's texts (read-me, cartridge notice, third-party list) SHALL NOT show the version.
 
 #### Scenario: A new version
 - **WHEN** the workspace version is changed to `0.2.0` and the package is built
-- **THEN** the zip is named with `0.2.0` and both executables' Properties show `0.2.0`
+- **THEN** the zip is named with `0.2.0`, both executables' Properties show `0.2.0`, and no text of the package names a version
 
 ### Requirement: The package says what a computer needs
 The package's read-me SHALL say what a computer needs to run the programs and that nothing else needs installing, and SHALL say, for each way a program can fail to start or work, its cause and what to do.

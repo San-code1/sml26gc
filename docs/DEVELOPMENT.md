@@ -62,9 +62,10 @@ The package another person unpacks and runs:
 2. Checks that neither executable needs the Visual C++ runtime DLLs (`VCRUNTIME140.dll`,
    `api-ms-win-crt-*`): `.cargo/config.toml` links the C runtime in (`+crt-static`).
 3. Writes `dist\windows-x64\sml26gc\`, emptied first: `sml26gc.exe`, `sml26gc_editor.exe`,
-   `README.txt` and `NO-CARTRIDGE.txt` (from `packaging/`, with the product and version filled
-   in), `LICENSE.txt` (the GPL), `LEGAL.md`, `manuals\` (`docs/GAME.md`, `docs/EDITOR.md`) and
-   `licenses\` (the fonts' and those of every Rust crate compiled in, from `cargo metadata`).
+   `README.txt` and `NO-CARTRIDGE.txt` (from `packaging/`, with the product and program names
+   filled in), `LICENSE.txt` (the GPL), `LEGAL.md`, `CHANGELOG.md`, `manuals\` (`docs/GAME.md`,
+   `docs/EDITOR.md`) and `licenses\` (the fonts' and those of every Rust crate compiled in, from
+   `cargo metadata`).
 4. Zips that folder to `dist\sml26gc-<version>-windows-x64.zip`.
 
 What goes into the executables:
@@ -80,9 +81,9 @@ What goes into the executables:
 - The window subsystem: no console window; `host::console::attach()` gives the command-line
   modes the terminal they were started from.
 
-To release a new version: change `version` in the workspace `Cargo.toml`, run the tests, then
-`cargo xtask package windows-x64`. What a computer needs to run the package, and what to do when
-it does not start, is in [`packaging/README.txt`](../packaging/README.txt).
+A package is published only as part of a release (below, "Workflow and releases"). What a
+computer needs to run it, and what to do when it does not start, is in
+[`packaging/README.txt`](../packaging/README.txt).
 
 Build errors and their cause:
 
@@ -95,6 +96,44 @@ Build errors and their cause:
 
 Other platforms: the code is ready for them (see `ARCHITECTURE.md`, "Platforms and packaging");
 each is built on its own system.
+
+## Workflow and releases
+
+The rules are in [`AGENTS.md`](../AGENTS.md), "Git workflow"; this is why they are so.
+
+- **Two long-lived branches.** `main` only ever holds released versions, so whatever is on it
+  can be built and given to someone; `develop` gathers finished features until the next release.
+- **One branch per change, from `develop`, even for an urgent fix.** Every change goes through
+  the same steps (its spec, its tests, the changelog), so a hurried fix cannot skip them.
+  A release then carries everything already on `develop`, so its number is chosen by all it
+  holds, not only by the fix.
+- **Archive, changelog and tests on the branch.** The branch arrives at `develop` complete: the
+  specs say what the code now does, the changelog says what users will notice, the tests pass.
+  Writing the changelog when each feature ends is easier and truer than rebuilding it from
+  memory at release time, and its "Unreleased" section tells which number the release needs.
+- **`--no-ff`, then delete the branch.** The merge commit keeps the feature visible as one unit
+  in the history, so the branch itself is no longer needed; old branches only hide the ones that
+  matter.
+- **The version changes once, at release time.** It is what the executables, the zip and the tag
+  show, so it changes in the commit that prepares the release and nowhere else. It is
+  `MAJOR.MINOR.PATCH`: PATCH when a release only fixes, MINOR when it adds features, MAJOR when
+  projects or saves of an earlier version no longer work (while it is `0.x`, the programs are
+  still maturing).
+- **The tag is the version and points at the merge on `main`.** A published zip can always be
+  traced to the exact code it was built from. A release may have a name too: it is its title on
+  GitHub, never its tag.
+
+Publishing release X.Y.Z, once the user has asked for it and agreed the number:
+
+1. On `develop`: set `version = "X.Y.Z"` in the workspace `Cargo.toml`, build (it updates
+   `Cargo.lock`), turn `## [Unreleased]` in `CHANGELOG.md` into `## [X.Y.Z] - YYYY-MM-DD` with a
+   new empty "Unreleased" above it, run the tests, commit "Release X.Y.Z", push.
+2. `git checkout main`, `git merge --no-ff develop`, `git tag -a vX.Y.Z -m "Version X.Y.Z"`,
+   `git push origin main vX.Y.Z`.
+3. `cargo xtask package windows-x64` (from `main`): `dist\sml26gc-X.Y.Z-windows-x64.zip`.
+4. On GitHub, Releases, "Draft a new release": choose the tag `vX.Y.Z`, paste the changelog's
+   section as the text, attach the zip, publish (or `gh release create vX.Y.Z <zip> --notes-file
+   <section>` with the GitHub CLI).
 
 ## How the emulator was made, and why
 
