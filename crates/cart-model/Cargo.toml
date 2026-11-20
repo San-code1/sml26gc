@@ -3,6 +3,8 @@ name = "cart-model"
 description = "What is known about the cartridge: levels, objects, world map, ROM patches, and driving the game."
 version.workspace = true
 edition.workspace = true
+license.workspace = true
+authors.workspace = true
 
 [dependencies]
 gb-core.workspace = true

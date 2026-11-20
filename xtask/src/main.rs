@@ -5,8 +5,9 @@
 //!                         `dist/TARGET/<id>/` and `dist/<id>-<version>-TARGET.zip`
 //!   check-portable        checks the platform-independent crates for Linux
 //!
-//! A package holds the two executables, the read-me and the cartridge notice (`packaging/`)
-//! and the licences, and nothing else: it is built into its own folder under `target/`, apart
+//! A package holds the two executables, the read-me and the cartridge notice (`packaging/`),
+//! the licence (`LICENSE`) and the legal notice (`LEGAL.md`), the manuals (`docs/GAME.md`,
+//! `docs/EDITOR.md`) and the other licences, and nothing else: it is built into its own folder under `target/`, apart
 //! from the developer's `target/release` and the files the programs write there.
 mod licences;
 
@@ -25,6 +26,9 @@ const TARGETS: &[Target] = &[Target { name: "windows-x64", triple: "x86_64-pc-wi
 
 /// The programs shipped: their crates (the binaries' names come from the manifests).
 const PROGRAMS: [&str; 2] = ["game", "editor"];
+
+/// The user manuals, copied into `manuals/`.
+const MANUALS: [&str; 2] = ["GAME.md", "EDITOR.md"];
 
 /// The licences of the fonts whose glyphs are in the executables.
 const FONT_LICENCES: [&str; 3] = ["OFL-BIZUDGothic.txt", "OFL-NotoSansCJK.txt", "OFL-FusionPixelFont.txt"];
@@ -99,7 +103,9 @@ fn package(t: &Target) -> Result<(), String> {
     if folder.exists() {
         std::fs::remove_dir_all(&folder).map_err(|e| format!("{}: {e}", folder.display()))?;
     }
-    std::fs::create_dir_all(folder.join("licenses")).map_err(|e| format!("{}: {e}", folder.display()))?;
+    for sub in ["licenses", "manuals"] {
+        std::fs::create_dir_all(folder.join(sub)).map_err(|e| format!("{}: {e}", folder.display()))?;
+    }
 
     let mut programs = Vec::new();
     for p in PROGRAMS {
@@ -112,12 +118,20 @@ fn package(t: &Target) -> Result<(), String> {
     }
 
     let fill = |text: &str| {
-        let text = text.replace("{product}", name).replace("{version}", &version).replace("{game}", &programs[0]).replace("{editor}", &programs[1]);
+        let text = text.replace("{product}", name).replace("{version}", &version).replace("{game}", &programs[0]).replace("{editor}", &programs[1]).replace("{source}", env!("PRODUCT_SOURCE"));
         if suffix.is_empty() { text } else { text.replace("\r\n", "\n").replace('\n', "\r\n") }
     };
     for f in ["README.txt", "NO-CARTRIDGE.txt"] {
         let text = std::fs::read_to_string(root().join("packaging").join(f)).map_err(|e| format!("packaging/{f}: {e}"))?;
         std::fs::write(folder.join(f), fill(&text)).map_err(|e| format!("{f}: {e}"))?;
+    }
+    for (from, to) in [("LICENSE", "LICENSE.txt"), ("LEGAL.md", "LEGAL.md")] {
+        let text = std::fs::read_to_string(root().join(from)).map_err(|e| format!("{from}: {e}"))?;
+        std::fs::write(folder.join(to), fill(&text)).map_err(|e| format!("{to}: {e}"))?;
+    }
+    for f in MANUALS {
+        let text = std::fs::read_to_string(root().join("docs").join(f)).map_err(|e| format!("docs/{f}: {e}"))?;
+        std::fs::write(folder.join("manuals").join(f), fill(&text)).map_err(|e| format!("manuals/{f}: {e}"))?;
     }
     for f in FONT_LICENCES {
         std::fs::copy(root().join("fonts").join(f), folder.join("licenses").join(f)).map_err(|e| format!("fonts/{f}: {e}"))?;

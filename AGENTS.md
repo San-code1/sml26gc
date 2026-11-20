@@ -55,8 +55,15 @@ say each thing in one place and link to it.
 - No AI attribution in commits or pull requests (no `Co-Authored-By` or "Generated with" lines).
 - Never commit cartridges or anything derived from them (see `.gitignore`).
 
+## Licences
+
+The project is `GPL-3.0-or-later` (copyright The SML2 6GC authors): new files fall under it through
+`REUSE.toml`. Anything brought in from elsewhere (code, fonts, art) must have a licence
+compatible with the GPL, get its own entry in `REUSE.toml` and its licence text in `LICENSES/`.
+Nothing of the game or of Nintendo goes in (`LEGAL.md`).
+
 ## Releases
 
-A package for another computer is only made with `cargo xtask package <target>` (README,
-"Package for another computer"), never by copying from `target/release`, which holds the
+A package for another computer is only made with `cargo xtask package <target>`
+(`docs/DEVELOPMENT.md`, "Building for Windows"), never by copying from `target/release`, which holds the
 developer's own cartridge choice, projects and saves.
