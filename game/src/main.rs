@@ -6,6 +6,7 @@
 //! reads the command line, picks the adapters and starts the window loop. Opened without
 //! a cartridge file, it first shows the start screen: the base cartridge, then what to play
 //! (`macroquad_picker`).
+#![cfg_attr(all(windows, not(test)), windows_subsystem = "windows")]
 mod adapters;
 mod application;
 mod checks;
@@ -123,9 +124,10 @@ mod tests {
     }
 }
 
-const TITLE: &str = "Game Boy Native (Rust)";
+const TITLE: &str = "SML2 6GC";
 
 fn main() {
+    host::console::attach();
     let raw: Vec<String> = std::env::args().skip(1).collect();
     if raw.first().map(|s| s == "--research").unwrap_or(false) {
         let rom = host::require_rom(None).unwrap_or_else(|e| {
@@ -163,6 +165,7 @@ fn main() {
         window_height: 576,
         high_dpi: false,
         window_resizable: true,
+        icon: include!(concat!(env!("OUT_DIR"), "/window_icon.rs")),
         ..Default::default()
     };
     macroquad::Window::from_config(conf, run(args, found, checking, title));
@@ -233,7 +236,11 @@ async fn run(args: Args, found: Result<PathBuf, String>, checking: bool, title: 
     let mut display = MacroquadDisplay::new();
     // no cartridge on the command line: the start screen first (checks find it themselves)
     let mut app = if args.rom.is_none() && (!checking || args.start_screen) {
-        App::Pick(Picker::new(&SettingsFile.load()))
+        App::Pick({
+            let mut picker = Picker::new(&SettingsFile.load());
+            picker.error = host::paths::data_dir_problem(picker.lang()).map(String::from);
+            picker
+        })
     } else {
         match start(&args, found, command_line_saves(&args, checking), checking, &audio) {
             Ok(s) => App::Run(s),

@@ -1,17 +1,18 @@
-# New Mario Bros
+# SML2 6GC Emulator and Level Editor
 
-A Game Boy emulator in Rust that runs **your own** Super Mario Land 2 cartridge file, plus an
-editor that changes the game's levels, objects and maps in projects, each with its own edited
-cartridge. For private use: cartridges, saves and projects never go into this repository (see
-`.gitignore`).
+A Game Boy emulator in Rust that runs **your own** Super Mario Land 2: 6 Golden Coins cartridge
+file (`sml26gc`), plus a level editor that changes the game's levels, objects and maps in
+projects, each with its own edited cartridge (`sml26gc_editor`). No game is included: the person
+uses a cartridge file from their own backup. Cartridges, saves and projects never go into this
+repository (see `.gitignore`). Not affiliated with or endorsed by Nintendo.
 
 Architecture: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). Contributing rules: [`AGENTS.md`](AGENTS.md).
 
 ## Build and run
 
     cargo build --release
-    target\release\game.exe ["path\to\game.gb"] [--project NAME | --test] [--level N] [--cheats]
-    target\release\editor.exe
+    target\release\sml26gc.exe ["path\to\game.gb"] [--project NAME | --test] [--level N] [--cheats]
+    target\release\sml26gc_editor.exe
     target\release\research.exe disasm 0 0361 20
 
 Both programs ask once for the base cartridge, Super Mario Land 2 - 6 Golden Coins (USA,
@@ -20,6 +21,17 @@ Europe) under any file name, check it by its SHA-1 at every start, and share the
 `saves\<project>\`), `settings.cfg` and `editor.cfg` live next to the executables. The
 research tools find the cartridge from the command line, `RESEARCH_ROM`, the base cartridge, a
 `rom` folder or `%USERPROFILE%\Games`.
+
+## Package for another computer
+
+    cargo xtask package windows-x64
+
+builds both programs (profile `dist`) and writes `dist\windows-x64\sml26gc\` and
+`dist\sml26gc-<version>-windows-x64.zip`: the two executables, `README.txt`, `NO-CARTRIDGE.txt`
+and `licenses\`, nothing else. Unpacked anywhere writable, it runs on Windows 11 with nothing
+installed. The icons come from `assets/icons/` (see its README); the package's texts from
+`packaging/`. `cargo xtask targets` lists the platforms; `cargo xtask check-portable` checks the
+system-independent crates for Linux (`rustup target add x86_64-unknown-linux-gnu` first).
 
 ## Game
 
@@ -210,5 +222,5 @@ the tag shown when a level begins lists them with the key that opens the menu.
 ## Checks
 
     cargo test --release --workspace        # includes the golden fingerprint
-    target\release\game.exe --self-test out.json
-    target\release\game.exe --research menushots DIR
+    target\release\sml26gc.exe --self-test out.json
+    target\release\sml26gc.exe --research menushots DIR

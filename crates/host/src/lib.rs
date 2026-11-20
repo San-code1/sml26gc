@@ -3,6 +3,7 @@
 //! sound or keyboards.
 pub mod base_cartridge;
 pub mod battery;
+pub mod console;
 pub mod paths;
 pub mod png_out;
 pub mod projects;

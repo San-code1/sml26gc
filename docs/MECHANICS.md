@@ -1,20 +1,10 @@
 # Mechanics sheet
 
-This port runs the cartridge's own program on a Game Boy written in Rust, so the
-game's rules are executed exactly as shipped. The values below were read from that
-program's machine code, and `--self-test` reads them from the cartridge at start-up
-and checks that the running game reaches each one.
-
-## How the code was read
-
-Craft Anything's decompilers can't read Game Boy (SM83) machine code: Ghidra has no
-SM83 processor, and the built-in lifter treats the file as x86 (evidence
-ev_31762a05…). So `--research` was added to this program: an SM83 disassembler, a
-memory write-watch that names the instruction that wrote each value, and a per-frame
-trace of chosen memory. ROM bytes were cross-checked with native_bytes_show
-(ev_40da10f0… for $19FF-$1BFE, ev_332f4fb7… for $18AF-$19A0; tool addresses are file
-offset + $100 for this raw image). All addresses below are bank 0 (`0:xxxx`), which
-is always mapped.
+The game's rules as its own program has them, read from the cartridge's machine code with the
+research tool (`tools/research`: an SM83 disassembler, a memory write-watch naming the
+instruction that wrote each value, and per-frame traces). The game's `--self-test` reads these
+values from the cartridge and checks that the running game reaches each one. All addresses are
+bank 0 (`0:xxxx`), which is always mapped.
 
 ## Player state (in the cartridge's battery RAM, which this game also uses as work RAM)
 

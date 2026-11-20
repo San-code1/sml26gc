@@ -1,0 +1,13 @@
+[alias]
+# The release tool: `cargo xtask package windows-x64` (see xtask/).
+xtask = "run --quiet --release -p xtask --"
+
+# The C runtime inside the executables: they start on a Windows without the Visual C++
+# Redistributable.
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]
+
+# The product's names, read by the build scripts, `host` and the xtask.
+[env]
+PRODUCT_NAME = "SML2 6GC Emulator and Level Editor"
+PRODUCT_ID = "sml26gc"

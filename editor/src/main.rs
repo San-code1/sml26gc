@@ -4,8 +4,9 @@
 //! cartridge. The base cartridge is never written.
 //!
 //! Layers: `domain` (document, undo history, tools) ← `application` (saving, captured
-//! graphics) ← `ports` ← `adapters` (files, game.exe) and `ui` (macroquad panels). This
+//! graphics) ← `ports` ← `adapters` (files, the game) and `ui` (macroquad panels). This
 //! file is the composition root.
+#![cfg_attr(all(windows, not(test)), windows_subsystem = "windows")]
 mod adapters;
 mod application;
 mod domain;
@@ -25,14 +26,15 @@ use ports::{FileDialogs, MenuBar, PrefsStore};
 use std::path::PathBuf;
 use ui::{language_menu, BaseScreen, Editor, Leave, Mode, Ports, ProjectsChoice, ProjectsScreen, TAB_POINTS};
 
-const TITLE: &str = "Level Editor (Rust)";
+const TITLE: &str = "SML2 6GC Editor";
 
 fn conf() -> Conf {
-    Conf { window_title: TITLE.into(), window_width: 1280, window_height: 820, window_resizable: true, high_dpi: false, ..Default::default() }
+    Conf { window_title: TITLE.into(), window_width: 1280, window_height: 820, window_resizable: true, high_dpi: false, icon: include!(concat!(env!("OUT_DIR"), "/window_icon.rs")), ..Default::default() }
 }
 
 #[macroquad::main(conf)]
 async fn main() {
+    host::console::attach();
     let args: Vec<String> = std::env::args().skip(1).collect();
     let value = |f: &str| args.iter().position(|a| a == f).and_then(|i| args.get(i + 1));
     let shot = value("--screenshot").map(PathBuf::from);
