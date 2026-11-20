@@ -6,7 +6,7 @@ What each version of the programs brings, as a person using them notices it. The
 
 ## [Unreleased]
 
-## [0.1.0] - 2026-11-21
+## [1.0.0] - 2026-11-21
 
 ### Added
 
