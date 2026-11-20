@@ -35,13 +35,7 @@ moment; warnings that are not about one place (the object count) SHALL only be l
 - **THEN** the view shows that screen with it marked
 
 ### Requirement: Objects on the first screen
-The game brings an object to life when its x comes in past the screen's edge (33 pixels past
-the left edge, 25 past the right edge), whatever its height, so the objects whose x lies in the
-band from 33 pixels left of the screen the level begins on to 24 pixels right of it, over the
-whole height of the level, do not appear when the level begins; they appear only once Mario has
-gone far enough away and comes back. The level check SHALL warn about them (how many, showing
-the first), and the level view SHALL frame that band in Objects mode, or in any mode while
-objects are in it.
+The level check SHALL warn about the objects that do not appear when the level begins (how many, showing the first): those whose x lies from 33 pixels left of the screen the level begins on to 24 pixels right of it, at any height, as the game brings an object to life only when its x comes in past the screen's edge. The level view SHALL frame that band in Objects mode, or in any mode while objects are in it.
 
 #### Scenario: A mushroom in front of Mario
 - **WHEN** an object is placed 48 pixels right of Mario's start
