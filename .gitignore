@@ -25,6 +25,10 @@ cache/
 settings.cfg
 editor.cfg
 
+# Planning notes kept on the developer's computer: OpenSpec changes, assistant settings
+openspec/changes/
+CLAUDE.md
+
 # Editors / OS
 .vscode/
 .idea/
