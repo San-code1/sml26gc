@@ -15,7 +15,7 @@ mod zones;
 pub use added::ZONE_POINTS;
 
 pub use zones::{ZonePoints, ZoneRefusal};
-use super::files::{self, FileError, LevelFile, ProjectFile, WorldFile};
+use super::files::{self, FileError, LevelFile, ProjectFile, RestorePoints, WorldFile};
 use super::history::History;
 use super::stamp::{Area, Stamp};
 use cart_model::error::{BankUsage, ObjectsUsage};
@@ -53,6 +53,14 @@ pub struct StandIn {
     pub header: [u8; 20],
 }
 
+/// What a new level or new zone was when it was imported or replaced from a file, to restore
+/// it to; `origin` as the file said it (`files::Origin::text`, empty: unknown).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RestorePoint<T> {
+    pub file: T,
+    pub origin: String,
+}
+
 /// A level as it can be undone: its blocks, its objects and, for a new level, its stand-in.
 #[derive(Clone, PartialEq, Debug)]
 pub struct LevelContent {
@@ -75,6 +83,8 @@ pub struct LevelContent {
     pub under: [Vec<u8>; 2],
     /// Where the secret exit leads (None: where the game's leads, or nowhere).
     pub secret: Option<SecretTo>,
+    /// The file it was imported or replaced from, if it was.
+    pub restore: Option<Box<RestorePoint<LevelFile>>>,
 }
 
 pub struct LevelDoc {
@@ -121,7 +131,7 @@ fn stored_set(rom: &[u8], l: usize) -> Option<EnemySet> {
 /// tables gets its base level's in `original`.
 fn content_with(f: LevelFile, original: &[u8]) -> LevelContent {
     let tables = f.tables.unwrap_or_else(|| Tables::read(original, f.stand_in.base as usize));
-    LevelContent { map: f.map, objs: f.objs, start: Start::read(&f.stand_in.header), settings: Settings::read(&f.stand_in.header), tables, enemies: f.enemies, stand_in: Some(f.stand_in), name: f.name, under: Default::default(), secret: f.secret }
+    LevelContent { map: f.map, objs: f.objs, start: Start::read(&f.stand_in.header), settings: Settings::read(&f.stand_in.header), tables, enemies: f.enemies, stand_in: Some(f.stand_in), name: f.name, under: Default::default(), secret: f.secret, restore: None }
 }
 
 /// `objs` with each checkpoint bell where the game finds it (x order within its page), as a
@@ -234,7 +244,7 @@ fn entries_of(rom: &[u8]) -> Vec<u8> {
 fn level_from(rom: &[u8], l: usize) -> LevelContent {
     let (_, start) = levels::map_location(rom, levels::header(rom, l));
     let h = levels::header(rom, l).at;
-    LevelContent { map: levels::decode(rom, start).0, objs: objects::read(rom, l).0, stand_in: None, name: String::new(), start: Start::read(&rom[h..h + 8]), settings: Settings::read(&rom[h..h + 20]), tables: Tables::read(rom, l), enemies: stored_set(rom, l), under: Default::default(), secret: None }
+    LevelContent { map: levels::decode(rom, start).0, objs: objects::read(rom, l).0, stand_in: None, name: String::new(), start: Start::read(&rom[h..h + 8]), settings: Settings::read(&rom[h..h + 20]), tables: Tables::read(rom, l), enemies: stored_set(rom, l), under: Default::default(), secret: None, restore: None }
 }
 
 impl EditorDocument {
@@ -385,9 +395,19 @@ impl EditorDocument {
     }
 
     /// The level as the original cartridge has it (undoable); a new level, as its base level
-    /// is there (header too), keeping its name.
+    /// is there (header too), keeping its name; one imported or replaced from a file, as the
+    /// file had it.
     pub fn restore_level(&mut self, l: usize) {
         self.snapshot(l);
+        if let Some(point) = self.levels[l].content.restore.clone() {
+            let mut content = content_with(point.file.clone(), &self.original);
+            content.restore = Some(point);
+            let lv = &mut self.levels[l];
+            lv.content = content;
+            lv.all_dirty();
+            self.extras_dirty = true;
+            return;
+        }
         let base = self.base_of(l);
         let mut content = level_from(&self.original, base);
         let at = levels::header(&self.original, base).at;
@@ -400,6 +420,35 @@ impl EditorDocument {
         }
         lv.content = content;
         lv.all_dirty();
+    }
+
+    /// Where level `l` was imported from, when Restore puts it back as its file had it
+    /// (`files::Origin::text`, empty: unknown).
+    pub fn level_restore_origin(&self, l: usize) -> Option<&str> {
+        self.levels.get(l)?.content.restore.as_ref().map(|r| r.origin.as_str())
+    }
+
+    /// What the new levels and new zones were imported or replaced from, to keep with the
+    /// project.
+    pub fn restore_points(&self) -> RestorePoints {
+        let levels = self.levels.iter().enumerate().skip(LEVELS).filter_map(|(l, lv)| Some((l, (**lv.content.restore.as_ref()?).clone()))).collect();
+        let zones = self.new_zones.iter().enumerate().filter_map(|(k, z)| Some((k, (**z.restore.as_ref()?).clone()))).collect();
+        RestorePoints { levels, zones }
+    }
+
+    /// Give the new levels and new zones the restore points kept with the project; one for a
+    /// level or zone the document does not have is dropped. Changes nothing to save.
+    pub fn attach_restore_points(&mut self, points: RestorePoints) {
+        for (l, point) in points.levels {
+            if let Some(lv) = self.levels.get_mut(l).filter(|_| l >= LEVELS) {
+                lv.content.restore = Some(Box::new(point));
+            }
+        }
+        for (k, point) in points.zones {
+            if let Some(z) = self.new_zones.get_mut(k) {
+                z.restore = Some(Box::new(point));
+            }
+        }
     }
 
     /// Where Mario begins level `l`.
@@ -561,19 +610,23 @@ impl EditorDocument {
         LevelFile { stand_in, map: c.map.clone(), objs: c.objs.clone(), name: c.name.clone(), secret: c.secret, tables: Some(c.tables), enemies: c.enemies.clone() }
     }
 
-    /// A new level after the others from a level file; None when there is no room.
-    pub fn import_level(&mut self, f: LevelFile) -> Option<usize> {
-        let content = content_with(f, &self.original);
+    /// A new level after the others from a level file exported from `origin`, which Restore
+    /// puts back; None when there is no room.
+    pub fn import_level(&mut self, f: LevelFile, origin: &str) -> Option<usize> {
+        let mut content = content_with(f.clone(), &self.original);
+        content.restore = Some(Box::new(RestorePoint { file: f, origin: origin.to_string() }));
         self.push_level(content)
     }
 
-    /// Replace new level `l` whole with a level file (undoable). The 32 are never replaced.
-    pub fn replace_level(&mut self, l: usize, f: LevelFile) -> bool {
+    /// Replace new level `l` whole with a level file exported from `origin`, which Restore then
+    /// puts back (undoable). The 32 are never replaced.
+    pub fn replace_level(&mut self, l: usize, f: LevelFile, origin: &str) -> bool {
         if l < LEVELS || l >= self.levels.len() {
             return false;
         }
         self.snapshot(l);
-        let content = content_with(f, &self.original);
+        let mut content = content_with(f.clone(), &self.original);
+        content.restore = Some(Box::new(RestorePoint { file: f, origin: origin.to_string() }));
         let lv = &mut self.levels[l];
         lv.content = content;
         lv.all_dirty();
@@ -1488,7 +1541,7 @@ mod tests {
         let again = EditorDocument::open(doc.original.clone(), Some(doc.rom.clone()));
         assert_eq!((again.level_tables(1), again.level_tables(n)), (space, space));
         assert!(again.mods.level(1), "the game level differs from the game's");
-        let filed = doc.import_level(files::read_level(&files::level_text(&doc.level_file(n))).unwrap()).unwrap();
+        let filed = doc.import_level(files::read_level(&files::level_text(&doc.level_file(n), "")).unwrap().0, "").unwrap();
         assert_eq!(doc.level_tables(filed), space);
         doc.restore_level(1);
         assert_eq!(doc.level_tables(1), own);
@@ -1513,7 +1566,7 @@ mod tests {
         let again = EditorDocument::open(doc.original.clone(), Some(doc.rom.clone()));
         assert_eq!((again.level_enemies(1), again.level_enemies(n)), (Some(&set), Some(&set)));
         assert!(again.mods.level(1));
-        let filed = doc.import_level(files::read_level(&files::level_text(&doc.level_file(n))).unwrap()).unwrap();
+        let filed = doc.import_level(files::read_level(&files::level_text(&doc.level_file(n), "")).unwrap().0, "").unwrap();
         assert_eq!(doc.level_enemies(filed), Some(&set));
         doc.restore_level(1);
         assert!(doc.level_enemies(1).is_none());
@@ -1622,21 +1675,61 @@ mod tests {
             return;
         };
         doc.set_block(9, 4, 4, 0x11);
-        let f = files::read_level(&files::level_text(&doc.level_file(9))).unwrap();
+        let f = files::read_level(&files::level_text(&doc.level_file(9), "")).unwrap().0;
         assert_eq!(f.stand_in.base, 9);
-        let n = doc.import_level(f.clone()).unwrap();
+        let n = doc.import_level(f.clone(), "").unwrap();
         assert_eq!((doc.base_of(n), doc.block(n, 4, 4)), (9, 0x11));
         assert_eq!(doc.levels[n].content.objs, doc.levels[9].content.objs);
-        assert!(!doc.replace_level(9, f.clone()), "the 32 levels are never replaced");
+        assert!(!doc.replace_level(9, f.clone(), ""), "the 32 levels are never replaced");
         let m = doc.add_level(2).unwrap();
         let before = doc.levels[m].content.clone();
-        assert!(doc.replace_level(m, f));
+        assert!(doc.replace_level(m, f, ""));
         assert_eq!((doc.base_of(m), doc.block(m, 4, 4)), (9, 0x11));
         assert!(doc.undo(m));
         assert_eq!(doc.levels[m].content, before);
         while doc.add_level(0).is_some() {}
         assert_eq!(doc.new_levels(), extra_levels::MAX);
-        assert_eq!(doc.import_level(doc.level_file(0)), None, "no room");
+        assert_eq!(doc.import_level(doc.level_file(0), ""), None, "no room");
+    }
+
+    #[test]
+    fn an_imported_level_restores_as_its_file_had_it() {
+        let Some(mut doc) = open() else {
+            eprintln!("no cartridge found: document test skipped");
+            return;
+        };
+        doc.set_block(5, 4, 4, 0x11);
+        let a = doc.level_file(5);
+        let copy = doc.add_level(2).unwrap();
+        let n = doc.import_level(a.clone(), "Demo|level|05|").unwrap();
+        doc.set_block(n, 4, 4, 0x22);
+        doc.restore_level(n);
+        assert_eq!((doc.base_of(n), doc.block(n, 4, 4), doc.level_restore_origin(n)), (5, 0x11, Some("Demo|level|05|")));
+        assert_eq!(doc.level_file(n), a, "as the file had it, not as base level 05");
+        doc.set_block(20, 4, 4, 0x33);
+        assert!(doc.replace_level(n, doc.level_file(20), "B"));
+        assert!(doc.undo(n));
+        assert_eq!(doc.level_restore_origin(n), Some("Demo|level|05|"), "undo brings the earlier restore point back");
+        assert!(doc.remove_level(copy));
+        let n = n - 1;
+        doc.set_block(n, 4, 4, 0x44);
+        doc.restore_level(n);
+        assert_eq!(doc.block(n, 4, 4), 0x11, "it follows the level when an earlier one is removed");
+        let kept = doc.restore_points();
+        assert_eq!(kept.levels.iter().map(|p| p.0).collect::<Vec<_>>(), vec![n]);
+        let mut again = open().unwrap();
+        let mut odd = kept.clone();
+        odd.levels.push((7, odd.levels[0].1.clone()));
+        odd.zones.push((0, RestorePoint { file: again.zone_file(OnMap::Zone(0)).unwrap(), origin: String::new() }));
+        again.attach_restore_points(odd);
+        assert_eq!(again.restore_points(), RestorePoints::default(), "no new level or zone to attach to, and 7 is a game level");
+        again.add_level(2);
+        again.attach_restore_points(kept.clone());
+        assert_eq!(again.restore_points(), kept, "attached by number when the level is there");
+        let c = doc.add_level(2).unwrap();
+        assert_eq!(doc.level_restore_origin(c), None, "a copied level has none");
+        doc.restore_level(c);
+        assert_eq!(doc.base_of(c), 2);
     }
 
     #[test]
@@ -1657,7 +1750,7 @@ mod tests {
         let n = doc.add_level(3).unwrap();
         let other = Start::standing(0x300, 0x100);
         doc.set_level_start(n, other);
-        let filed = doc.import_level(files::read_level(&files::level_text(&doc.level_file(3))).unwrap()).unwrap();
+        let filed = doc.import_level(files::read_level(&files::level_text(&doc.level_file(3), "")).unwrap().0, "").unwrap();
         assert_eq!(doc.level_start(filed), moved);
         doc.commit().unwrap();
         let again = EditorDocument::open(doc.original.clone(), Some(doc.rom.clone()));
@@ -1697,7 +1790,7 @@ mod tests {
         assert_eq!(checkpoint::bells(&doc.levels[1].content.objs).len(), 2, "the game's bell and the new one");
         assert!(checkpoint::installed(&doc.rom), "several bells: the hook");
         assert_ne!(checkpoint::bell_entry(&doc.rom, 1, 1), [0; 8], "the second bell's restart");
-        let filed = doc.import_level(files::read_level(&files::level_text(&doc.level_file(1))).unwrap()).unwrap();
+        let filed = doc.import_level(files::read_level(&files::level_text(&doc.level_file(1), "")).unwrap().0, "").unwrap();
         assert_eq!(doc.level_settings(filed), changed);
         assert_eq!(checkpoint::bell_places(&doc.levels[filed].content.objs), checkpoint::bell_places(&doc.levels[1].content.objs));
         let text = files::project_text(&doc.project_file());
@@ -1830,7 +1923,7 @@ mod tests {
         assert_eq!((again.level_secret(1), again.level_secret(7), again.level_secret(n), again.level_secret(8)), (Some(SecretTo::Point(0x0A)), Some(SecretTo::Point(0x34)), Some(SecretTo::Point(0x07)), None));
         assert_eq!(again.goal_cells(1, Goal::Secret), vec![(20, 28)]);
         let f = doc.level_file(7);
-        assert_eq!(files::read_level(&files::level_text(&f)).map(|f| f.secret), Ok(Some(SecretTo::Point(0x34))));
+        assert_eq!(files::read_level(&files::level_text(&f, "")).map(|f| f.0.secret), Ok(Some(SecretTo::Point(0x34))));
         assert!(doc.undo(7));
         assert_eq!(doc.level_secret(7), None, "undone");
         assert!(doc.undo(1) && doc.undo(1));

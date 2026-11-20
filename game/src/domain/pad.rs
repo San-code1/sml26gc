@@ -65,11 +65,11 @@ pad_buttons! {
 
 /// The controller's bindings by place on a Game Boy: the D-pad, the right face button for A
 /// and the bottom one for B, Start, the left face button for Select, the shoulders for save
-/// and load state, the left trigger to rewind, the right one to fast-forward, and Select
-/// (Back, View, Share) for the pause menu.
+/// and load state, the left trigger to rewind, the right one to fast-forward, Select (Back,
+/// View, Share) for the pause menu and the top face button to restart the level.
 pub const DEFAULT_PAD: [PadButton; KEYS] = {
     use PadButton::*;
-    [DPadUp, DPadDown, DPadLeft, DPadRight, East, South, Start, West, LeftShoulder, RightShoulder, LeftTrigger, RightTrigger, Select]
+    [DPadUp, DPadDown, DPadLeft, DPadRight, East, South, Start, West, LeftShoulder, RightShoulder, LeftTrigger, RightTrigger, Select, North]
 };
 
 /// The left stick's directions, in `keys` order (Up, Down, Left, Right).

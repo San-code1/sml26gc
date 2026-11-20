@@ -37,7 +37,17 @@ impl Editor {
 
     /// "Place start" on or off (the key or the button again, or Esc, leaves it).
     pub(super) fn toggle_placing(&mut self, what: Placing) {
+        if what == Placing::PlayHere && self.placing != Some(what) && self.game_open() {
+            return;
+        }
         self.placing = if self.placing == Some(what) { None } else { Some(what) };
+        // choosing where to play: nothing is painted or placed meanwhile
+        if self.placing == Some(Placing::PlayHere) {
+            self.blocks = None;
+            self.kind = None;
+            self.sel_obj = None;
+            self.leave_grid();
+        }
         // the finish may be far from the view: show it
         let goal = match self.placing {
             Some(Placing::Finish) => Some(cart_model::level_goals::Goal::Finish),
@@ -94,27 +104,38 @@ impl Editor {
         self.placing.is_some()
     }
 
+    /// The band around the screen a level begun at `s` shows first, whose objects do not
+    /// appear then, with its note; drawn when it holds objects or when `always`.
+    pub(super) fn draw_passed_band(&self, s: &Start, always: bool) {
+        let k = self.scale();
+        let c = &self.doc.levels[self.cur].content;
+        let crowded = c.objs.iter().any(|o| s.passed_at_start(o.x));
+        if !always && !crowded {
+            return;
+        }
+        let (l, right) = s.passed_band();
+        let at = vec2(self.panel + (l as f32 - self.cam.x) * k, -self.cam.y * k);
+        let col = if crowded { warn_col() } else { MARK };
+        marker(Rect::new(at.x, at.y, (right + 1 - l) as f32 * k, (ROWS * 16) as f32 * k), 2.0, col);
+        // the note at the foot of the view, clear of the overview
+        let t = tr(self.lang, "objects here do not appear at the start (only if Mario comes back)");
+        let left = at.x.max(self.panel) + 6.0;
+        let width = at.x + (right + 1 - l) as f32 * k - left - 6.0;
+        let lines = wrap_px(t, width.max(120.0), 14.0);
+        let bottom = (screen_height() - STATUS_H - 30.0).min(at.y + (ROWS * 16) as f32 * k - 8.0);
+        for (i, line) in lines.iter().enumerate() {
+            marked_text(line, left, bottom - (lines.len() - 1 - i) as f32 * 16.0, 14.0, col);
+        }
+    }
+
     /// Mario at the start, over the blocks and objects, and (with objects or in Objects mode)
-    /// the band around the screen the level begins on, whose objects do not appear at first.
+    /// the band of the level's start; while choosing where to play, that band follows the
+    /// mouse instead (`draw_play_here`).
     pub(super) fn draw_start(&self) {
         let r = self.mario_rect();
         let k = self.scale();
-        let c = &self.doc.levels[self.cur].content;
-        let crowded = c.objs.iter().any(|o| c.start.passed_at_start(o.x));
-        if self.mode == Mode::Objects || crowded {
-            let (l, right) = c.start.passed_band();
-            let at = vec2(self.panel + (l as f32 - self.cam.x) * k, -self.cam.y * k);
-            let col = if crowded { warn_col() } else { MARK };
-            marker(Rect::new(at.x, at.y, (right + 1 - l) as f32 * k, (ROWS * 16) as f32 * k), 2.0, col);
-            // the note at the foot of the view, clear of the overview
-            let t = tr(self.lang, "objects here do not appear at the start (only if Mario comes back)");
-            let left = at.x.max(self.panel) + 6.0;
-            let width = at.x + (right + 1 - l) as f32 * k - left - 6.0;
-            let lines = wrap_px(t, width.max(120.0), 14.0);
-            let bottom = (screen_height() - STATUS_H - 30.0).min(at.y + (ROWS * 16) as f32 * k - 8.0);
-            for (i, line) in lines.iter().enumerate() {
-                marked_text(line, left, bottom - (lines.len() - 1 - i) as f32 * 16.0, 14.0, col);
-            }
+        if self.placing != Some(Placing::PlayHere) {
+            self.draw_passed_band(&self.doc.levels[self.cur].content.start, self.mode == Mode::Objects);
         }
         let (x, y) = (self.panel + (r.x - self.cam.x) * k, (r.y - self.cam.y) * k);
         match self.mario.as_ref().and_then(|m| m.as_ref()) {

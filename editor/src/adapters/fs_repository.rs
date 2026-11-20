@@ -9,6 +9,7 @@ pub struct EditedCopyFile {
     path: PathBuf,
     project: PathBuf,
     place: PathBuf,
+    restore_points: PathBuf,
 }
 
 impl EditedCopyFile {
@@ -37,6 +38,19 @@ impl EditedCopyStore for EditedCopyFile {
     fn write_place(&self, text: &str) -> std::io::Result<()> {
         self.make_dir();
         std::fs::write(&self.place, text)
+    }
+    fn read_restore_points(&self) -> Option<String> {
+        std::fs::read_to_string(&self.restore_points).ok()
+    }
+    fn write_restore_points(&self, text: Option<&str>) -> std::io::Result<()> {
+        match text {
+            Some(t) => {
+                self.make_dir();
+                std::fs::write(&self.restore_points, t)
+            }
+            None if self.restore_points.exists() => std::fs::remove_file(&self.restore_points),
+            None => Ok(()),
+        }
     }
 }
 
@@ -73,7 +87,7 @@ pub fn open_project(base: &Path, name: &str) -> Result<Opened, ProjectError> {
     let original = std::fs::read(base).map_err(io)?;
     let path = host::projects::ensure_rom(base, name).map_err(|e| ProjectError::Io(e.text(i18n::Lang::En)))?;
     let edited = std::fs::read(&path).ok();
-    Ok(Opened { doc: EditorDocument::open(original, edited), store: EditedCopyFile { path, project: host::project_file(name), place: host::project_place(name) } })
+    Ok(Opened { doc: EditorDocument::open(original, edited), store: EditedCopyFile { path, project: host::project_file(name), place: host::project_place(name), restore_points: host::project_restore_points(name) } })
 }
 
 /// A new project `name`: its folder, its project file and cartridge as the game is.
@@ -129,6 +143,9 @@ pub fn duplicate_project(base: &Path, name: &str, new: &str) -> Result<(), Proje
     }
     if let Some(rom) = host::project_rom_in(name) {
         std::fs::copy(rom, host::project_rom(new, base)).map_err(io)?;
+    }
+    if host::project_restore_points(name).is_file() {
+        std::fs::copy(host::project_restore_points(name), host::project_restore_points(new)).map_err(io)?;
     }
     Ok(())
 }

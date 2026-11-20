@@ -103,6 +103,7 @@ pub fn category_plural(lang: Lang, c: Option<Category>) -> &'static str {
         Some(Category::Goal) => tr(lang, "Goals"),
         Some(Category::Marker) => tr(lang, "Invisible markers"),
         Some(Category::Scripted) => tr(lang, "Boss and scripted"),
+        Some(Category::BlockContent) => tr(lang, "Block contents"),
     }
 }
 
@@ -115,6 +116,7 @@ pub fn category_name(lang: Lang, c: Category) -> &'static str {
         Category::Goal => tr(lang, "goal"),
         Category::Marker => tr(lang, "invisible marker"),
         Category::Scripted => tr(lang, "boss or scripted"),
+        Category::BlockContent => tr(lang, "block content"),
     }
 }
 
@@ -248,6 +250,19 @@ impl Editor {
                 y += 17.0;
             }
             y += 6.0;
+            if let Some(note) = self.hidden_note((l, k)) {
+                y += message_lines(&note, PAD, y + 12.0, w, 14.0, Severity::Info) + 4.0;
+                // the blocks it works on, as the shown level draws them
+                if let Some(atlas) = self.atlases[self.doc.base_of(self.cur)].clone() {
+                    for (i, &b) in object_names::HIDDEN_IN.iter().enumerate() {
+                        let x = PAD + i as f32 * 44.0;
+                        draw_texture_ex(&atlas, x, y, WHITE, DrawTextureParams { source: Some(super::palette::source(b as usize, 16.0)), dest_size: Some(vec2(28.0, 28.0)), ..Default::default() });
+                        draw_rectangle_lines(x, y, 28.0, 28.0, 1.0, col(2));
+                        put_text(&format!("{b:02X}"), x, y + 40.0, 12.0, col(2));
+                    }
+                    y += 48.0;
+                }
+            }
             // in this level's set (its own enemies, or brought from another level): it can be
             // taken out, to make room or to undo an Add
             let member = o.uses.iter().find_map(|&(l, k)| members.as_ref()?.iter().find(|m| m.0.level as usize == l && m.0.kind == k).map(|m| m.0));
@@ -357,9 +372,13 @@ impl Editor {
                 Standing::OtherCatalogue => tag(r, tr(lang, "OTHER CATALOGUE"), col(3), col(0)),
             };
             let (l, k) = o.first();
-            if let Some((tex, _, _)) = self.looks.get(&(l, k)).and_then(|t| t.as_ref()) {
+            let hidden = self.hidden_look((l, k));
+            if let Some((tex, _, _)) = self.looks.get(&(l, k)).and_then(|t| t.as_ref()).or(hidden) {
                 let f = (40.0 / tex.width()).min(40.0 / tex.height()).min(2.0);
                 draw_texture_ex(tex, r.x + 4.0, r.y + 4.0, WHITE, DrawTextureParams { dest_size: Some(vec2(tex.width() * f, tex.height() * f)), ..Default::default() });
+                if hidden.is_some() {
+                    super::objects_view::hidden_mark(Rect::new(r.x + 4.0, r.y + 4.0, tex.width() * f, tex.height() * f));
+                }
             }
             let (name, cat) = object_names::name(l, k).map_or((format!("#{k:02X}"), "".to_string()), |(n, c)| (tr(lang, n).to_string(), category_name(lang, c).to_string()));
             // the name on up to two lines, then the category

@@ -21,7 +21,7 @@ use adapters::macroquad_keyboard::MacroquadKeyboard;
 use adapters::macroquad_picker::{Choice, Picker};
 use adapters::win32;
 use application::preferences::Preferences;
-use application::session::{Flow, GameSession, SessionParts};
+use application::session::{Flow, GameSession, SessionParts, TestGame};
 use domain::keys::Key;
 use ports::{AudioOut, Keyboard, SaveStore, SettingsStore, ZoneProgressStore};
 use std::path::PathBuf;
@@ -47,6 +47,10 @@ struct Args {
     test: bool,
     lives: Option<u8>,
     coins: Option<u16>,
+    /// Mario's power in the test game (0 small, 1 big, 2 carrot, 3 fire).
+    power: Option<u8>,
+    /// A test game on the map beginning on this point (`HEX`, or `HEX@K` in new zone K).
+    point: Option<cart_model::start_point::Start>,
     /// The project whose saves the game on the command line uses (none: the original's).
     project: Option<String>,
     /// With `--screenshot`: the start screen (a check picture of it).
@@ -71,6 +75,8 @@ fn parse_args(v: &[String]) -> Args {
             "--project" => a.project = Some(next),
             "--lives" => a.lives = next.parse().ok(),
             "--coins" => a.coins = next.parse().ok(),
+            "--power" => a.power = next.parse().ok().filter(|&p| p <= 3),
+            "--point" => a.point = map_point(&next),
             "--cheats" | "--test" | "--start-screen" => {
                 match v[i].as_str() {
                     "--test" => a.test = true,
@@ -186,9 +192,19 @@ fn start(args: &Args, found: Result<PathBuf, String>, saves: Option<PathBuf>, ch
         start_at: args.start,
         checking,
         cheats,
-        test: args.test.then(|| (args.lives.unwrap_or(99), args.coins.unwrap_or(999))),
+        test: args.test.then(|| TestGame { lives: args.lives.unwrap_or(99), coins: args.coins.unwrap_or(999), power: args.power.unwrap_or(0) }),
+        start_point: args.point,
     };
     Ok(GameSession::new(gb, parts))
+}
+
+/// `--point`'s value: a map point in hexadecimal, `@` and a new zone's index when in one.
+fn map_point(v: &str) -> Option<cart_model::start_point::Start> {
+    let (p, zone) = match v.split_once('@') {
+        Some((p, k)) => (p, Some(k.parse().ok()?)),
+        None => (v, None),
+    };
+    Some(cart_model::start_point::Start { point: u8::from_str_radix(p, 16).ok()?, new_zone: zone })
 }
 
 /// Where the saves of the cartridge on the command line go.

@@ -97,8 +97,8 @@ keys! {
 }
 
 /// The bindings in order: the Game Boy buttons (Up, Down, Left, Right, A, B, Start, Select),
-/// then the port's own save state, load state and rewind (cheats mode), fast-forward and the
-/// pause menu.
+/// then the port's own save state, load state and rewind (cheats mode), fast-forward, the
+/// pause menu and restart level.
 pub const UP: usize = 0;
 pub const DOWN: usize = 1;
 pub const LEFT: usize = 2;
@@ -115,11 +115,13 @@ pub const REWIND: usize = 10;
 pub const FAST_FORWARD: usize = 11;
 /// Opens the pause menu anywhere and goes back in it.
 pub const MENU: usize = 12;
+/// Restarts the level being played (cheats mode or a test game).
+pub const RESTART: usize = 13;
 /// Game Boy buttons, then all bindings.
 pub const PAD_KEYS: usize = 8;
-pub const KEYS: usize = 13;
+pub const KEYS: usize = 14;
 
-pub const DEFAULT_KEYS: [Key; KEYS] = [Key::Up, Key::Down, Key::Left, Key::Right, Key::X, Key::Z, Key::Enter, Key::Backspace, Key::F6, Key::F7, Key::R, Key::LeftControl, Key::Escape];
+pub const DEFAULT_KEYS: [Key; KEYS] = [Key::Up, Key::Down, Key::Left, Key::Right, Key::X, Key::Z, Key::Enter, Key::Backspace, Key::F6, Key::F7, Key::R, Key::LeftControl, Key::Escape, Key::F8];
 
 impl Key {
     pub fn bindable(self) -> bool {

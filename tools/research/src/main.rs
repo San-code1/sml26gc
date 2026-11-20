@@ -6,6 +6,7 @@
 //! only read the cartridge (and write pictures where asked); nothing here is used by the
 //! game or the editor.
 mod added;
+mod blocks;
 mod cheats;
 mod checks;
 mod console;
@@ -140,6 +141,8 @@ const COMMANDS: &[(&str, Run)] = &[
     ("spotcheck", |r, _a| testing::spot_check(r)),
     ("comboprobe", |r, a| testing::combo_probe(r, a.num(1) as usize, a.num(2) as usize, a.num(3) == 1)),
     ("physicsprobe", |r, a| testing::physics_probe(r, a.num(1) as u8)),
+    ("blockview", |r, a| blocks::block_view(r, a.num(1) as u8, a.num(2) as u16, a.num(3) as u16)),
+    ("blockprobe", |r, a| blocks::block_probe(r, &if a.s(1) == "all" { Vec::new() } else { a.list(1) }, &if a.s(2).is_empty() { Vec::new() } else { a.list(2) })),
     ("tableprobe", |r, a| testing::table_probe(r, a.hex(1) as u16, a.num(2) as u8, a.num(3) as u8)),
     ("cameraprobe", |r, a| testing::camera_probe(r, a.num(1) as u8)),
     ("scrollprobe", |r, a| testing::scroll_probe(r, a.num(1) as u8, a.num(2) as u8, a.num(3) as u16, a.num(4) == 1)),
@@ -208,6 +211,6 @@ mod tests {
         let a = Args(["watch", "x", "ffc2,a200-a202", "0x10", "12"].map(String::from).to_vec());
         assert_eq!(a.list(2), vec![0xFFC2, 0xA200, 0xA201, 0xA202]);
         assert_eq!((a.hex(3), a.big(3), a.num(4), a.num(9)), (0x10, 0x10, 12, 0));
-        assert_eq!(COMMANDS.len(), 115);
+        assert_eq!(COMMANDS.len(), 117);
     }
 }

@@ -2,6 +2,7 @@
 //! panel drawn over the picture. What each one does to the game is `cart_model::cheats`.
 use super::overlay::{text_width, Canvas};
 use cart_model::cheats::{Active, Info};
+use cart_model::level_start::{FEET, SPRITE_W};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Cheat {
@@ -68,12 +69,23 @@ impl Cheats {
 /// A 16x16 item picture in the screen's shades, `None` where it is see-through.
 pub type Icon = [Option<u8>; 256];
 
-/// `L05 X0123 Y0045 P07 M04` (hexadecimal) in a dark tag at the top left.
+/// `L05 X0123 Y0045 P07 M04` (hexadecimal) in a dark tag at the top left, and under it
+/// `EDITOR 14,30`: the column and row of the block Mario stands on, as the level editor counts
+/// them (the block Play here puts his feet on).
 pub fn draw_info(px: &mut [u8], info: &Info) {
     let text = format!("L{:02X} X{:04X} Y{:04X} P{:02X} M{:02X}", info.level, info.x, info.y, info.point, info.mode);
+    let (col, row) = editor_block(info);
+    let block = format!("EDITOR {col},{row}");
     let mut c = Canvas { px };
     c.rect(1, 1, text_width(&text) + 5, 11, 3);
     c.text(3, 3, &text, 0);
+    c.rect(1, 12, text_width(&block) + 5, 10, 3);
+    c.text(3, 13, &block, 0);
+}
+
+/// The block under Mario's feet, below his middle: (column, row).
+fn editor_block(info: &Info) -> (u16, u16) {
+    ((info.x + SPRITE_W / 2) / 16, (info.y + FEET) / 16)
 }
 
 /// Each active object's type (hexadecimal) in a small tag above it.

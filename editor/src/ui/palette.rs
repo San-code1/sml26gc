@@ -1,14 +1,18 @@
 //! The side panel's palettes: the level's 128 blocks, the 128 object types and the shown map's
-//! 256 tiles. Each is zoomed with its own setting and keeps its layout; when it is bigger than
-//! the panel it scrolls (wheel, right-drag) and shows scroll bars. Dragging over the blocks or
-//! tiles selects a rectangle of them.
+//! 256 tiles (as the game draws them: a zone's picture or the world map's pieces, then the
+//! tiles left out). Each is zoomed
+//! with its own setting and keeps its layout; when it is bigger than the panel it scrolls
+//! (wheel, right-drag) and shows scroll bars. Dragging over the blocks or tiles selects a
+//! rectangle of them.
 use super::grid_edit::Brush;
 use super::shortcuts::{self, Action};
 use super::widgets::*;
 use super::testing_view::warn_col;
 use super::Editor;
 use crate::domain::object_names::{Category, CATEGORIES};
-use cart_model::{checkpoint, level_graphics};
+use cart_model::original_points::OnMap;
+use crate::domain::tile_palette::{self, TileCells};
+use cart_model::{checkpoint, level_graphics, world, zone_maps};
 use crate::domain::stamp::{Area, Stamp};
 use crate::domain::tools::ToolKind;
 use macroquad::prelude::*;
@@ -34,7 +38,8 @@ struct Layout {
 
 impl Layout {
     const BLOCKS: Layout = Layout { count: 128, cols: 8, px: 16.0, gap: 2.0 };
-    const TILES: Layout = Layout { count: 256, cols: 16, px: 8.0, gap: 1.0 };
+    /// A map's tiles as the game draws them (`tile_palette`).
+    const MAP_TILES: Layout = Layout { count: 256, cols: tile_palette::COLS, px: 8.0, gap: 1.0 };
 
     fn cell(&self, zoom: u32) -> f32 {
         self.px * zoom as f32 + self.gap
@@ -51,6 +56,14 @@ impl Layout {
 pub struct PaletteView {
     scroll: Vec2,
     drag: Option<(Vec2, Vec2)>,
+}
+
+/// The chosen cells' outline: the bright mark colour between two black lines, plain over
+/// light and dark cells alike.
+fn chosen_frame(r: Rect) {
+    draw_rectangle_lines(r.x - 2.0, r.y - 2.0, r.w + 4.0, r.h + 4.0, 2.0, BLACK);
+    draw_rectangle_lines(r.x, r.y, r.w, r.h, 3.0, MARK_SELECTED);
+    draw_rectangle_lines(r.x + 3.0, r.y + 3.0, r.w - 6.0, r.h - 6.0, 1.0, BLACK);
 }
 
 /// The cells drawn by `draw` inside `area`, scrolled by the wheel (Shift: sideways) or a
@@ -93,7 +106,7 @@ fn cell_grid(area: Rect, l: Layout, cell: f32, view: &mut PaletteView, outline: 
     }
     if let Some(a) = outline {
         let p = at(a.x0, a.y0);
-        draw_rectangle_lines(p.x - 1.0, p.y - 1.0, a.w() as f32 * cell, a.h() as f32 * cell, 3.0, col(3));
+        chosen_frame(Rect::new(p.x - 1.0, p.y - 1.0, a.w() as f32 * cell, a.h() as f32 * cell));
     }
     clip(None);
     let bar = Color::new(0.12, 0.12, 0.12, 0.8);
@@ -122,7 +135,7 @@ impl Editor {
     /// The side panel's width for the palette shown: all its columns, but never narrower
     /// than the buttons nor wider than half the window.
     pub(super) fn fitted_panel(&self) -> f32 {
-        let w = if self.in_world { Layout::TILES.width(self.prefs.map_palette_zoom) } else { Layout::BLOCKS.width(self.prefs.level_palette_zoom) };
+        let w = if self.in_world { Layout::MAP_TILES.width(self.prefs.map_palette_zoom) } else { Layout::BLOCKS.width(self.prefs.level_palette_zoom) };
         (w + MARGINS).clamp(PANEL_MIN, (screen_width() / 2.0).max(PANEL_MIN))
     }
 
@@ -152,32 +165,27 @@ impl Editor {
     }
 
     fn tip(text: &str, area: Rect) {
-        put_text(text, 10.0, area.y + area.h + 22.0, 15.0, col(2));
+        put_text(&fit(text, area.w, 15.0), 10.0, area.y + area.h + 22.0, 15.0, col(2));
     }
 
+    /// The palette's title: what is chosen (a piece by its name), and its size.
     fn brush_title(&self, what: &str) -> String {
-        let b = self.brush();
+        let Some(b) = self.brush() else { return format!("{what}  ({})", tr(self.lang, "none chosen")) };
         let size = if b.stamp.is_single() { String::new() } else { format!("  {}x{}", b.stamp.w, b.stamp.h) };
-        format!("{what} #{:02X}{size}", b.first())
+        match b.piece {
+            Some(name) => format!("{what}  {}{size}", tr(self.lang, name)),
+            None => format!("{what} #{:02X}{size}", b.first()),
+        }
     }
 
-    /// Mouse on a block or tile palette: a click or a drag chooses a rectangle of cells.
-    fn palette_select(&mut self, hover: Option<(i32, i32)>, l: Layout) {
-        if let (true, Some(c)) = (is_mouse_button_pressed(MouseButton::Left), hover) {
-            self.palette_drag = Some(c);
-            if matches!(self.tool.kind(), ToolKind::Select | ToolKind::Paste) {
-                self.leave_grid();
-                self.set_tool(ToolKind::Pencil);
-            }
-        }
-        let Some(from) = self.palette_drag else { return };
-        if let Some(to) = hover {
-            let a = Area::between(from, to);
-            let cells = a.cells().map(|(x, y)| (y as usize * l.cols + x as usize).min(l.count - 1) as u8).collect();
-            *self.brush_mut() = Brush { stamp: Stamp { w: a.w(), h: a.h(), cells }, in_palette: Some(a) };
-        }
-        if !is_mouse_button_down(MouseButton::Left) {
-            self.palette_drag = None;
+    /// The map tile palette of the map shown (`tile_palette`): a zone's picture (a new zone's
+    /// base zone's), or the world map's pieces, both as the game has them, then the tiles left
+    /// out.
+    pub(super) fn tile_cells(&self) -> TileCells {
+        match self.world_map {
+            OnMap::World => TileCells::world(&world::read(&self.doc.original)),
+            OnMap::Zone(z) => TileCells::zone(&zone_maps::read(&self.doc.original, z), zone_maps::W),
+            OnMap::NewZone(k) => TileCells::zone(&zone_maps::read(&self.doc.original, self.doc.new_zones[k].base), zone_maps::W),
         }
     }
 
@@ -240,7 +248,9 @@ impl Editor {
         if button(Rect::new(right - aw, y, aw, 22.0), all_label, self.show_all_objects, 14.0) {
             self.show_all_objects = !self.show_all_objects;
         }
-        let y = self.zoom_row(y + 28.0);
+        let y = self.search_field(y + 28.0, width);
+        let y = self.zoom_row(y);
+        let y = self.recent_row(y, true);
         let area = self.palette_area(y);
         let zoom = self.prefs.level_palette_zoom;
         let cell = Layout::BLOCKS.cell(zoom);
@@ -250,10 +260,12 @@ impl Editor {
         if let Some(f) = self.palette_filter {
             shown.retain(|&k| self.object_label(self.look_key(k)).is_some_and(|l| l.1 == f));
         }
+        shown.retain(|&k| self.search_matches(k));
         let imported: Vec<u8> = shown.iter().copied().filter(|&k| self.imported_enemy(k).is_some()).collect();
         let layout = Layout { count: shown.len(), ..Layout::BLOCKS };
         let mut view = self.level_palette;
-        let hover = cell_grid(area, layout, cell, &mut view, None, |i, r| {
+        let chosen = self.kind.and_then(|k| shown.iter().position(|&s| s == k)).map(|i| ((i % 8) as i32, (i / 8) as i32)).map(|c| Area::between(c, c));
+        let hover = cell_grid(area, layout, cell, &mut view, chosen, |i, r| {
             let k = shown[i];
             let (bg, fg) = if Some(k) == self.kind { (col(3), col(0)) } else if used.contains(&k) { (col(2), col(0)) } else { (col(1), col(3)) };
             draw_rectangle(r.x, r.y, r.w, r.h, bg);
@@ -265,11 +277,15 @@ impl Editor {
                 draw_triangle(vec2(r.x + r.w, r.y), vec2(r.x + r.w - 10.0, r.y), vec2(r.x + r.w, r.y + 10.0), MARK);
             }
             let fs = (6.0 + 5.0 * zoom as f32).min(18.0);
-            if let Some((tex, _, _)) = self.look(k) {
+            let hidden = self.look(k).is_none().then(|| self.hidden_look(self.look_key(k))).flatten();
+            if let Some((tex, _, _)) = self.look(k).or(hidden) {
                 let f = ((r.w - 4.0) / tex.width()).min((r.h - 4.0) / tex.height()).min(zoom as f32);
                 let (tw, th) = (tex.width() * f, tex.height() * f);
                 draw_texture_ex(tex, r.x + (r.w - tw) / 2.0, r.y + (r.h - th) / 2.0, WHITE, DrawTextureParams { dest_size: Some(vec2(tw, th)), ..Default::default() });
                 put_text(&format!("{k:02X}"), r.x + 1.0, r.y + fs * 0.7, fs * 0.7, fg);
+                if hidden.is_some() {
+                    super::objects_view::hidden_mark(r);
+                }
             } else {
                 let t = format!("{k:02X}");
                 let dim = text_size(&t, fs as u16);
@@ -291,6 +307,10 @@ impl Editor {
                 Some((n, cat)) => format!("#{k:02X} {n} ({})", super::catalogue_view::category_name(self.lang, cat)),
                 None => format!("#{k:02X}"),
             };
+            let name = match self.hidden_note(self.look_key(k)) {
+                Some(note) => format!("{name}. {note}"),
+                None => name,
+            };
             match self.imported_enemy(k) {
                 Some(e) => {
                     let n = self.doc.levels[self.cur].content.objs.iter().filter(|o| o.kind == k).count();
@@ -300,8 +320,11 @@ impl Editor {
                 None => name,
             }
         });
+        let chosen_note = self.kind.and_then(|k| self.hidden_note(self.look_key(k)));
         let tip = if let Some(t) = named {
             t
+        } else if let Some(note) = chosen_note {
+            note
         } else if self.pictures_pending(base) {
             tr(self.lang, "Still capturing pictures: more types will be offered.").to_string()
         } else if self.show_all_objects {
@@ -354,36 +377,88 @@ impl Editor {
         v
     }
 
-    /// The level's blocks as the game draws them, 8 per row.
+    /// The level's 128 blocks as the game draws them, 8 per row.
     pub(super) fn block_palette(&mut self, y: f32) {
         let title = self.brush_title(tr(self.lang, "BLOCKS"));
         let y = self.palette_title(y, &title);
+        let y = self.recent_row(y, false);
         let area = self.palette_area(y);
         let Some(atlas) = self.atlases[self.doc.base_of(self.cur)].clone() else { return };
+        let cells = TileCells::blocks();
         let cell = Layout::BLOCKS.cell(self.prefs.level_palette_zoom);
         let mut view = self.level_palette;
-        let hover = cell_grid(area, Layout::BLOCKS, cell, &mut view, self.blocks.in_palette, |i, r| {
-            draw_texture_ex(&atlas, r.x, r.y, WHITE, DrawTextureParams { source: Some(source(i, 16.0)), dest_size: Some(vec2(r.w, r.h)), ..Default::default() });
-        });
+        let hover = self.grouped_grid(area, Layout::BLOCKS, cell, &mut view, &cells, &atlas, 16.0, self.blocks.as_ref().and_then(|b| b.in_palette));
         self.level_palette = view;
-        self.palette_select(hover, Layout::BLOCKS);
+        self.tile_select(hover, &cells);
         Self::tip(tr(self.lang, "Drag: several. Right drag: move it"), area);
     }
 
-    /// The shown map's 256 tiles, 16 per row.
+    /// A grouped palette's cells drawn from `atlas` (`px` source pixels each), a rule over the
+    /// rest; the cell under the mouse.
+    #[allow(clippy::too_many_arguments)]
+    fn grouped_grid(&self, area: Rect, layout: Layout, cell: f32, view: &mut PaletteView, cells: &TileCells, atlas: &Texture2D, px: f32, outline: Option<Area>) -> Option<(i32, i32)> {
+        let rule = cells.rest_row * cells.cols;
+        cell_grid(area, layout, cell, view, outline, |i, r| {
+            if let Some(t) = cells.cells[i] {
+                // map tiles a pixel wider, so no seam shows between them
+                let seam = if px < 16.0 { 1.0 } else { 0.0 };
+                draw_texture_ex(atlas, r.x, r.y, WHITE, DrawTextureParams { source: Some(source(t as usize, px)), dest_size: Some(vec2(r.w + seam, r.h + seam)), ..Default::default() });
+            }
+            if rule > 0 && (rule..rule + cells.cols).contains(&i) {
+                draw_rectangle(r.x, r.y - 1.0 - cell / 2.0, r.w + layout.gap, 2.0, col(3));
+            }
+        })
+    }
+
+    /// The shown map's tiles as the game draws them (`tile_cells`): a zone's picture or the
+    /// world map's pieces, a rule, then the tiles they leave out. A drag stays in the piece it
+    /// starts in, so dragging past one takes all of it.
     pub(super) fn tile_palette(&mut self, y: f32) {
         let title = self.brush_title("TILES");
         let y = self.palette_title(y, &title);
+        let y = self.recent_row(y, false);
         let area = self.palette_area(y);
         let Some(atlas) = self.map_atlas().cloned() else { return };
-        let cell = Layout::TILES.cell(self.prefs.map_palette_zoom);
+        let cells = self.tile_cells();
+        let layout = Layout { count: cells.cells.len(), ..Layout::MAP_TILES };
+        let cell = layout.cell(self.prefs.map_palette_zoom);
         let mut view = self.map_palette;
-        let hover = cell_grid(area, Layout::TILES, cell, &mut view, self.tiles.in_palette, |i, r| {
-            draw_texture_ex(&atlas, r.x, r.y, WHITE, DrawTextureParams { source: Some(source(i, 8.0)), dest_size: Some(vec2(r.w + 1.0, r.h + 1.0)), ..Default::default() });
-        });
+        let hover = self.grouped_grid(area, layout, cell, &mut view, &cells, &atlas, 8.0, self.tiles.as_ref().and_then(|b| b.in_palette));
         self.map_palette = view;
-        self.palette_select(hover, Layout::TILES);
-        Self::tip(tr(self.lang, "Drag: several. Right drag: move it"), area);
+        if let Some(name) = hover.and_then(|c| cells.group(c)).map(|g| cells.names[g]).filter(|n| !n.is_empty()) {
+            self.tip = Some(tr(self.lang, name).to_string());
+        }
+        self.tile_select(hover, &cells);
+        let tip = match self.world_map {
+            OnMap::World => tr(self.lang, "Pieces of the world map, then unused tiles. Drag: several"),
+            _ => tr(self.lang, "Zone picture, then unused tiles. Drag: several"),
+        };
+        Self::tip(tip, area);
+    }
+
+    /// Mouse on the map tile palette: a click or a drag chooses tiles inside the piece (or
+    /// picture, or tiles left out) it starts in.
+    fn tile_select(&mut self, hover: Option<(i32, i32)>, cells: &TileCells) {
+        if let (true, Some(c)) = (is_mouse_button_pressed(MouseButton::Left), hover) {
+            if cells.group(c).is_none() {
+                return;
+            }
+            self.palette_drag = Some(c);
+            if matches!(self.tool.kind(), ToolKind::Select | ToolKind::Paste) {
+                self.leave_grid();
+                self.set_tool(ToolKind::Pencil);
+            }
+        }
+        let Some(from) = self.palette_drag else { return };
+        if let Some((a, b, tiles)) = hover.and_then(|to| cells.select(from, to)) {
+            let area = Area::between(a, b);
+            let piece = cells.group(from).map(|g| cells.names[g]).filter(|n| !n.is_empty());
+            *self.brush_mut() = Some(Brush { stamp: Stamp { w: area.w(), h: area.h(), cells: tiles }, in_palette: Some(area), piece });
+        }
+        if !is_mouse_button_down(MouseButton::Left) {
+            self.palette_drag = None;
+            self.remember_brush();
+        }
     }
 }
 
@@ -393,8 +468,8 @@ mod tests {
 
     #[test]
     fn widths_at_the_default_zoom_fit_the_narrowest_panel() {
-        assert!(Layout::TILES.width(2) + MARGINS <= PANEL_MIN);
         assert!(Layout::BLOCKS.width(2) + MARGINS <= PANEL_MIN);
-        assert_eq!(Layout::TILES.width(4), 16.0 * 33.0);
+        assert!(Layout::MAP_TILES.width(1) + MARGINS <= PANEL_MIN);
+        assert_eq!(Layout::MAP_TILES.width(4), 20.0 * 33.0);
     }
 }

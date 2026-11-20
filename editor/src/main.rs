@@ -106,7 +106,7 @@ async fn main() {
         let looks = fs_repository::LookFile::for_cartridge(&opened.doc.original);
         let ports = Ports {
             store: Box::new(opened.store),
-            launcher: Box::new(GameProcess),
+            launcher: Box::new(GameProcess::default()),
             prefs: Box::new(fs_repository::PrefsFile),
             dialogs: Box::new(SystemDialogs { lang, owner: TITLE }),
             text_files: Box::new(fs_repository::TextFile),
