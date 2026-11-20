@@ -233,7 +233,7 @@ impl Editor {
         y += categories.len().div_ceil(2) as f32 * (ROW + 4.0) + 6.0;
         draw_rectangle(PAD, y, w, 1.0, col(2));
         y += 8.0;
-        put_text(&format!("{} {}", shown.len(), tr(lang, "objects")), PAD, y + 12.0, 15.0, col(2));
+        put_text(&format!("{} {}", shown.len(), tr(lang, "objects")), PAD, y + 12.0, 15.0, INFO);
         y += 24.0;
         let mut pick = None;
         let mut add = None;

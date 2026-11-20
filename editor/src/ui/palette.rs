@@ -148,7 +148,7 @@ impl Editor {
     /// The palette's zoom keys and - + buttons; returns where the palette starts.
     fn zoom_row(&mut self, y: f32) -> f32 {
         let keys = format!("Zoom  Ctrl {}/{}", shortcuts::keys(Action::ZoomOut).trim_start_matches("Ctrl+"), shortcuts::keys(Action::ZoomIn).trim_start_matches("Ctrl+"));
-        put_text(&keys, 10.0, y + 15.0, 15.0, col(2));
+        put_text(&keys, 10.0, y + 15.0, 15.0, INFO);
         let right = self.panel - 10.0;
         if button(Rect::new(right - 54.0, y, 26.0, 20.0), "-", false, 18.0) {
             self.run(Action::ZoomOut);
@@ -165,7 +165,7 @@ impl Editor {
     }
 
     fn tip(text: &str, area: Rect) {
-        put_text(&fit(text, area.w, 15.0), 10.0, area.y + area.h + 22.0, 15.0, col(2));
+        put_text(&fit(text, area.w, 15.0), 10.0, area.y + area.h + 22.0, 15.0, INFO);
     }
 
     /// The palette's title: what is chosen (a piece by its name), and its size.

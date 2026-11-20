@@ -29,6 +29,7 @@ mod world_view;
 
 pub use projects_view::{BaseScreen, ProjectsChoice, ProjectsScreen};
 pub use widgets::{col, set_text_language};
+use widgets::INFO;
 
 use crate::application::art_service::{ArtService, Capture};
 use crate::application::look_loader::LookLoader;
@@ -979,7 +980,7 @@ impl Editor {
         draw_rectangle(r.x, r.y, r.w, r.h, col(0));
         draw_rectangle_lines(r.x, r.y, r.w, r.h, 3.0, col(3));
         put_text(&format!("{} {}", tr(lang, "Unsaved changes in"), self.project), r.x + 20.0, r.y + 36.0, 22.0, col(3));
-        put_text(tr(lang, "Save them before leaving?"), r.x + 20.0, r.y + 64.0, 18.0, col(2));
+        put_text(tr(lang, "Save them before leaving?"), r.x + 20.0, r.y + 64.0, 18.0, INFO);
         let bw = (w - 40.0 - 2.0 * 12.0) / 3.0;
         let at = |i: f32| Rect::new(r.x + 20.0 + i * (bw + 12.0), r.y + h - 56.0, bw, 36.0);
         if button(at(0.0), tr(lang, "Save"), true, 17.0) || is_key_pressed(KeyCode::Enter) {
@@ -1021,7 +1022,7 @@ impl Editor {
         put_text(tr(lang, "Two starts for Mario"), r.x + 20.0, r.y + 34.0, 22.0, col(3));
         let mut y = r.y + 60.0;
         for line in wrap_px(&format!("{} {what}. {}", tr(lang, "The map brought in has Mario's start at"), tr(lang, "A project has one start: which do you keep?")), w - 40.0, 16.0) {
-            put_text(&line, r.x + 20.0, y, 16.0, col(2));
+            put_text(&line, r.x + 20.0, y, 16.0, INFO);
             y += 20.0;
         }
         let bw = (w - 40.0 - 12.0) / 2.0;
