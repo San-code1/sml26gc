@@ -17,6 +17,14 @@ No game is included: you use a cartridge file from your own backup of a cartridg
 Cartridges, saves and projects never go into this repository (see `.gitignore`). Not affiliated
 with or endorsed by Nintendo.
 
+## How it is made
+
+This project is developed with the help of AI coding agents, directed and reviewed by its
+author. Which agent is used is not named, on purpose: any agent, or none, is welcome. What counts
+is the code, and the same checks apply to every change, whoever or whatever wrote it: the rules
+in [`AGENTS.md`](AGENTS.md), the tests (with the regression fingerprint, which holds the emulator
+to its recorded behaviour) and the specs in `openspec/specs/`.
+
 ## Playing
 
 Unpack the release zip (`sml26gc-<version>-windows-x64.zip`) in a folder you can write to, such
