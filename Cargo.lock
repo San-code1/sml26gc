@@ -257,6 +257,7 @@ version = "0.1.0"
 dependencies = [
  "cart-model",
  "cpal",
+ "fonts",
  "gb-core",
  "host",
  "i18n",
@@ -327,6 +328,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "fonts"
+version = "0.1.0"
+dependencies = [
+ "i18n",
+]
+
+[[package]]
 name = "futures-core"
 version = "0.3.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -356,6 +364,7 @@ version = "0.1.0"
 dependencies = [
  "cart-model",
  "cpal",
+ "fonts",
  "gb-core",
  "gilrs",
  "host",

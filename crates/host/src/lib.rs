@@ -9,6 +9,7 @@ pub mod projects;
 pub mod rom_locator;
 pub mod settings_file;
 pub mod system_language;
+pub mod texts;
 
 pub use base_cartridge::{base_cartridge, BaseProblem};
 pub use battery::{load_gb, write_battery_save};

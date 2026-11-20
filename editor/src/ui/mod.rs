@@ -1067,7 +1067,7 @@ impl Editor {
 
     /// The test game Play and Here start.
     fn test_game(&self) -> TestGame {
-        TestGame { lives: self.prefs.test_lives, coins: self.prefs.test_coins, power: self.prefs.test_power }
+        TestGame { lives: self.prefs.test_lives, coins: self.prefs.test_coins, power: self.prefs.test_power, lang: self.lang }
     }
 
     /// Save and start the game in the level shown. True when it started.

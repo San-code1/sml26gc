@@ -4,7 +4,7 @@
 //! It changes `Settings` in place; saving them, switching full screen and carrying out the
 //! cheats is the caller's job.
 use super::cheats::{draw_icon, Cheat, Cheats, Icon};
-use super::i18n::{texts, Texts, LANG_NAMES};
+use super::i18n::{texts, Texts, LANGS, LANG_NAMES};
 use super::keys::{self, Key, DEFAULT_KEYS};
 use super::overlay::{text_width, Canvas};
 use super::pad::{self, Input, PadButton, DEFAULT_PAD};
@@ -63,6 +63,8 @@ const LEVEL_ROWS: usize = 10;
 const CONTROLS_FIRST: usize = 1;
 /// Controls rows on the screen at once (the rest scroll into view).
 const CONTROLS_SHOWN: usize = 15;
+/// Language rows on the screen at once (the rest scroll into view).
+const LANGUAGES_SHOWN: usize = 8;
 
 /// What the menu reads in one frame: the keyboard, and the controller when it plays.
 #[derive(Default)]
@@ -230,11 +232,11 @@ impl Menu {
             Screen::Main => self.items.len(),
             Screen::Confirm(_) => 2,
             Screen::Controls => CONTROLS_FIRST + keys::KEYS + 1,
-            Screen::Display => 4,
-            Screen::Sound => 2,
-            Screen::Language => 4,
+            Screen::Display => 3,
+            Screen::Sound => 1,
+            Screen::Language => LANGS,
             Screen::Waiting(_) => 0,
-            Screen::Cheats => Cheat::ALL.len() + 1,
+            Screen::Cheats => Cheat::ALL.len(),
             Screen::Summon => Item::ALL.len(),
             Screen::Levels => self.level_count().max(1),
         }
@@ -360,24 +362,18 @@ impl Menu {
                     2 if change => {
                         st.integer_scale = !st.integer_scale;
                     }
-                    3 if ok => self.go(Screen::Main, self.pos(IT_DISPLAY)),
                     _ => {}
                 }
             }
-            Screen::Sound => match self.sel {
-                0 if step != 0 => {
+            Screen::Sound => {
+                if step != 0 {
                     st.volume = (st.volume as i32 + step).clamp(0, 10) as u8;
                 }
-                1 if ok => self.go(Screen::Main, self.pos(IT_SOUND)),
-                _ => {}
-            },
+            }
             Screen::Language => {
                 if ok {
-                    if self.sel < 3 {
-                        st.lang = self.sel;
-                    } else {
-                        self.go(Screen::Main, self.pos(IT_LANGUAGE));
-                    }
+                    st.lang = self.sel;
+                    st.lang_auto = false;
                 }
             }
             Screen::Cheats => {
@@ -508,14 +504,13 @@ impl Menu {
                 c.text(x + (w - text_width(t.cancel)) / 2, y + 40, t.cancel, 2);
             }
             Screen::Display => {
-                let (x, y, w, h) = (6, 30, 148, 84);
+                let (x, y, w, h) = (6, 36, 148, 71);
                 c.frame(x, y, w, h);
                 c.title(x, y, w, t.display);
                 let rows = [
                     (t.colours, t.palettes[st.palette % 3]),
                     (t.fullscreen, if st.fullscreen { t.yes } else { t.no }),
                     (t.scale, if st.integer_scale { t.sharp } else { t.fitted }),
-                    (t.back, ""),
                 ];
                 for (i, (l, v)) in rows.iter().enumerate() {
                     let ty = y + 14 + i as i32 * 13;
@@ -543,7 +538,7 @@ impl Menu {
                 c.footer(x, y + h - 2, w, t.footer_change);
             }
             Screen::Sound => {
-                let (x, y, w, h) = (14, 44, 132, 56);
+                let (x, y, w, h) = (14, 48, 132, 46);
                 c.frame(x, y, w, h);
                 c.title(x, y, w, t.sound);
                 c.text(x + 18, y + 13, t.volume, shade(0));
@@ -559,29 +554,36 @@ impl Menu {
                     }
                 }
                 c.text(bx + 94, by, &format!("{}", st.volume), 3);
-                c.text(x + 18, y + 38, t.back, shade(1));
-                c.cursor(x + 9, if self.sel == 0 { y + 13 } else { y + 38 }, 3);
+                c.cursor(x + 9, y + 13, 3);
+                c.footer(x, y + h - 2, w, t.footer_change);
             }
             Screen::Language => {
-                let (x, y, w, h) = (22, 34, 116, 76);
+                // the languages, each written in itself: the rows scroll with the cursor, a
+                // small arrow at the side showing there are more above or below
+                let rows = LANGS;
+                let h = 13 + LANGUAGES_SHOWN as i32 * 11 + 9;
+                let (x, y, w) = (22, (gb_core::ppu::H as i32 - h) / 2, 116);
                 c.frame(x, y, w, h);
                 c.title(x, y, w, t.language);
-                for i in 0..4 {
-                    let ty = y + 13 + i as i32 * 12;
-                    let label = if i < 3 { LANG_NAMES[i] } else { t.back };
-                    c.text(x + 18, ty, label, shade(i));
-                    if i < 3 && i == st.lang {
-                        // the language in use is marked with a filled box, like a checked option
-                        c.rect(x + w - 16, ty, 7, 7, 3);
-                        c.rect(x + w - 15, ty + 1, 5, 5, 0);
+                let top = (self.sel + 1).saturating_sub(LANGUAGES_SHOWN).min(rows - LANGUAGES_SHOWN);
+                for i in top..top + LANGUAGES_SHOWN {
+                    let ty = y + 13 + (i - top) as i32 * 11;
+                    c.text(x + 18, ty, LANG_NAMES[i], shade(i));
+                    // the language in use is marked with a filled box, like a checked option
+                    c.rect(x + w - 16, ty, 7, 7, 3);
+                    c.rect(x + w - 15, ty + 1, 5, 5, 0);
+                    if i == st.lang {
                         c.rect(x + w - 14, ty + 2, 3, 3, 3);
-                    } else if i < 3 {
-                        c.rect(x + w - 16, ty, 7, 7, 3);
-                        c.rect(x + w - 15, ty + 1, 5, 5, 0);
                     }
                     if i == self.sel {
                         c.cursor(x + 9, ty, 3);
                     }
+                }
+                if top > 0 {
+                    c.more(x + 5, y + 14, true);
+                }
+                if top + LANGUAGES_SHOWN < rows {
+                    c.more(x + 5, y + 13 + (LANGUAGES_SHOWN as i32 - 1) * 11 + 4, false);
                 }
                 c.footer(x, y + h - 2, w, t.footer_language);
             }
@@ -590,23 +592,18 @@ impl Menu {
                 c.frame(x, y, w, h);
                 c.title(x, y, w, t.main[IT_CHEATS]);
                 let state = self.cheats.as_ref().map(|m| m.state).unwrap_or_default();
-                for i in 0..=Cheat::ALL.len() {
+                for (i, &cheat) in Cheat::ALL.iter().enumerate() {
                     let ty = y + 9 + i as i32 * 9;
-                    match Cheat::ALL.get(i) {
-                        Some(&cheat) => {
-                            let usable = self.usable(cheat);
-                            c.text(x + 16, ty, t.cheats[i], if usable { shade(i) } else { 1 });
-                            let value = if cheat.toggles() {
-                                if state.is_on(cheat) { t.on } else { t.off }
-                            } else if self.done.contains(&cheat) {
-                                t.done
-                            } else {
-                                ""
-                            };
-                            c.text(x + w - 8 - text_width(value), ty, value, 3);
-                        }
-                        None => c.text(x + 16, ty, t.back, shade(i)),
-                    }
+                    let usable = self.usable(cheat);
+                    c.text(x + 16, ty, t.cheats[i], if usable { shade(i) } else { 1 });
+                    let value = if cheat.toggles() {
+                        if state.is_on(cheat) { t.on } else { t.off }
+                    } else if self.done.contains(&cheat) {
+                        t.done
+                    } else {
+                        ""
+                    };
+                    c.text(x + w - 8 - text_width(value), ty, value, 3);
                     if i == self.sel {
                         c.cursor(x + 8, ty, 3);
                     }

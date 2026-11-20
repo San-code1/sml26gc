@@ -1,0 +1,280 @@
+# The game's start screen: each entry's English (the text in the code) and its translations, in
+# `i18n::Lang` order. See crates/i18n for the format. %n stands for a number. The Latin languages
+# are written without accents (the screen's built-in font has none). The translations other
+# than Spanish and Japanese are machine-written and await review by native speakers.
+
+en: THE ORIGINAL GAME
+es: EL JUEGO ORIGINAL
+ja: オリジナルのゲーム
+pt: O JOGO ORIGINAL
+fr: LE JEU ORIGINAL
+de: DAS ORIGINALSPIEL
+it: IL GIOCO ORIGINALE
+id: PERMAINAN ASLI
+ru: ОРИГИНАЛЬНАЯ ИГРА
+zh: 原版游戏
+ko: 원작 게임
+
+en: Super Mario Land 2 as it came, with its own saves
+es: Super Mario Land 2 tal cual, con sus propias partidas
+ja: そのままの Super Mario Land 2(セーブも別)
+pt: Super Mario Land 2 como veio, com seus proprios saves
+fr: Super Mario Land 2 tel quel, avec ses propres sauvegardes
+de: Super Mario Land 2 wie es war, mit eigenen Spielstaenden
+it: Super Mario Land 2 cosi com'e, con i suoi salvataggi
+id: Super Mario Land 2 apa adanya, dengan simpanannya sendiri
+ru: Super Mario Land 2 как есть, со своими сохранениями
+zh: 原样的 Super Mario Land 2,使用它自己的存档
+ko: 원래 그대로의 Super Mario Land 2, 세이브도 따로
+
+en: new level
+es: nivel nuevo
+ja: 新しいコース
+pt: fase nova
+fr: nouveau niveau
+de: neues Level
+it: livello nuovo
+id: level baru
+ru: новый уровень
+zh: 个新关卡
+ko: 개의 새 코스
+
+en: new levels
+es: niveles nuevos
+ja: 新しいコース
+pt: fases novas
+fr: nouveaux niveaux
+de: neue Level
+it: livelli nuovi
+id: level baru
+ru: новых уровней
+zh: 个新关卡
+ko: 개의 새 코스
+
+en: EDITOR PROJECT
+es: PROYECTO DEL EDITOR
+ja: エディターのプロジェクト
+pt: PROJETO DO EDITOR
+fr: PROJET DE L'EDITEUR
+de: EDITOR-PROJEKT
+it: PROGETTO DELL'EDITOR
+id: PROYEK EDITOR
+ru: ПРОЕКТ РЕДАКТОРА
+zh: 编辑器项目
+ko: 에디터 프로젝트
+
+en: saved just now
+es: guardado ahora mismo
+ja: たった今保存
+pt: salvo agora mesmo
+fr: enregistre a l'instant
+de: gerade gespeichert
+it: salvato ora
+id: baru saja disimpan
+ru: сохранено только что
+zh: 刚刚保存
+ko: 방금 저장됨
+
+en: saved %n min ago
+es: guardado hace %n min
+ja: %n分前に保存
+pt: salvo ha %n min
+fr: enregistre il y a %n min
+de: vor %n Min. gespeichert
+it: salvato %n min fa
+id: disimpan %n menit lalu
+ru: сохранено %n мин назад
+zh: %n分钟前保存
+ko: %n분 전에 저장됨
+
+en: saved %n h ago
+es: guardado hace %n h
+ja: %n時間前に保存
+pt: salvo ha %n h
+fr: enregistre il y a %n h
+de: vor %n Std. gespeichert
+it: salvato %n ore fa
+id: disimpan %n jam lalu
+ru: сохранено %n ч назад
+zh: %n小时前保存
+ko: %n시간 전에 저장됨
+
+en: saved %n days ago
+es: guardado hace %n dias
+ja: %n日前に保存
+pt: salvo ha %n dias
+fr: enregistre il y a %n jours
+de: vor %n Tagen gespeichert
+it: salvato %n giorni fa
+id: disimpan %n hari lalu
+ru: сохранено %n дн. назад
+zh: %n天前保存
+ko: %n일 전에 저장됨
+
+en: Base cartridge
+es: Cartucho base
+ja: 元のカートリッジ
+pt: Cartucho base
+fr: Cartouche de base
+de: Basismodul
+it: Cartuccia base
+id: Kartrid dasar
+ru: Базовый картридж
+zh: 基础卡带
+ko: 기본 카트리지
+
+en: The game and the editor share it; the file may have any name.
+es: El juego y el editor lo comparten; el fichero puede llamarse como sea.
+ja: ゲームとエディターで共有します。ファイル名は自由です。
+pt: O jogo e o editor o compartilham; o arquivo pode ter qualquer nome.
+fr: Le jeu et l'editeur la partagent ; le fichier peut avoir n'importe quel nom.
+de: Spiel und Editor teilen es; die Datei darf beliebig heissen.
+it: Il gioco e l'editor la condividono; il file puo avere qualsiasi nome.
+id: Permainan dan editor memakainya bersama; berkas boleh bernama apa saja.
+ru: Игра и редактор используют его вместе; файл может называться как угодно.
+zh: 游戏和编辑器共用它;文件可以是任何名字。
+ko: 게임과 에디터가 함께 씁니다. 파일 이름은 무엇이든 됩니다.
+
+en: Choose the cartridge file...
+es: Elegir el fichero del cartucho...
+ja: カートリッジファイルを選ぶ...
+pt: Escolher o arquivo do cartucho...
+fr: Choisir le fichier de la cartouche...
+de: Moduldatei waehlen...
+it: Scegli il file della cartuccia...
+id: Pilih berkas kartrid...
+ru: Выбрать файл картриджа...
+zh: 选择卡带文件...
+ko: 카트리지 파일 선택...
+
+en: Quit
+es: Salir
+ja: 終了
+pt: Sair
+fr: Quitter
+de: Beenden
+it: Esci
+id: Keluar
+ru: Выход
+zh: 退出
+ko: 종료
+
+en: Projects made in the editor show here too.
+es: Aqui salen tambien los proyectos hechos en el editor.
+ja: エディターで作ったプロジェクトもここに出ます。
+pt: Projetos feitos no editor tambem aparecem aqui.
+fr: Les projets faits dans l'editeur apparaissent aussi ici.
+de: Im Editor erstellte Projekte erscheinen auch hier.
+it: Qui compaiono anche i progetti fatti nell'editor.
+id: Proyek yang dibuat di editor juga muncul di sini.
+ru: Проекты из редактора тоже показаны здесь.
+zh: 在编辑器中制作的项目也会显示在这里。
+ko: 에디터에서 만든 프로젝트도 여기에 나옵니다.
+
+en: Play
+es: Jugar
+ja: 遊ぶ
+pt: Jogar
+fr: Jouer
+de: Spielen
+it: Gioca
+id: Main
+ru: Играть
+zh: 开始游戏
+ko: 플레이
+
+en: Edit in the editor
+es: Editar en el editor
+ja: エディターで編集
+pt: Editar no editor
+fr: Modifier dans l'editeur
+de: Im Editor bearbeiten
+it: Modifica nell'editor
+id: Sunting di editor
+ru: Редактировать
+zh: 在编辑器中编辑
+ko: 에디터에서 편집
+
+en: The original is not edited
+es: El original no se edita
+ja: オリジナルは編集しません
+pt: Original nao editavel
+fr: Original non modifiable
+de: Nicht bearbeitbar
+it: Non modificabile
+id: Asli tak bisa disunting
+ru: Оригинал не редактируется
+zh: 原版不能编辑
+ko: 원작은 편집하지 않습니다
+
+en: New project
+es: Proyecto nuevo
+ja: 新しいプロジェクト
+pt: Novo projeto
+fr: Nouveau projet
+de: Neues Projekt
+it: Nuovo progetto
+id: Proyek baru
+ru: Новый проект
+zh: 新建项目
+ko: 새 프로젝트
+
+en: Cheats
+es: Trucos
+ja: チート
+pt: Trapacas
+fr: Triches
+de: Cheats
+it: Trucchi
+id: Curang
+ru: Читы
+zh: 作弊
+ko: 치트
+
+en: Cartridge...
+es: Cartucho...
+ja: カートリッジ...
+pt: Cartucho...
+fr: Cartouche...
+de: Modul...
+it: Cartuccia...
+id: Kartrid...
+ru: Картридж...
+zh: 卡带...
+ko: 카트리지...
+
+en: Base cartridge:
+es: Cartucho base:
+ja: 元のカートリッジ:
+pt: Cartucho base:
+fr: Cartouche de base :
+de: Basismodul:
+it: Cartuccia base:
+id: Kartrid dasar:
+ru: Базовый картридж:
+zh: 基础卡带:
+ko: 기본 카트리지:
+
+en: Choose the Super Mario Land 2 cartridge
+es: Elige el cartucho de Super Mario Land 2
+ja: Super Mario Land 2 のカートリッジを選んでください
+pt: Escolha o cartucho de Super Mario Land 2
+fr: Choisissez la cartouche de Super Mario Land 2
+de: Waehle das Modul von Super Mario Land 2
+it: Scegli la cartuccia di Super Mario Land 2
+id: Pilih kartrid Super Mario Land 2
+ru: Выберите картридж Super Mario Land 2
+zh: 选择 Super Mario Land 2 卡带
+ko: Super Mario Land 2 카트리지 선택
+
+en: Game Boy cartridges
+es: Cartuchos de Game Boy
+ja: ゲームボーイのカートリッジ
+pt: Cartuchos de Game Boy
+fr: Cartouches Game Boy
+de: Game-Boy-Module
+it: Cartucce Game Boy
+id: Kartrid Game Boy
+ru: Картриджи Game Boy
+zh: Game Boy 卡带
+ko: 게임보이 카트리지

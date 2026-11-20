@@ -47,6 +47,8 @@ struct Args {
     test: bool,
     lives: Option<u8>,
     coins: Option<u16>,
+    /// The language of this game only (an `i18n::Lang` id): the editor's, for its test games.
+    lang: Option<i18n::Lang>,
     /// Mario's power in the test game (0 small, 1 big, 2 carrot, 3 fire).
     power: Option<u8>,
     /// A test game on the map beginning on this point (`HEX`, or `HEX@K` in new zone K).
@@ -77,6 +79,7 @@ fn parse_args(v: &[String]) -> Args {
             "--coins" => a.coins = next.parse().ok(),
             "--power" => a.power = next.parse().ok().filter(|&p| p <= 3),
             "--point" => a.point = map_point(&next),
+            "--lang" => a.lang = i18n::Lang::from_id(&next),
             "--cheats" | "--test" | "--start-screen" => {
                 match v[i].as_str() {
                     "--test" => a.test = true,
@@ -169,7 +172,10 @@ fn main() {
 /// game's saves (none: nothing read or written, for checks and the editor's test games).
 fn start(args: &Args, found: Result<PathBuf, String>, saves: Option<PathBuf>, checking: bool, audio: &dyn AudioOut) -> Result<GameSession, (Preferences, String)> {
     let settings: Box<dyn SettingsStore> = if checking { Box::new(DefaultSettings) } else { Box::new(SettingsFile) };
-    let prefs = Preferences::new(settings, Box::new(MacroquadWindow));
+    let mut prefs = Preferences::new(settings, Box::new(MacroquadWindow));
+    if let Some(lang) = args.lang {
+        prefs.speak_for_this_game(lang as usize);
+    }
     let rom = match found {
         Ok(r) => r,
         Err(e) => return Err((prefs, e)),
@@ -263,6 +269,12 @@ async fn run(args: Args, found: Result<PathBuf, String>, checking: bool, title: 
                         picker.cheats = !picker.cheats;
                         let mut s = SettingsFile.load();
                         s.cheats = picker.cheats;
+                        SettingsFile.save(&s);
+                        None
+                    }
+                    Choice::Language(lang) => {
+                        let mut s = SettingsFile.load();
+                        (s.lang, s.lang_auto) = (lang as usize, false);
                         SettingsFile.save(&s);
                         None
                     }

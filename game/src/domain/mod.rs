@@ -1,6 +1,7 @@
 //! The game's own rules, testable without a window, speakers or files.
 pub mod bindings;
 pub mod cheats;
+pub mod glyphs_cjk;
 pub mod i18n;
 pub mod keys;
 pub mod menu;

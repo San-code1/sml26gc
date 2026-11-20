@@ -30,6 +30,8 @@ pub struct TestGame {
     pub lives: u32,
     pub coins: u32,
     pub power: u32,
+    /// The editor's language: the game speaks it in this test game only.
+    pub lang: i18n::Lang,
 }
 
 /// Starting the game on the edited copy.

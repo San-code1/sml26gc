@@ -1,5 +1,7 @@
-//! Drawing over the Game Boy picture in its four shades: a pixel font (Latin and katakana),
-//! boxes, Game Boy style windows, and the start-up hint tag.
+//! Drawing over the Game Boy picture in its four shades: a pixel font (Latin, Cyrillic and
+//! katakana capitals, and the Chinese and Korean characters the menu uses), boxes, Game Boy
+//! style windows, and the start-up hint tag.
+use super::glyphs_cjk::GLYPHS;
 use gb_core::ppu::{H, W};
 
 fn latin(c: char) -> Option<[u8; 7]> {
@@ -54,6 +56,52 @@ fn latin(c: char) -> Option<[u8; 7]> {
         '+' => [0, 4, 4, 31, 4, 4, 0],
         '=' => [0, 0, 31, 0, 31, 0, 0],
         ' ' => [0; 7],
+        _ => return cyrillic(c),
+    })
+}
+
+/// Cyrillic capitals: those drawn as a Latin letter take its glyph.
+fn cyrillic(c: char) -> Option<[u8; 7]> {
+    let same = match c {
+        'А' => 'A',
+        'В' => 'B',
+        'Е' => 'E',
+        'К' => 'K',
+        'М' => 'M',
+        'Н' => 'H',
+        'О' => 'O',
+        'Р' => 'P',
+        'С' => 'C',
+        'Т' => 'T',
+        'Х' => 'X',
+        _ => ' ',
+    };
+    if same != ' ' {
+        return latin(same);
+    }
+    Some(match c {
+        'Б' => [31, 16, 16, 30, 17, 17, 30],
+        'Г' => [31, 16, 16, 16, 16, 16, 16],
+        'Д' => [6, 10, 10, 10, 10, 31, 17],
+        'Ё' => [10, 0, 31, 16, 30, 16, 31],
+        'Ж' => [21, 21, 21, 14, 21, 21, 21],
+        'З' => [14, 17, 1, 6, 1, 17, 14],
+        'И' => [17, 17, 19, 21, 25, 17, 17],
+        'Й' => [10, 4, 17, 19, 21, 25, 17],
+        'Л' => [7, 9, 9, 9, 9, 9, 17],
+        'П' => [31, 17, 17, 17, 17, 17, 17],
+        'У' => [17, 17, 17, 15, 1, 17, 14],
+        'Ф' => [4, 14, 21, 21, 14, 4, 4],
+        'Ц' => [18, 18, 18, 18, 18, 31, 1],
+        'Ч' => [17, 17, 17, 15, 1, 1, 1],
+        'Ш' => [21, 21, 21, 21, 21, 21, 31],
+        'Щ' => [21, 21, 21, 21, 21, 31, 1],
+        'Ъ' => [24, 8, 8, 14, 9, 9, 14],
+        'Ы' => [17, 17, 17, 29, 19, 19, 29],
+        'Ь' => [16, 16, 16, 30, 17, 17, 30],
+        'Э' => [14, 17, 1, 7, 1, 17, 14],
+        'Ю' => [18, 21, 21, 29, 21, 21, 18],
+        'Я' => [15, 17, 17, 15, 5, 9, 17],
         _ => return None,
     })
 }
@@ -108,6 +156,8 @@ fn kana(c: char) -> Option<([u8; 7], u8)> {
             'チ' => [3, 28, 4, 31, 4, 4, 8],
             'ナ' => [4, 4, 31, 4, 4, 8, 16],
             'ワ' => [31, 17, 17, 1, 2, 4, 8],
+            'マ' => [31, 1, 1, 10, 4, 2, 0],
+            'ェ' => [0, 0, 14, 4, 4, 31, 0],
             _ => [0; 7],
         }
     };
@@ -135,12 +185,23 @@ fn kana(c: char) -> Option<([u8; 7], u8)> {
     Some((base(b), mark))
 }
 
+/// A Chinese or Korean character's glyph (`glyphs_cjk`): 7 rows of 8 pixels.
+fn cjk(c: char) -> Option<&'static [u8; 7]> {
+    GLYPHS.binary_search_by_key(&c, |g| g.0).ok().map(|i| &GLYPHS[i].1)
+}
+
 fn advance(c: char) -> i32 {
-    if kana(c).is_some() {
+    if kana(c).is_some() || cjk(c).is_some() {
         8
     } else {
         6
     }
+}
+
+/// Does the pixel font draw `c` (a space, or a character with ink)?
+#[cfg(test)]
+pub fn has_glyph(c: char) -> bool {
+    c == ' ' || kana(c).is_some_and(|(g, _)| g != [0; 7]) || cjk(c).is_some() || latin(c.to_ascii_uppercase()).or_else(|| latin(c)).is_some_and(|g| g != [0; 7])
 }
 
 pub fn text_width(t: &str) -> i32 {
@@ -190,6 +251,14 @@ impl Canvas<'_> {
                         }
                     }
                     _ => {}
+                }
+            } else if let Some(g) = cjk(c) {
+                for (row, bits) in g.iter().enumerate() {
+                    for col in 0..8 {
+                        if bits & (0x80 >> col) != 0 {
+                            self.set(cx + col, y + row as i32, s);
+                        }
+                    }
                 }
             } else if let Some(g) = latin(c.to_ascii_uppercase()).or_else(|| latin(c)) {
                 self.bits(cx, y, &g, s);

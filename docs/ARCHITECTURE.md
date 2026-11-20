@@ -12,7 +12,8 @@ with ports and adapters around them. Behaviour is guarded by the golden fingerpr
 | `crates/cart-model` | Domain: what is known about this cartridge (levels, objects, world map, patches, RAM map) and use cases on a running console |
 | `crates/project-model` | Domain: a project of the editor (what is edited and its rules, level, zone, world map and project files) and the cartridge a project file makes over the base cartridge |
 | `crates/host` | Shared adapters: the base cartridge, file locations, a project's cartridge made from its file, battery saves, settings file, PNG output, the system's language |
-| `crates/i18n` | Languages and a translation dictionary keyed by the English text (the editor's catalogue is `editor/i18n/editor.txt`). No dependencies |
+| `crates/i18n` | Languages and a translation dictionary keyed by the English text (the catalogues: `editor/i18n/editor.txt`, `crates/host/i18n/host.txt`, and the game's `game/i18n/`: `start.txt` the start screen, `menu.txt` the pause menu, `keys.txt` the key names). No dependencies |
+| `crates/fonts` | The fonts a language needs beyond the built-in one (`fonts/`, SIL Open Font License), as bytes. Depends on `i18n` only |
 | `game/` | Application: the game (`game.exe`) |
 | `editor/` | Application: the editor (`editor.exe`) |
 | `tools/research/` | Reverse-engineering CLI (`research.exe`) |
@@ -31,6 +32,7 @@ with ports and adapters around them. Behaviour is guarded by the golden fingerpr
   make a project's cartridge from its file (through `host::projects`).
 - `host` knows nothing about macroquad or cpal.
 - `i18n` is used by `host` and the applications; it knows no files and no system.
+- `fonts` is used by the applications; it holds data only (no window library).
 - `game` and `editor` do not depend on each other; they share only the contract below.
 
 ## `gb-core`

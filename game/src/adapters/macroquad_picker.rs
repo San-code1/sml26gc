@@ -7,7 +7,6 @@
 //! holds the cartridge's own title screen, running (`title_preview`). Choosing only selects:
 //! Play starts the game, Edit opens the project in the editor.
 use super::title_preview::TitlePreview;
-use crate::domain::i18n::LANG_ES;
 use crate::domain::settings::Settings;
 use gb_core::palette::PALETTES;
 use host::BaseProblem;
@@ -36,6 +35,8 @@ pub enum Choice {
     Browse,
     /// Turn the debug / cheats box on or off.
     Cheats,
+    /// The language chosen in the list (already shown; to keep in the settings).
+    Language(i18n::Lang),
     /// Open the editor on this project, or (None) on a new one.
     Edit(Option<String>),
     Quit,
@@ -57,7 +58,11 @@ pub struct Picker {
     pub error: Option<String>,
     /// The "Debug / cheats" box.
     pub cheats: bool,
-    es: bool,
+    lang: i18n::Lang,
+    /// The language list, when open: the row the keys are on.
+    languages: Option<usize>,
+    /// Where the language button was last drawn (the list opens from it).
+    language_at: Rect,
     /// When the list was last read (projects made in the editor meanwhile show up).
     listed: f64,
     /// The base cartridge's title screen, and the palette it is shown with.
@@ -101,17 +106,63 @@ const COLUMN: f32 = 560.0;
 
 /// A text's width at `size`.
 fn width(t: &str, size: f32) -> f32 {
-    measure_text(t, None, size as u16, 1.0).width
+    with_font(|font| measure_text(t, font, size as u16, 1.0).width)
+}
+
+/// Each language's name written in itself, as the start screen's font for it draws it (the Latin
+/// ones without accents, as the built-in font has none).
+const LANGUAGE_NAMES: [&str; i18n::LANGS] = ["English", "Espanol", "日本語", "Portugues", "Francais", "Deutsch", "Italiano", "Bahasa Indonesia", "Русский", "简体中文", "한국어"];
+
+/// The start screen's texts in every language.
+const START_TEXTS: &str = include_str!("../../i18n/start.txt");
+
+thread_local! {
+    /// The fonts (`fonts::Face`), each loaded the first time it is drawn, and the one in use.
+    static FONTS: std::cell::RefCell<Vec<(fonts::Face, Option<Font>)>> = const { std::cell::RefCell::new(Vec::new()) };
+    static FACE: std::cell::Cell<fonts::Face> = const { std::cell::Cell::new(fonts::Face::BuiltIn) };
+    /// The language list is open: the screen behind it takes no keys or clicks.
+    static BLOCKED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Text from now on is drawn with `lang`'s font (the built-in one for the Latin languages).
+fn set_font(lang: i18n::Lang) {
+    let face = fonts::Face::of(lang);
+    FACE.set(face);
+    FONTS.with(|f| {
+        let mut f = f.borrow_mut();
+        if !f.iter().any(|(had, _)| *had == face) {
+            f.push((face, face.bytes().and_then(|b| load_ttf_font_from_bytes(b).ok())));
+        }
+    });
+}
+
+fn with_font<R>(f: impl FnOnce(Option<&Font>) -> R) -> R {
+    let face = FACE.get();
+    FONTS.with(|cell| f(cell.borrow().iter().find(|(had, _)| *had == face).and_then(|(_, font)| font.as_ref())))
+}
+
+fn blocked() -> bool {
+    BLOCKED.get()
+}
+
+/// Key `k` was pressed, and the screen takes keys (no list open over it).
+fn pressed(k: KeyCode) -> bool {
+    !blocked() && is_key_pressed(k)
+}
+
+/// Text at `(x, y)` (its baseline) in the language's font.
+fn put(t: &str, x: f32, y: f32, size: f32, c: Color) {
+    with_font(|font| draw_text_ex(t, x, y, TextParams { font, font_size: size as u16, color: c, ..Default::default() }));
 }
 
 fn centred(t: &str, cx: f32, y: f32, size: f32, c: Color) {
-    draw_text(t, cx - width(t, size) / 2.0, y, size, c);
+    put(t, cx - width(t, size) / 2.0, y, size, c);
 }
 
 /// A button: its label left, its key at the right in a small box; true when clicked.
 fn button(r: Rect, label: &str, key: &str, primary: bool, on: bool) -> bool {
     let m: Vec2 = mouse_position().into();
-    let hover = on && r.contains(m);
+    let hover = on && !blocked() && r.contains(m);
     let (fill, fg) = match (primary && on, hover) {
         (true, false) => (ACCENT, ACCENT_DARK),
         (true, true) => (Color::new(0.64, 0.86, 0.44, 1.0), ACCENT_DARK),
@@ -127,12 +178,12 @@ fn button(r: Rect, label: &str, key: &str, primary: bool, on: bool) -> bool {
     let room = r.w - kw - 28.0;
     let mut label = label.to_string();
     while width(&label, size) > room && label.pop().is_some() {}
-    draw_text(&label, r.x + 16.0, r.y + r.h / 2.0 + size * 0.35, size, fg);
+    put(&label, r.x + 16.0, r.y + r.h / 2.0 + size * 0.35, size, fg);
     if !key.is_empty() {
         let kx = r.x + r.w - kw - 10.0;
         let ky = r.y + (r.h - 20.0) / 2.0;
         draw_rectangle_lines(kx, ky, kw, 20.0, 1.0, if primary && on { ACCENT_DARK } else { DIM });
-        draw_text(key, kx + 6.0, ky + 14.0, 14.0, if primary && on { ACCENT_DARK } else { DIM });
+        put(key, kx + 6.0, ky + 14.0, 14.0, if primary && on { ACCENT_DARK } else { DIM });
     }
     hover && is_mouse_button_pressed(MouseButton::Left)
 }
@@ -144,7 +195,7 @@ const ARROW_GAP: f32 = 16.0;
 /// A round arrow button pointing left (`-1`) or right (`1`); true when clicked.
 fn arrow(cx: f32, cy: f32, dir: f32, on: bool) -> bool {
     let m: Vec2 = mouse_position().into();
-    let hover = on && (m - vec2(cx, cy)).length() <= ARROW_R;
+    let hover = !blocked() && on && (m - vec2(cx, cy)).length() <= ARROW_R;
     draw_circle(cx, cy, ARROW_R, if hover { HOVER } else { RAISED });
     draw_circle_lines(cx, cy, ARROW_R, 1.0, LINE);
     let c = if on { TEXT } else { LINE };
@@ -154,7 +205,7 @@ fn arrow(cx: f32, cy: f32, dir: f32, on: bool) -> bool {
 
 impl Picker {
     pub fn new(settings: &Settings) -> Picker {
-        let mut p = Picker { base: Err(BaseProblem::NotChosen), plays: Vec::new(), cards: Vec::new(), selected: 0, error: None, cheats: settings.cheats, es: settings.lang == LANG_ES, listed: 0.0, preview: None, palette: settings.palette };
+        let mut p = Picker { base: Err(BaseProblem::NotChosen), plays: Vec::new(), cards: Vec::new(), selected: 0, error: None, cheats: settings.cheats, lang: i18n::Lang::ALL.get(settings.lang).copied().unwrap_or_default(), languages: None, language_at: Rect::new(0.0, 0.0, 0.0, 0.0), listed: 0.0, preview: None, palette: settings.palette };
         p.reload(&settings.last_play);
         p
     }
@@ -184,7 +235,7 @@ impl Picker {
 
     fn card(&self, p: &Play) -> Card {
         let Some(name) = &p.project else {
-            return Card { kind: self.tr("THE ORIGINAL GAME", "EL JUEGO ORIGINAL"), name: host::VANILLA.into(), about: self.tr("Super Mario Land 2 as it came, with its own saves", "Super Mario Land 2 tal cual, con sus propias partidas").into() };
+            return Card { kind: self.tr("THE ORIGINAL GAME"), name: host::VANILLA.into(), about: self.tr("Super Mario Land 2 as it came, with its own saves").into() };
         };
         let file = host::project_file(name);
         let text = std::fs::read_to_string(&file).unwrap_or_default();
@@ -193,36 +244,89 @@ impl Picker {
         let saved = std::fs::metadata(&file).and_then(|m| m.modified()).ok().map(|t| self.ago(t));
         let mut about = Vec::new();
         if let Some(n) = new_levels.filter(|&n| n > 0) {
-            about.push(format!("{n} {}", if n == 1 { self.tr("new level", "nivel nuevo") } else { self.tr("new levels", "niveles nuevos") }));
+            about.push(format!("{n} {}", if n == 1 { self.tr("new level") } else { self.tr("new levels") }));
         }
         if let Some(s) = saved {
             about.push(s);
         }
-        Card { kind: self.tr("EDITOR PROJECT", "PROYECTO DEL EDITOR"), name: name.clone(), about: about.join("  -  ") }
+        Card { kind: self.tr("EDITOR PROJECT"), name: name.clone(), about: about.join("  -  ") }
     }
 
     fn ago(&self, t: std::time::SystemTime) -> String {
         let s = std::time::SystemTime::now().duration_since(t).map(|d| d.as_secs()).unwrap_or(0);
-        let (n, en, es) = match s {
-            0..=59 => return self.tr("saved just now", "guardado ahora mismo").into(),
-            60..=3599 => (s / 60, "min", "min"),
-            3600..=86399 => (s / 3600, "h", "h"),
-            _ => (s / 86400, "days", "dias"),
+        let (n, text) = match s {
+            0..=59 => return self.tr("saved just now").into(),
+            60..=3599 => (s / 60, self.tr("saved %n min ago")),
+            3600..=86399 => (s / 3600, self.tr("saved %n h ago")),
+            _ => (s / 86400, self.tr("saved %n days ago")),
         };
-        if self.es {
-            format!("guardado hace {n} {es}")
-        } else {
-            format!("saved {n} {en} ago")
+        text.replace("%n", &n.to_string())
+    }
+
+    /// The language button: its name written in itself and a small arrow; a click (or L) opens
+    /// the list of the languages.
+    fn language_button(&mut self, r: Rect) {
+        self.language_at = r;
+        let clicked = button(r, LANGUAGE_NAMES[self.lang as usize], "L", false, true);
+        let ax = r.x + r.w - width("L", 14.0) - 40.0;
+        let ay = r.y + r.h / 2.0;
+        draw_triangle(vec2(ax - 5.0, ay - 3.0), vec2(ax + 5.0, ay - 3.0), vec2(ax, ay + 3.0), DIM);
+        if clicked || pressed(KeyCode::L) {
+            self.languages = Some(self.lang as usize);
         }
     }
 
-    /// The language of the texts from `host` (the start screen speaks English or Spanish).
-    pub fn lang(&self) -> i18n::Lang {
-        if self.es {
-            i18n::Lang::Es
-        } else {
-            i18n::Lang::En
+    /// The open language list, over the screen, under its button (or over it when there is no
+    /// room below): each language written in itself; a click or Enter chooses, Esc, L or a click
+    /// outside closes it.
+    fn language_list(&mut self, screen_h: f32) -> Choice {
+        let Some(mut at) = self.languages else { return Choice::Wait };
+        const ROW: f32 = 30.0;
+        let b = self.language_at;
+        let h = ROW * i18n::LANGS as f32 + 8.0;
+        let y = if b.y + b.h + 4.0 + h <= screen_h { b.y + b.h + 4.0 } else { b.y - 4.0 - h };
+        let list = Rect::new(b.x, y, b.w, h);
+        let m: Vec2 = mouse_position().into();
+        if is_key_pressed(KeyCode::Down) {
+            at = (at + 1) % i18n::LANGS;
         }
+        if is_key_pressed(KeyCode::Up) {
+            at = (at + i18n::LANGS - 1) % i18n::LANGS;
+        }
+        let row_at = |i: usize| Rect::new(list.x + 4.0, list.y + 4.0 + i as f32 * ROW, list.w - 8.0, ROW);
+        if mouse_delta_position() != Vec2::ZERO {
+            if let Some(i) = (0..i18n::LANGS).find(|&i| row_at(i).contains(m)) {
+                at = i;
+            }
+        }
+        draw_rectangle(list.x + 4.0, list.y + 6.0, list.w, list.h, Color::new(0.0, 0.0, 0.0, 0.4));
+        draw_rectangle(list.x, list.y, list.w, list.h, PANEL);
+        draw_rectangle_lines(list.x, list.y, list.w, list.h, 1.0, LINE);
+        for (i, lang) in i18n::Lang::ALL.into_iter().enumerate() {
+            let r = row_at(i);
+            if i == at {
+                draw_rectangle(r.x, r.y, r.w, r.h, HOVER);
+            }
+            set_font(lang);
+            put(LANGUAGE_NAMES[i], r.x + 12.0, r.y + r.h / 2.0 + 6.0, 18.0, if lang == self.lang { ACCENT } else { TEXT });
+        }
+        set_font(self.lang);
+        self.languages = Some(at);
+        let click = is_mouse_button_pressed(MouseButton::Left);
+        if (click && row_at(at).contains(m)) || is_key_pressed(KeyCode::Enter) || is_key_pressed(KeyCode::KpEnter) {
+            self.languages = None;
+            self.lang = i18n::Lang::ALL[at];
+            return Choice::Language(self.lang);
+        }
+        if (click && !list.contains(m)) || is_key_pressed(KeyCode::Escape) || is_key_pressed(KeyCode::L) {
+            self.languages = None;
+        }
+        Choice::Wait
+    }
+
+    /// The language of the texts from `host`: the game's.
+    pub fn lang(&self) -> i18n::Lang {
+        self.lang
     }
 
     /// The cartridge to play: the base one, or the project's (made when needed).
@@ -231,12 +335,10 @@ impl Picker {
         host::projects::ensure_rom(base, name).map(|rom| Play { project: play.project.clone(), rom }).map_err(|e| e.text(self.lang()))
     }
 
-    fn tr<'a>(&self, en: &'a str, es: &'a str) -> &'a str {
-        if self.es {
-            es
-        } else {
-            en
-        }
+    /// `en` in the game's language (`game/i18n/start.txt`).
+    fn tr(&self, en: &'static str) -> &'static str {
+        static CATALOGUE: std::sync::OnceLock<i18n::Dictionary> = std::sync::OnceLock::new();
+        CATALOGUE.get_or_init(|| i18n::Dictionary::parse(START_TEXTS).expect("the start screen's catalogue")).get(self.lang, en)
     }
 
     /// Where the "Open" dialog starts: the folder of the cartridge chosen before.
@@ -245,55 +347,62 @@ impl Picker {
     }
 
     pub fn dialog_texts(&self) -> (&'static str, &'static str) {
-        if self.es {
-            ("Elige el cartucho de Super Mario Land 2", "Cartuchos de Game Boy")
-        } else {
-            ("Choose the Super Mario Land 2 cartridge", "Game Boy cartridges")
-        }
+        (self.tr("Choose the Super Mario Land 2 cartridge"), self.tr("Game Boy cartridges"))
     }
 
     /// Draw the screen and read the keys and mouse.
     pub fn frame(&mut self) -> Choice {
+        set_font(self.lang);
         clear_background(BG);
         let (w, h) = (screen_width(), screen_height());
         let col_w = (w - 48.0).min(COLUMN);
         let x = (w - col_w) / 2.0;
         let cx = w / 2.0;
-        draw_text("SUPER MARIO LAND 2", x, 40.0, 16.0, ACCENT);
-        let choice = match self.base.clone() {
+        put("SUPER MARIO LAND 2", x, 31.0, 16.0, ACCENT);
+        let open = self.languages.is_some();
+        BLOCKED.set(open);
+        let mut choice = match self.base.clone() {
             Err(problem) => self.cartridge_screen(&problem, x, col_w),
             Ok(base) => self.play_screen(&base, x, col_w, cx, h),
         };
+        BLOCKED.set(false);
         if let Some(e) = &self.error {
             let lines: Vec<String> = e.lines().flat_map(|l| wrap(l, col_w, 16.0)).collect();
             let top = h - 44.0 - lines.len() as f32 * 19.0;
             for (i, line) in lines.iter().enumerate() {
-                draw_text(line, x, top + i as f32 * 19.0, 16.0, RED);
+                put(line, x, top + i as f32 * 19.0, 16.0, RED);
             }
+        }
+        if open {
+            choice = self.language_list(h);
         }
         choice
     }
 
     /// No usable base cartridge: why, and choosing one.
     fn cartridge_screen(&mut self, problem: &BaseProblem, x: f32, col_w: f32) -> Choice {
-        draw_text(self.tr("Base cartridge", "Cartucho base"), x, 82.0, 34.0, TEXT);
+        put(self.tr("Base cartridge"), x, 82.0, 34.0, TEXT);
         let card = Rect::new(x, 108.0, col_w, 150.0);
         draw_rectangle(card.x, card.y, card.w, card.h, PANEL);
         draw_rectangle_lines(card.x, card.y, card.w, card.h, 1.0, LINE);
         let mut y = card.y + 34.0;
         let c = if *problem == BaseProblem::NotChosen { TEXT } else { RED };
         for line in problem.text(self.lang()).lines().flat_map(|l| wrap(l, col_w - 40.0, 18.0)) {
-            draw_text(&line, x + 20.0, y, 18.0, c);
+            put(&line, x + 20.0, y, 18.0, c);
             y += 23.0;
         }
-        for line in wrap(self.tr("The game and the editor share it; the file may have any name.", "El juego y el editor lo comparten; el fichero puede llamarse como sea."), col_w - 40.0, 15.0) {
-            draw_text(&line, x + 20.0, card.y + card.h - 18.0, 15.0, DIM);
+        // the note at the card's foot, its lines stacked up from there
+        let note = wrap(self.tr("The game and the editor share it; the file may have any name."), col_w - 40.0, 15.0);
+        for (i, line) in note.iter().enumerate() {
+            put(line, x + 20.0, card.y + card.h - 18.0 - (note.len() - 1 - i) as f32 * 18.0, 15.0, DIM);
         }
         let mut choice = Choice::Wait;
-        if button(Rect::new(x, card.y + card.h + 24.0, col_w, 48.0), self.tr("Choose the cartridge file...", "Elegir el fichero del cartucho..."), "O", true, true) || is_key_pressed(KeyCode::O) || is_key_pressed(KeyCode::Enter) {
+        if button(Rect::new(x, card.y + card.h + 24.0, col_w, 48.0), self.tr("Choose the cartridge file..."), "O", true, true) || pressed(KeyCode::O) || pressed(KeyCode::Enter) {
             choice = Choice::Browse;
         }
-        if button(Rect::new(x, card.y + card.h + 82.0, col_w, 38.0), self.tr("Quit", "Salir"), "Esc", false, true) || is_key_pressed(KeyCode::Escape) {
+        let half = (col_w - 10.0) / 2.0;
+        self.language_button(Rect::new(x, card.y + card.h + 82.0, half, 38.0));
+        if button(Rect::new(x + half + 10.0, card.y + card.h + 82.0, half, 38.0), self.tr("Quit"), "Esc", false, true) || pressed(KeyCode::Escape) {
             choice = Choice::Quit;
         }
         choice
@@ -306,20 +415,21 @@ impl Picker {
             let keep = self.plays.get(self.selected).and_then(|p| p.project.clone()).unwrap_or_default();
             self.reload(&keep);
         }
-        let what = self.tr("What to play", "Que jugar");
-        draw_text(what, x + col_w - width(what, 16.0), 40.0, 16.0, DIM);
+        // the language, at the top right
+        let lw = 220.0_f32.min(col_w / 2.0);
+        self.language_button(Rect::new(x + col_w - lw, 10.0, lw, 30.0));
         let n = self.plays.len();
         // the selector: the cartridge, arrows either side, its kind and a dot per choice below
         let scale = [2.0, 1.5, 1.0].into_iter().find(|&s| cartridge_size(s).1 <= h - BELOW - CART_TOP).unwrap_or(1.0);
         let (cart_w, cart_h) = cartridge_size(scale);
         let cart = Rect::new((cx - cart_w / 2.0).round(), CART_TOP, cart_w, cart_h);
-        let wheel = mouse_wheel().1;
+        let wheel = if blocked() { 0.0 } else { mouse_wheel().1 };
         let step = |d: i32, s: &mut usize| *s = (*s as i32 + d).rem_euclid(n as i32) as usize;
         let mid = cart.y + cart.h / 2.0;
-        if arrow(cart.x - ARROW_GAP - ARROW_R, mid, -1.0, n > 1) || is_key_pressed(KeyCode::Left) || is_key_pressed(KeyCode::Up) || (wheel > 0.0) {
+        if arrow(cart.x - ARROW_GAP - ARROW_R, mid, -1.0, n > 1) || pressed(KeyCode::Left) || pressed(KeyCode::Up) || (wheel > 0.0) {
             step(-1, &mut self.selected);
         }
-        if arrow(cart.x + cart.w + ARROW_GAP + ARROW_R, mid, 1.0, n > 1) || is_key_pressed(KeyCode::Right) || is_key_pressed(KeyCode::Down) || (wheel < 0.0) {
+        if arrow(cart.x + cart.w + ARROW_GAP + ARROW_R, mid, 1.0, n > 1) || pressed(KeyCode::Right) || pressed(KeyCode::Down) || (wheel < 0.0) {
             step(1, &mut self.selected);
         }
         if let Some(p) = &mut self.preview {
@@ -334,7 +444,7 @@ impl Picker {
             centred(line, cx, below + 44.0, 15.0, DIM);
         }
         if n == 1 {
-            centred(self.tr("Projects made in the editor show here too.", "Aqui salen tambien los proyectos hechos en el editor."), cx, below + 64.0, 14.0, DIM);
+            centred(self.tr("Projects made in the editor show here too."), cx, below + 64.0, 14.0, DIM);
         } else {
             let dots = 10.0 * n as f32;
             for i in 0..n {
@@ -346,42 +456,42 @@ impl Picker {
                 }
             }
             let place = format!("{} / {n}", self.selected + 1);
-            draw_text(&place, x + col_w - width(&place, 14.0), below + 64.0, 14.0, DIM);
+            put(&place, x + col_w - width(&place, 14.0), below + 64.0, 14.0, DIM);
         }
         // actions on the choice
         let mut choice = Choice::Wait;
         let project = self.plays[self.selected].project.clone();
         let mut y = below + 74.0;
-        if button(Rect::new(x, y, col_w, 50.0), self.tr("Play", "Jugar"), "Enter", true, true) || is_key_pressed(KeyCode::Enter) || is_key_pressed(KeyCode::KpEnter) {
+        if button(Rect::new(x, y, col_w, 50.0), self.tr("Play"), "Enter", true, true) || pressed(KeyCode::Enter) || pressed(KeyCode::KpEnter) {
             choice = Choice::Play(self.plays[self.selected].clone());
         }
         y += 60.0;
         let half = (col_w - 10.0) / 2.0;
-        let edit = if project.is_some() { self.tr("Edit in the editor", "Editar en el editor") } else { self.tr("The original is not edited", "El original no se edita") };
-        if (button(Rect::new(x, y, half, 40.0), edit, "E", false, project.is_some()) || is_key_pressed(KeyCode::E)) && project.is_some() {
+        let edit = if project.is_some() { self.tr("Edit in the editor") } else { self.tr("The original is not edited") };
+        if (button(Rect::new(x, y, half, 40.0), edit, "E", false, project.is_some()) || pressed(KeyCode::E)) && project.is_some() {
             choice = Choice::Edit(project.clone());
         }
-        if button(Rect::new(x + half + 10.0, y, half, 40.0), self.tr("New project", "Proyecto nuevo"), "N", false, true) || is_key_pressed(KeyCode::N) {
+        if button(Rect::new(x + half + 10.0, y, half, 40.0), self.tr("New project"), "N", false, true) || pressed(KeyCode::N) {
             choice = Choice::Edit(None);
         }
         // the settings row, quieter
         y += 60.0;
         draw_line(x, y - 12.0, x + col_w, y - 12.0, 1.0, LINE);
         let third = (col_w - 20.0) / 3.0;
-        let cheats = format!("{} {}", if self.cheats { "[x]" } else { "[ ]" }, self.tr("Cheats", "Trucos"));
-        if button(Rect::new(x, y, third, 34.0), &cheats, "C", false, true) || is_key_pressed(KeyCode::C) {
+        let cheats = format!("{} {}", if self.cheats { "[x]" } else { "[ ]" }, self.tr("Cheats"));
+        if button(Rect::new(x, y, third, 34.0), &cheats, "C", false, true) || pressed(KeyCode::C) {
             choice = Choice::Cheats;
         }
-        if button(Rect::new(x + third + 10.0, y, third, 34.0), self.tr("Cartridge...", "Cartucho..."), "O", false, true) || is_key_pressed(KeyCode::O) {
+        if button(Rect::new(x + third + 10.0, y, third, 34.0), self.tr("Cartridge..."), "O", false, true) || pressed(KeyCode::O) {
             choice = Choice::Browse;
         }
-        if button(Rect::new(x + 2.0 * (third + 10.0), y, third, 34.0), self.tr("Quit", "Salir"), "Esc", false, true) || is_key_pressed(KeyCode::Escape) {
+        if button(Rect::new(x + 2.0 * (third + 10.0), y, third, 34.0), self.tr("Quit"), "Esc", false, true) || pressed(KeyCode::Escape) {
             choice = Choice::Quit;
         }
-        let note = format!("{} {}", self.tr("Base cartridge:", "Cartucho base:"), base.file_name().map(|f| f.to_string_lossy().to_string()).unwrap_or_default());
+        let note = format!("{} {}", self.tr("Base cartridge:"), base.file_name().map(|f| f.to_string_lossy().to_string()).unwrap_or_default());
         let lines = wrap(&note, col_w, 14.0);
         for (i, line) in lines.iter().enumerate() {
-            draw_text(line, x, h - 16.0 - (lines.len() - 1 - i) as f32 * 17.0, 14.0, DIM);
+            put(line, x, h - 16.0 - (lines.len() - 1 - i) as f32 * 17.0, 14.0, DIM);
         }
         choice
     }
@@ -445,7 +555,7 @@ fn draw_cartridge(r: Rect, scale: f32, title: Option<&Texture2D>, name: &str, or
 /// Split text into lines that fit `width` pixels at font size `size` (breaking long words
 /// such as paths anywhere).
 fn wrap(text: &str, width: f32, size: f32) -> Vec<String> {
-    let fits = |s: &str| measure_text(s, None, size as u16, 1.0).width <= width;
+    let fits = |s: &str| with_font(|font| measure_text(s, font, size as u16, 1.0).width) <= width;
     let mut lines = Vec::new();
     let mut cur = String::new();
     for word in text.split(' ') {
@@ -471,4 +581,14 @@ fn wrap(text: &str, width: f32, size: f32) -> Vec<String> {
         lines.push(cur);
     }
     lines
+}
+
+#[cfg(test)]
+mod start_texts {
+    #[test]
+    fn every_start_screen_text_has_every_language() {
+        let d = i18n::Dictionary::parse(super::START_TEXTS).unwrap();
+        let missing: Vec<&str> = d.entries(i18n::Lang::En).map(|e| e.0).filter(|en| !d.missing(en).is_empty()).collect();
+        assert!(missing.is_empty(), "{missing:?}");
+    }
 }

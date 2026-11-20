@@ -32,8 +32,10 @@ research tools find the cartridge from the command line, `RESEARCH_ROM`, the bas
 | Select | Backspace |
 
 Esc (the Menu binding; or Enter in a level) opens the pause menu: controls, display, sound,
-back to map, file select, language. F11: full screen. Hold left Ctrl (Fast forward in
-Controls): fast-forward.
+back to map, file select, language (the eleven of the editor). The language is also chosen on
+the start screen (the list at its top right, or L); until one is chosen the game takes the system's.
+A test game from the editor speaks the editor's language, for that game only. F11: full
+screen. Hold left Ctrl (Fast forward in Controls): fast-forward.
 
 A controller (gamepad, XInput or Windows.Gaming.Input) plays as soon as it is connected, together
 with the keyboard, which always plays. Controls' Input row chooses whose bindings the screen
@@ -163,10 +165,13 @@ the tag shown when a level begins lists them with the key that opens the menu.
 - Palettes zoom with their - + buttons or Ctrl - / Ctrl +; the side panel widens or narrows to
   fit (at most half the window). A cut palette scrolls with the wheel or a right-drag. The zoom
   is kept in `editor.cfg`.
-- Language: English, Spanish or Japanese, the system's until one is chosen in the Language
-  menu (Automatic goes back to the system's); kept in `editor.cfg`. The texts are in
-  `editor/i18n/editor.txt` (English, the text in the code, with its Spanish and Japanese);
-  Japanese is drawn with BIZ UDGothic (`editor/fonts/`, SIL Open Font License).
+- Language: English, Spanish, Japanese, Portuguese, French, German, Italian, Indonesian,
+  Russian, Simplified Chinese or Korean, the system's until one is chosen in the Language menu
+  (Automatic goes back to the system's); kept in `editor.cfg`. The texts are in
+  `editor/i18n/editor.txt` (English, the text in the code, with its translations); Japanese is
+  drawn with BIZ UDGothic, Chinese with Noto Sans SC, Korean and Russian with Noto Sans KR
+  (`fonts/`, SIL Open Font License). The translations other than Spanish and Japanese are
+  machine-written and await review by native speakers.
 - Projects: the editor works inside one, a folder with its project file (what the project is)
   and the cartridge made from it over the base cartridge (made again when missing or older, also
   by the game). At start (and from File, Projects..., Ctrl+Shift+O,

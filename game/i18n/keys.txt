@@ -1,0 +1,196 @@
+# The names of the keys in the game menu's Controls screen: each entry's English (in
+# `game/src/domain/keys.rs`) and its translations, in `i18n::Lang` order (see crates/i18n for
+# the format). Only the keys whose name changes are here; the pixel font's limits are in
+# `menu.txt`'s header.
+
+en: UP ARROW
+es: FLECHA ARR
+ja: UP ARROW
+pt: UP ARROW
+fr: UP ARROW
+de: UP ARROW
+it: UP ARROW
+id: UP ARROW
+ru: UP ARROW
+zh: UP ARROW
+ko: UP ARROW
+
+en: DOWN ARROW
+es: FLECHA ABA
+ja: DOWN ARROW
+pt: DOWN ARROW
+fr: DOWN ARROW
+de: DOWN ARROW
+it: DOWN ARROW
+id: DOWN ARROW
+ru: DOWN ARROW
+zh: DOWN ARROW
+ko: DOWN ARROW
+
+en: LEFT ARROW
+es: FLECHA IZQ
+ja: LEFT ARROW
+pt: LEFT ARROW
+fr: LEFT ARROW
+de: LEFT ARROW
+it: LEFT ARROW
+id: LEFT ARROW
+ru: LEFT ARROW
+zh: LEFT ARROW
+ko: LEFT ARROW
+
+en: RIGHT ARROW
+es: FLECHA DER
+ja: RIGHT ARROW
+pt: RIGHT ARROW
+fr: RIGHT ARROW
+de: RIGHT ARROW
+it: RIGHT ARROW
+id: RIGHT ARROW
+ru: RIGHT ARROW
+zh: RIGHT ARROW
+ko: RIGHT ARROW
+
+en: SPACE
+es: ESPACIO
+ja: SPACE
+pt: SPACE
+fr: SPACE
+de: SPACE
+it: SPACE
+id: SPACE
+ru: SPACE
+zh: SPACE
+ko: SPACE
+
+en: ENTER
+es: INTRO
+ja: ENTER
+pt: ENTER
+fr: ENTER
+de: ENTER
+it: ENTER
+id: ENTER
+ru: ENTER
+zh: ENTER
+ko: ENTER
+
+en: NUM ENTER
+es: INTRO NUM
+ja: NUM ENTER
+pt: NUM ENTER
+fr: NUM ENTER
+de: NUM ENTER
+it: NUM ENTER
+id: NUM ENTER
+ru: NUM ENTER
+zh: NUM ENTER
+ko: NUM ENTER
+
+en: BACKSPACE
+es: RETROCESO
+ja: BACKSPACE
+pt: BACKSPACE
+fr: BACKSPACE
+de: BACKSPACE
+it: BACKSPACE
+id: BACKSPACE
+ru: BACKSPACE
+zh: BACKSPACE
+ko: BACKSPACE
+
+en: L SHIFT
+es: MAYUS IZQ
+ja: L SHIFT
+pt: L SHIFT
+fr: L SHIFT
+de: L SHIFT
+it: L SHIFT
+id: L SHIFT
+ru: L SHIFT
+zh: L SHIFT
+ko: L SHIFT
+
+en: R SHIFT
+es: MAYUS DER
+ja: R SHIFT
+pt: R SHIFT
+fr: R SHIFT
+de: R SHIFT
+it: R SHIFT
+id: R SHIFT
+ru: R SHIFT
+zh: R SHIFT
+ko: R SHIFT
+
+en: L CTRL
+es: CTRL IZQ
+ja: L CTRL
+pt: L CTRL
+fr: L CTRL
+de: L CTRL
+it: L CTRL
+id: L CTRL
+ru: L CTRL
+zh: L CTRL
+ko: L CTRL
+
+en: R CTRL
+es: CTRL DER
+ja: R CTRL
+pt: R CTRL
+fr: R CTRL
+de: R CTRL
+it: R CTRL
+id: R CTRL
+ru: R CTRL
+zh: R CTRL
+ko: R CTRL
+
+en: COMMA
+es: COMA
+ja: COMMA
+pt: COMMA
+fr: COMMA
+de: COMMA
+it: COMMA
+id: COMMA
+ru: COMMA
+zh: COMMA
+ko: COMMA
+
+en: PERIOD
+es: PUNTO
+ja: PERIOD
+pt: PERIOD
+fr: PERIOD
+de: PERIOD
+it: PERIOD
+id: PERIOD
+ru: PERIOD
+zh: PERIOD
+ko: PERIOD
+
+en: MINUS
+es: MENOS
+ja: MINUS
+pt: MINUS
+fr: MINUS
+de: MINUS
+it: MINUS
+id: MINUS
+ru: MINUS
+zh: MINUS
+ko: MINUS
+
+en: SLASH
+es: BARRA
+ja: SLASH
+pt: SLASH
+fr: SLASH
+de: SLASH
+it: SLASH
+id: SLASH
+ru: SLASH
+zh: SLASH
+ko: SLASH
