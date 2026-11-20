@@ -54,3 +54,18 @@ objects are in it.
 #### Scenario: Further on
 - **WHEN** the object is moved 240 pixels right of Mario's start
 - **THEN** the warning is gone and the object appears when the screen reaches it
+
+### Requirement: A block content on a block that does not release it
+The level check SHALL warn about each block content ($11-$15) whose block (the one under it, half a block below its place) is not one that releases it ($00, $01, $02, $03, $7E), naming the place. The game's own block contents that never come out (level 05's heart inside a hill, those over block $06 in levels 10 and 31) SHALL be left unwarned while they stay where the game has them.
+
+#### Scenario: A hidden mushroom over ground
+- **WHEN** a hidden mushroom ($11) is placed over a ground block
+- **THEN** the Level tab warns that it does nothing there, and the warning shows its place
+
+#### Scenario: Over a ? block
+- **WHEN** it is moved over a ? block ($01)
+- **THEN** the warning goes away
+
+#### Scenario: The game's own
+- **WHEN** level 05 is opened unchanged
+- **THEN** its heart inside a hill gives no warning, while a hidden mushroom put next to it does
