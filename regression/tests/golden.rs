@@ -1,5 +1,5 @@
 //! Golden regression fingerprint: the workspace crates must reproduce, line for line, the
-//! fingerprint recorded from the legacy port (legacy/gb_port/tests/golden.rs).
+//! recorded fingerprint (`golden.txt`).
 //!
 //! Runs the emulator and the cartridge-knowledge code over the person's own ROM and writes
 //! a list of `key = value` lines (hashes and small values) to `regression/golden.txt` at the
@@ -17,8 +17,8 @@ use gb_core::Gb;
 use std::path::PathBuf;
 
 const SAMPLE_RATE: u32 = 44_100;
-/// Point levels the legacy port knew: the game's table ($00-$81).
-const LEGACY_POINTS: usize = 0x82;
+/// Point levels the fingerprint covers: the game's table ($00-$81).
+const GAME_POINTS: usize = 0x82;
 
 /// FNV-1a, 64 bit: tiny, dependency-free and stable across versions.
 fn fnv(data: impl AsRef<[u8]>) -> String {
@@ -46,8 +46,7 @@ fn rom_path() -> Option<PathBuf> {
     host::find_rom(None)
 }
 
-/// A save result as the legacy port printed it (`Ok("...")` / `Err("...")`), so the
-/// fingerprint lines stay comparable now that the results are typed.
+/// A save result as the fingerprint writes it (`Ok("...")` / `Err("...")`).
 fn shown<T: std::fmt::Display, E: std::fmt::Display>(r: &Result<T, E>) -> String {
     match r {
         Ok(v) => format!("Ok({:?})", v.to_string()),
@@ -174,7 +173,7 @@ fn rom_data(rom: &[u8], out: &mut Out) {
     out.put("rom.objects.region", format!("{:?}", objects::region(rom)));
 
     out.put("rom.world.picture", fnv(&world::read(rom)));
-    out.put("rom.world.point_levels", fnv(&world::point_levels(rom)[..LEGACY_POINTS]));
+    out.put("rom.world.point_levels", fnv(&world::point_levels(rom)[..GAME_POINTS]));
 
     let mut banks: Vec<u8> = (0..levels::LEVELS).map(|l| levels::header(rom, l).bank).collect();
     banks.sort();
@@ -210,7 +209,7 @@ fn rom_data(rom: &[u8], out: &mut Out) {
             out.put("exp.edit.reread_ok", levels::decode(&big, start).0 == map);
 
             world::write(&mut big, &world::read(rom));
-            let mut pts = world::point_levels(rom)[..LEGACY_POINTS].to_vec();
+            let mut pts = world::point_levels(rom)[..GAME_POINTS].to_vec();
             pts.reverse();
             world::write_point_levels(&mut big, &pts);
             out.put("exp.after_edit.rom", fnv(&big));

@@ -1,5 +1,6 @@
-# Build output
+# Build output and the packages (cargo xtask package)
 target/
+dist/
 
 # Never commit the cartridge or anything derived from it
 *.gb
@@ -7,22 +8,28 @@ target/
 *.sav
 rom/
 roms/
+base_cartridge.txt
+editor/projects/
 saves/
 edits/
 exports/
 cache/
-*.nmblevel
 *.nmbproject
+*.nmblevel
+*.nmbzone
+*.nmbworld
 *.points.txt
 *.progress.txt
 
-# Local settings written by the game
+# The programs' own settings
 settings.cfg
+editor.cfg
+
+# Planning notes kept on the developer's computer: OpenSpec changes, assistant settings
+openspec/changes/
+CLAUDE.md
 
 # Editors / OS
 .vscode/
 .idea/
 Thumbs.db
-editor/projects/
-base_cartridge.txt
-*.nmbworld

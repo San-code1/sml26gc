@@ -23,8 +23,10 @@ Layout and dependency rules: `docs/ARCHITECTURE.md`.
 
 ## OpenSpec
 
-OpenSpec files (`openspec/`: specs and changes) live in this repository, and the change is
-implemented here, on its feature branch.
+The specs (`openspec/specs/`) and the OpenSpec settings (`openspec/config.yaml`) are in the
+repository. Changes being planned or applied (`openspec/changes/`) stay on the developer's
+computer (`.gitignore`); archiving a change brings its result into the specs, which are
+committed. A change is implemented on its feature branch.
 
 ## Tests
 
@@ -54,3 +56,16 @@ say each thing in one place and link to it.
 - Commit messages: a short summary line, then what changed and why when it is not obvious.
 - No AI attribution in commits or pull requests (no `Co-Authored-By` or "Generated with" lines).
 - Never commit cartridges or anything derived from them (see `.gitignore`).
+
+## Licences
+
+The project is `GPL-3.0-or-later` (copyright The SML2 6GC authors): new files fall under it through
+`REUSE.toml`. Anything brought in from elsewhere (code, fonts, art) must have a licence
+compatible with the GPL, get its own entry in `REUSE.toml` and its licence text in `LICENSES/`.
+Nothing of the game or of Nintendo goes in (`LEGAL.md`).
+
+## Releases
+
+A package for another computer is only made with `cargo xtask package <target>`
+(`docs/DEVELOPMENT.md`, "Building for Windows"), never by copying from `target/release`, which holds the
+developer's own cartridge choice, projects and saves.

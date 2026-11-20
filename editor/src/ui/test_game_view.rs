@@ -71,7 +71,7 @@ impl Editor {
         power += stepper(x + PAD, cy, inner, "Mario", tr(lang, POWERS[power as usize % POWERS.len()]));
         cy += ROW + GAP + 4.0;
         for line in &note {
-            put_text(line, x + PAD, cy + NOTE - 2.0, NOTE, col(2));
+            put_text(line, x + PAD, cy + NOTE - 2.0, NOTE, INFO);
             cy += NOTE + 2.0;
         }
         cy += 8.0;

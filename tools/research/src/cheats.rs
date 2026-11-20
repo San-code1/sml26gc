@@ -300,8 +300,9 @@ pub fn timer_probe(rom: &Path, level: u8) {
 
 /// In level `level`, after 60 frames write `pokes` ("a24f=0c,ff9b=18"), then for 3000 frames
 /// print every change of the game mode with the level number ($A269), pressing A now and
-/// then on screens that wait for it.
-pub fn finish_probe(rom: &Path, level: u8, pokes: &str) {
+/// then on screens that wait for it; the screens of frames 200-1100 go side by side in
+/// `<dir>/finish.png` (the current folder when `dir` is empty).
+pub fn finish_probe(rom: &Path, level: u8, pokes: &str, dir: &Path) {
     let Some(mut g) = probed(rom) else { return };
     if !g.boot_to_map() || !g.enter_level_anywhere(level) {
         return;
@@ -333,7 +334,11 @@ pub fn finish_probe(rom: &Path, level: u8, pokes: &str) {
     }
     let mut rgba = vec![0u8; all.len() * 4];
     gb_core::palette::fb_to_rgba(&all, &gb_core::palette::PALETTES[0], &mut rgba);
-    let _ = host::png_out::write_rgba(Path::new("finish.png"), w * shots.len(), h, &rgba);
+    let p = dir.join("finish.png");
+    match host::png_out::write_rgba(&p, w * shots.len(), h, &rgba) {
+        Ok(()) => println!("wrote {}", p.display()),
+        Err(e) => println!("{e}"),
+    }
 }
 
 /// Level `level` started on its bell (Mario put where the bell object is, so he takes it),

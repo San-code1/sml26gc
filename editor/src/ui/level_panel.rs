@@ -309,13 +309,13 @@ impl Editor {
         let per_line = ((w / 7.5) as usize).max(10);
         for line in wrap(text, per_line) {
             if let Some(y) = rows.next(16.0) {
-                put_text(&line, PAD, y + 12.0, 14.0, col(2));
+                put_text(&line, PAD, y + 12.0, 14.0, INFO);
             }
         }
     }
 
     fn note(x: f32, y: f32, w: f32, text: &str) {
-        put_text(&fit(text, w, 14.0), x, y + 18.0, 14.0, col(2));
+        put_text(&fit(text, w, 14.0), x, y + 18.0, 14.0, INFO);
     }
 
     /// The shown level's inspector: level, goals, settings and warnings.
@@ -503,7 +503,7 @@ impl Editor {
         self.heading(&mut rows, &format!("{} ({})", tr(lang, "WARNINGS"), warnings.len()));
         if warnings.is_empty() {
             if let Some(y) = rows.next(20.0) {
-                put_text(tr(lang, "None: the level looks fine."), PAD, y + 14.0, 15.0, col(2));
+                put_text(tr(lang, "None: the level looks fine."), PAD, y + 14.0, 15.0, INFO);
             }
         }
         for wa in &warnings {

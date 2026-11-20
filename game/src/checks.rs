@@ -1,5 +1,5 @@
 //! Checks of the game's own additions, run from the command line without a window:
-//!   game --research menushots DIR         the pause menu's screens in every language (Controls
+//!   sml26gc --research menushots DIR      the pause menu's screens in every language (Controls
 //!                                         with the keyboard and with the controller)
 use crate::domain::menu::Menu;
 use crate::domain::settings::Settings;
@@ -44,6 +44,6 @@ pub fn research_main(rom: &Path, v: &[String]) {
     let g = |i: usize| v.get(i).cloned().unwrap_or_default();
     match g(0).as_str() {
         "menushots" => menu_shots(rom, Path::new(&g(1))),
-        _ => eprintln!("game --research menushots DIR   (other research commands: research.exe)"),
+        _ => eprintln!("sml26gc --research menushots DIR   (other research commands: the research tool, tools/research)"),
     }
 }

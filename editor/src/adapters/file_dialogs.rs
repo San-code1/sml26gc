@@ -48,7 +48,7 @@ impl FileDialogs for SystemDialogs {
     }
 
     fn pick_cartridge(&self) -> Option<PathBuf> {
-        let dir = host::base_cartridge::chosen_before().and_then(|p| p.parent().map(|d| d.to_path_buf())).unwrap_or_else(host::exe_dir);
+        let dir = host::base_cartridge::chosen_before().and_then(|p| p.parent().map(|d| d.to_path_buf())).unwrap_or_else(host::paths::data_dir);
         let (what, title) = (tr(self.lang, "Game Boy cartridges"), tr(self.lang, "Choose the Super Mario Land 2 cartridge"));
         imp::dialog(self.owner, what, title, "gb", None, &dir)
     }

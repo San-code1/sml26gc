@@ -60,7 +60,7 @@ impl Editor {
         draw_rectangle(self.panel - 3.0, 0.0, 3.0, screen_height(), col(3));
         let w = self.panel - 2.0 * PAD - 8.0;
         put_text(tr(lang, "NEW BLANK ZONE"), PAD, 25.0, 20.0, col(3));
-        put_text(tr(lang, "Graphics and music of:"), PAD, 52.0, 15.0, col(2));
+        put_text(tr(lang, "Graphics and music of:"), PAD, 52.0, 15.0, INFO);
         let mut y = 60.0;
         for (j, b) in BASES.iter().enumerate() {
             let name = zone_name(lang, b.zone);

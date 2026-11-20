@@ -110,3 +110,15 @@ id: Proyek tidak muat di kartrid:
 ru: Проект не помещается в картридж:
 zh: 项目放不进卡带:
 ko: 프로젝트가 카트리지에 들어가지 않습니다:
+
+en: This folder cannot be written: settings, projects and saves will not be kept. Move the program's folder somewhere you can write, such as Documents.
+es: No se puede escribir en esta carpeta: no se guardaran ajustes, proyectos ni partidas. Mueve la carpeta del programa a un sitio donde puedas escribir, como Documentos.
+ja: このフォルダーに書き込めません。設定、プロジェクト、セーブは保存されません。プログラムのフォルダーを「ドキュメント」など書き込める場所に移してください。
+pt: Nao e possivel gravar nesta pasta: configuracoes, projetos e saves nao serao guardados. Mova a pasta do programa para um lugar onde possa gravar, como Documentos.
+fr: Impossible d'ecrire dans ce dossier : reglages, projets et sauvegardes ne seront pas conserves. Deplacez le dossier du programme a un endroit ou vous pouvez ecrire, comme Documents.
+de: In diesen Ordner kann nicht geschrieben werden: Einstellungen, Projekte und Spielstaende werden nicht gespeichert. Verschiebe den Programmordner an einen beschreibbaren Ort, z. B. Dokumente.
+it: Impossibile scrivere in questa cartella: impostazioni, progetti e salvataggi non verranno conservati. Sposta la cartella del programma in un luogo scrivibile, come Documenti.
+id: Folder ini tidak dapat ditulis: pengaturan, proyek, dan simpanan tidak akan disimpan. Pindahkan folder program ke tempat yang dapat ditulis, seperti Dokumen.
+ru: В эту папку нельзя записывать: настройки, проекты и сохранения не будут сохранены. Переместите папку программы туда, где разрешена запись, например в Документы.
+zh: 无法写入此文件夹：设置、项目和存档将不会保存。请将程序文件夹移到可以写入的位置，例如"文档"。
+ko: 이 폴더에 쓸 수 없습니다. 설정, 프로젝트, 세이브가 저장되지 않습니다. 프로그램 폴더를 문서처럼 쓸 수 있는 곳으로 옮기세요.

@@ -1,7 +1,7 @@
 //! Where every file lives. The game and the editor both use these, so they always agree
 //! (this is part of the contract between them, see docs/ARCHITECTURE.md, "Contract between game and editor").
 //!
-//! Next to the executables:
+//! In the data folder (`data_dir`, the executables' own folder: the programs are portable):
 //!   base_cartridge.txt                the original cartridge file both programs use
 //!   settings.cfg                      the game's settings
 //!   editor.cfg                        the editor's own settings
@@ -13,9 +13,28 @@
 //!   exports\                          level, zone, world map and project files the editor writes
 use std::path::{Path, PathBuf};
 
-/// The folder the running program sits in.
+/// The folder the running program sits in (where the other program is found).
 pub fn exe_dir() -> PathBuf {
     std::env::current_exe().ok().and_then(|e| e.parent().map(|p| p.to_path_buf())).unwrap_or_else(|| PathBuf::from("."))
+}
+
+/// The folder every data file lives in: the executables' folder on every platform so far, so
+/// the unpacked package is self-contained.
+pub fn data_dir() -> PathBuf {
+    exe_dir()
+}
+
+/// Why the data folder is of no use, in `lang`: None when it can be written. Tried by making and
+/// removing a file.
+pub fn data_dir_problem(lang: i18n::Lang) -> Option<&'static str> {
+    (!data_dir_writable()).then(|| crate::texts::tr(lang, "This folder cannot be written: settings, projects and saves will not be kept. Move the program's folder somewhere you can write, such as Documents."))
+}
+
+fn data_dir_writable() -> bool {
+    let probe = data_dir().join(format!(".write-test-{}", std::process::id()));
+    let ok = std::fs::write(&probe, b"").is_ok();
+    let _ = std::fs::remove_file(&probe);
+    ok
 }
 
 fn stem(rom: &Path) -> String {
@@ -24,15 +43,15 @@ fn stem(rom: &Path) -> String {
 
 /// The file naming the base cartridge (`base_cartridge`).
 pub fn base_cartridge_path() -> PathBuf {
-    exe_dir().join("base_cartridge.txt")
+    data_dir().join("base_cartridge.txt")
 }
 
 pub fn settings_path() -> PathBuf {
-    exe_dir().join("settings.cfg")
+    data_dir().join("settings.cfg")
 }
 
 pub fn editor_settings_path() -> PathBuf {
-    exe_dir().join("editor.cfg")
+    data_dir().join("editor.cfg")
 }
 
 /// The longest project name.
@@ -53,7 +72,7 @@ pub fn valid_project_name(name: &str) -> bool {
 }
 
 pub fn projects_dir() -> PathBuf {
-    exe_dir().join("editor").join("projects")
+    data_dir().join("editor").join("projects")
 }
 
 pub fn project_dir(name: &str) -> PathBuf {
@@ -96,7 +115,7 @@ pub fn projects() -> Vec<String> {
 
 /// Where a game's saves go: `saves/vanilla` for the original cartridge, else the project's.
 pub fn saves_dir(project: Option<&str>) -> PathBuf {
-    exe_dir().join("saves").join(project.unwrap_or("vanilla"))
+    data_dir().join("saves").join(project.unwrap_or("vanilla"))
 }
 
 /// The battery save in a saves folder.
@@ -111,7 +130,7 @@ pub fn zones_file(saves: &Path) -> PathBuf {
 
 /// Where the editor's Save and Open dialogs start, by kind of file.
 pub fn exports_dir() -> PathBuf {
-    exe_dir().join("exports")
+    data_dir().join("exports")
 }
 
 pub fn project_exports(name: &str) -> PathBuf {
@@ -128,13 +147,17 @@ pub fn zone_exports() -> PathBuf {
 
 /// The game program, next to the editor.
 pub fn game_exe() -> PathBuf {
-    exe_dir().join(if cfg!(windows) { "game.exe" } else { "game" })
+    exe_dir().join(format!("{GAME_PROGRAM}{}", std::env::consts::EXE_SUFFIX))
 }
 
 /// The editor program, next to the game.
 pub fn editor_exe() -> PathBuf {
-    exe_dir().join(if cfg!(windows) { "editor.exe" } else { "editor" })
+    exe_dir().join(format!("{EDITOR_PROGRAM}{}", std::env::consts::EXE_SUFFIX))
 }
+
+/// The programs' names (the `[[bin]]` names of `game` and `editor`), without the system's suffix.
+pub const GAME_PROGRAM: &str = "sml26gc";
+pub const EDITOR_PROGRAM: &str = "sml26gc_editor";
 
 #[cfg(test)]
 mod tests {
@@ -148,6 +171,14 @@ mod tests {
         assert!(battery_file(&saves_dir(Some("Islands"))).ends_with("saves/Islands/game.sav"));
         assert!(zones_file(&saves_dir(None)).ends_with("saves/vanilla/zones.txt"));
         assert!(project_exports("Islands").ends_with("exports/projects/Islands"));
+    }
+
+    #[test]
+    fn the_programs_find_each_other_by_their_bin_names() {
+        let manifest = |crate_dir: &str| std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").join(crate_dir).join("Cargo.toml")).unwrap().replace('\r', "");
+        assert!(manifest("game").contains(&format!("[[bin]]\nname = \"{GAME_PROGRAM}\"")));
+        assert!(manifest("editor").contains(&format!("[[bin]]\nname = \"{EDITOR_PROGRAM}\"")));
+        assert!(game_exe().file_stem().is_some_and(|s| s == GAME_PROGRAM));
     }
 
     #[test]

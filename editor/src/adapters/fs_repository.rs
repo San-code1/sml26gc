@@ -189,7 +189,7 @@ impl LookFile {
     pub fn for_cartridge(original: &[u8]) -> LookFile {
         // FNV-1a
         let hash = original.iter().fold(0xcbf2_9ce4_8422_2325u64, |h, &b| (h ^ b as u64).wrapping_mul(0x0100_0000_01b3));
-        LookFile { path: host::exe_dir().join("cache").join(format!("looks-{hash:016x}.txt")) }
+        LookFile { path: host::paths::data_dir().join("cache").join(format!("looks-{hash:016x}.txt")) }
     }
 }
 

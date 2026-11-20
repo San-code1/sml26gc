@@ -3,5 +3,7 @@ name = "i18n"
 description = "Languages and a translation dictionary keyed by the English text."
 version.workspace = true
 edition.workspace = true
+license.workspace = true
+authors.workspace = true
 
 [dependencies]

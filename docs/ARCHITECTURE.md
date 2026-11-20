@@ -14,11 +14,12 @@ with ports and adapters around them. Behaviour is guarded by the golden fingerpr
 | `crates/host` | Shared adapters: the base cartridge, file locations, a project's cartridge made from its file, battery saves, settings file, PNG output, the system's language |
 | `crates/i18n` | Languages and a translation dictionary keyed by the English text (the catalogues: `editor/i18n/editor.txt`, `crates/host/i18n/host.txt`, and the game's `game/i18n/`: `start.txt` the start screen, `menu.txt` the pause menu, `keys.txt` the key names). No dependencies |
 | `crates/fonts` | The fonts a language needs beyond the built-in one (`fonts/`, SIL Open Font License), as bytes. Depends on `i18n` only |
-| `game/` | Application: the game (`game.exe`) |
-| `editor/` | Application: the editor (`editor.exe`) |
+| `game/` | Application: the game (`sml26gc.exe`) |
+| `editor/` | Application: the editor (`sml26gc_editor.exe`) |
+| `crates/app-resources` | Build time only: the programs' icons (`assets/icons/`) and Windows version details, for their build scripts |
 | `tools/research/` | Reverse-engineering CLI (`research.exe`) |
 | `regression/` | Golden fingerprint test |
-| `legacy/gb_port/` | The original single-crate port, kept as reference; built on its own |
+| `xtask/` | The release tool (`cargo xtask`): a platform's package folder and zip |
 
 ```
  game ─────┐                                       tools/research ─┐
@@ -34,6 +35,26 @@ with ports and adapters around them. Behaviour is guarded by the golden fingerpr
 - `i18n` is used by `host` and the applications; it knows no files and no system.
 - `fonts` is used by the applications; it holds data only (no window library).
 - `game` and `editor` do not depend on each other; they share only the contract below.
+
+## Platforms and packaging
+
+What depends on the operating system (window menus, file dialogs, the system language, the
+console, starting the other program, icons and version details) is only in `adapters/` folders,
+`crates/host`, `crates/app-resources`, build scripts and `xtask/`, each piece with a Windows
+branch and a fallback for other systems; `crates/host/tests/platform_boundary.rs` checks it.
+Every data file lives in `host::paths::data_dir()` (the executables' folder: the programs are
+portable); `exe_dir()` only finds the other program.
+
+Windows builds link the C runtime in (`.cargo/config.toml`) and use the window subsystem; the
+programs call `host::console::attach()` so their command-line modes print to the terminal they
+were started from. The product's name and short id are `PRODUCT_NAME` / `PRODUCT_ID` in
+`.cargo/config.toml`; the version is the workspace's.
+
+`cargo xtask package TARGET` builds `game` and `editor` with the `dist` profile for the target's
+triple (into `target/<triple>/dist/`, apart from `target/release`), checks the executables'
+imports, and assembles `dist/TARGET/sml26gc/` (executables, `packaging/` texts, font licences,
+the third-party crates' licences from `cargo metadata`) and its zip. A new platform is one entry
+of `TARGETS` in `xtask/src/main.rs` and its adapters' branches.
 
 ## `gb-core`
 
@@ -117,7 +138,7 @@ editor/src/
 ├─ ports.rs       EditedCopyStore, GameLauncher, PrefsStore, FileDialogs, TextFiles, MenuBar,
 │                 SoundOut, LookStore
 ├─ adapters/      file repository (edited copy, editor.cfg, text files), Win32 file dialogs
-│                 and menu bar, game.exe launcher, cpal speakers
+│                 and menu bar, the game's launcher, cpal speakers
 ├─ ui/            macroquad panels: level, objects, palettes, world map, status bar, widgets;
 │                 grid_edit (painting and clipboard shared by both views), shortcuts (one
 │                 table for keys and button labels), menu (the File menu), files_view
@@ -141,8 +162,8 @@ trace, ROM views, and checks that play the edited data in the emulator (`routech
 
 | Item | Format |
 |---|---|
-| Start the game | `game.exe <rom> [--project NAME \| --test [--lives N] [--coins N]] [--level N [--start X,Y]] [--cheats]` (no rom: the start screen; `--test`: no saves, those lives and coins, 99 and 999 when not given; `--start`: Mario's left x and feet y for that start only) |
-| Start the editor (from the game) | `editor.exe [--project NAME \| --new-project]` (the project opened, or the project screen typing a new one) |
+| Start the game | `sml26gc.exe <rom> [--project NAME \| --test [--lives N] [--coins N] [--power N]] [--level N [--start X,Y] \| --point P] [--lang ID] [--cheats]` (no rom: the start screen; `--test`: no saves, those lives and coins, 99 and 999 when not given, Mario's power 0-3; `--start`: Mario's left x and feet y for that start only; `--point`: a map point in hex, `PP@K` in new zone K; `--lang`: the language of that game only) |
+| Start the editor (from the game) | `sml26gc_editor.exe [--project NAME \| --new-project]` (the project opened, or the project screen typing a new one) |
 | Base cartridge (checked by SHA-1) | `base_cartridge.txt` |
 | A project (its file, and the cartridge made from it over the base cartridge when missing or older) | `editor/projects/<name>/<name>.nmbproject`, `editor/projects/<name>/<base name> - <name>.gb` |
 | Battery saves | `saves/vanilla/game.sav`, `saves/<project>/game.sav` |
