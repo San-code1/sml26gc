@@ -3,6 +3,8 @@ name = "xtask"
 description = "The release tool: builds a platform's package folder and zip (`cargo xtask package windows-x64`)."
 version.workspace = true
 edition.workspace = true
+license.workspace = true
+authors.workspace = true
 publish = false
 
 [dependencies]

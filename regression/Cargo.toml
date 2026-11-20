@@ -3,6 +3,8 @@ name = "regression"
 description = "Golden fingerprint test: the emulator and the cartridge code must keep behaving exactly as recorded in golden.txt."
 version.workspace = true
 edition.workspace = true
+license.workspace = true
+authors.workspace = true
 publish = false
 
 [lib]

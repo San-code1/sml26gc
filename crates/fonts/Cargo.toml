@@ -3,6 +3,8 @@ name = "fonts"
 description = "The fonts the programs draw their texts with in the languages the built-in font cannot write."
 version.workspace = true
 edition.workspace = true
+license.workspace = true
+authors.workspace = true
 
 [dependencies]
 i18n.workspace = true

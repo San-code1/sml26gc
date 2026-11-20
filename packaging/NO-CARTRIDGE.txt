@@ -13,4 +13,5 @@ The edited copies the editor makes are derived from your cartridge file: they ar
 use and are not to be shared.
 
 Super Mario Land 2: 6 Golden Coins is a trademark of its owners. These programs are not
-affiliated with, sponsored or endorsed by Nintendo.
+affiliated with, sponsored or endorsed by Nintendo, and they are given away free: nobody makes
+money from them. The grounds on which they are made and shared are in LEGAL.md.

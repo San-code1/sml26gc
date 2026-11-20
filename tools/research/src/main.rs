@@ -117,7 +117,7 @@ const COMMANDS: &[(&str, Run)] = &[
     ("summonprobe", |r, a| cheats::summon_probe(r, a.num(1) as u8, &a.list(2))),
     ("lookprobe", |r, a| cheats::look_probe(r, a.num(1) as u8, a.hex(2) as u8, &a.list(3), &a.path(4))),
     ("timerprobe", |r, a| cheats::timer_probe(r, a.num(1) as u8)),
-    ("finishprobe", |r, a| cheats::finish_probe(r, a.num(1) as u8, &a.s(2))),
+    ("finishprobe", |r, a| cheats::finish_probe(r, a.num(1) as u8, &a.s(2), &a.path(3))),
     ("bellprobe", |r, a| cheats::bell_probe(r, a.num(1) as u8)),
     ("tilesprobe", |r, _a| cheats::tiles_probe(r)),
     ("patchprobe", |r, a| cheats::patch_probe(r, a.num(1) as u8, a.num(2), a.num(3), &a.s(4))),

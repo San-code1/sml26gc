@@ -11,3 +11,4 @@ rustflags = ["-C", "target-feature=+crt-static"]
 [env]
 PRODUCT_NAME = "SML2 6GC Emulator and Level Editor"
 PRODUCT_ID = "sml26gc"
+PRODUCT_SOURCE = "https://github.com/ogueta93/nmb"

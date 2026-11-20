@@ -1,0 +1,27 @@
+# Who holds the copyright of each file and under which licence (https://reuse.software).
+# The licence texts are in LICENSES/. See LEGAL.md.
+version = 1
+
+[[annotations]]
+path = "**"
+precedence = "closest"
+SPDX-FileCopyrightText = "2026 The SML2 6GC authors"
+SPDX-License-Identifier = "GPL-3.0-or-later"
+
+[[annotations]]
+path = ["fonts/BIZUDGothic-Regular.ttf", "fonts/OFL-BIZUDGothic.txt"]
+precedence = "override"
+SPDX-FileCopyrightText = "2022 The BIZ UDGothic Project Authors (https://github.com/googlefonts/morisawa-biz-ud-mincho)"
+SPDX-License-Identifier = "OFL-1.1"
+
+[[annotations]]
+path = ["fonts/NotoSansSC-Regular.otf", "fonts/NotoSansKR-Regular.otf", "fonts/OFL-NotoSansCJK.txt"]
+precedence = "override"
+SPDX-FileCopyrightText = "2014-2021 Adobe (http://www.adobe.com/), with Reserved Font Name 'Source'"
+SPDX-License-Identifier = "OFL-1.1"
+
+[[annotations]]
+path = ["game/src/domain/glyphs_cjk.rs", "fonts/OFL-FusionPixelFont.txt"]
+precedence = "override"
+SPDX-FileCopyrightText = "2022 TakWolf (https://takwolf.com)"
+SPDX-License-Identifier = "OFL-1.1"
