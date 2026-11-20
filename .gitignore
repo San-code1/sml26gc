@@ -25,11 +25,22 @@ cache/
 settings.cfg
 editor.cfg
 
-# Planning notes kept on the developer's computer: OpenSpec changes, assistant settings
+# Planning notes and assistant settings kept on the developer's computer
 openspec/changes/
 CLAUDE.md
+.claude/
+
+# Local secrets
+.env
+.env.*
+
+# What the tools write in the folder they run from (pictures and reports of the game)
+/*.png
+/*.json
 
 # Editors / OS
 .vscode/
 .idea/
 Thumbs.db
+desktop.ini
+.DS_Store
