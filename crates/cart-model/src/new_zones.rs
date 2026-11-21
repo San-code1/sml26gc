@@ -77,7 +77,7 @@ impl Base {
 
     /// The numbers a new zone of this base can give its points: its block, `SPARE`, then the
     /// added points' (`added_points`).
-    pub fn usable(&self) -> impl Iterator<Item = u8> {
+    pub fn usable(&self) -> impl Iterator<Item = u8> + use<> {
         self.numbers().chain(SPARE).chain(added_points::numbers())
     }
 

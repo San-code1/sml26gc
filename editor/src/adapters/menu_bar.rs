@@ -73,8 +73,8 @@ mod imp {
             }
             return 0;
         }
-        let previous: WNDPROC = std::mem::transmute(PREVIOUS.load(Ordering::SeqCst));
-        CallWindowProcW(previous, hwnd, msg, w, l)
+        let previous: WNDPROC = unsafe { std::mem::transmute(PREVIOUS.load(Ordering::SeqCst)) };
+        unsafe { CallWindowProcW(previous, hwnd, msg, w, l) }
     }
 
     pub fn take_chosen() -> Vec<u16> {

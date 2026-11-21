@@ -48,3 +48,14 @@ Code that depends on the operating system (window menus, file dialogs, the syste
 #### Scenario: Adding a platform
 - **WHEN** Linux support is added
 - **THEN** the work is new adapters, a new package target and their tests, and no domain or application module changes
+
+### Requirement: Built with the current Rust
+The workspace SHALL use the current Rust edition (2024) with its dependency resolver (3), and declare as `rust-version` the stable toolchain it is built and tested with (1.100). Every crate SHALL take the edition from the workspace. The whole workspace SHALL build without warnings, and the tests, the regression fingerprint included, SHALL pass unchanged: the edition changes the code's language rules, never what the programs do.
+
+#### Scenario: Building with the declared toolchain
+- **WHEN** the workspace is built and tested with Rust 1.100
+- **THEN** it builds without warnings and every test passes, with the regression fingerprint matching `regression/golden.txt`
+
+#### Scenario: An older toolchain
+- **WHEN** someone builds with a Rust older than 1.100
+- **THEN** Cargo says the project needs Rust 1.100
