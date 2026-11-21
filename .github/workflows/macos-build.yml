@@ -1,0 +1,32 @@
+# Builds and packages the macOS port on a GitHub Mac (no cartridge: tests that need it skip).
+name: macOS build
+on:
+  push:
+    branches: [ci/macos-build]
+  workflow_dispatch:
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, macos-13]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup toolchain install 1.100 --profile minimal && rustup default 1.100 && rustup target add aarch64-apple-darwin x86_64-apple-darwin
+      - run: sw_vers && uname -m
+      - run: cargo build --release
+      - run: cargo xtask package macos-universal
+      - run: |
+          for app in "dist/macos-universal/sml26gc/"*.app; do
+            exe="$app/Contents/MacOS/$(defaults read "$PWD/$app/Contents/Info" CFBundleExecutable)"
+            lipo -archs "$exe"; otool -L "$exe"; vtool -show-build "$exe" | grep -E "minos|architecture"
+            codesign --verify --deep --strict --verbose=2 "$app"
+          done
+          shasum -a 256 dist/*.zip
+      - run: cargo test --release --workspace
+      - uses: actions/upload-artifact@v4
+        if: matrix.os == 'macos-15'
+        with:
+          name: sml26gc-macos-universal
+          path: dist/*.zip
