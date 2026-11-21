@@ -5,7 +5,7 @@ version = 1
 [[annotations]]
 path = "**"
 precedence = "closest"
-SPDX-FileCopyrightText = "2026 The SML2 6GC authors"
+SPDX-FileCopyrightText = "2026 ogueta93 (https://github.com/ogueta93) and the SML2 6GC authors"
 SPDX-License-Identifier = "GPL-3.0-or-later"
 
 [[annotations]]

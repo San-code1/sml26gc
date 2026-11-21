@@ -70,6 +70,6 @@ What a computer needs and what to do when a program does not start: the read-me 
 
 ## Licence
 
-Copyright 2026 The SML2 6GC authors. Free software under the GNU General Public License, version 3 or later
+Copyright 2026 ogueta93 (https://github.com/ogueta93) and the SML2 6GC authors. Free software under the GNU General Public License, version 3 or later
 ([`LICENSE`](LICENSE)); the fonts are under the SIL Open Font License 1.1. Which licence covers
 each file: [`REUSE.toml`](REUSE.toml). Legal notice: [`LEGAL.md`](LEGAL.md).
