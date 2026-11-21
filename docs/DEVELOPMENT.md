@@ -50,6 +50,26 @@ them out first.
 
 Never run `cargo fmt`: the code is formatted by hand (`AGENTS.md`).
 
+## Working with OpenSpec after cloning
+
+Changes are planned as specs with OpenSpec (optional, see `AGENTS.md`, "OpenSpec"). A clone holds
+the specs (`openspec/specs/`) and the settings (`openspec/config.yaml`); the tool and the
+commands for your coding assistant are set up on each computer:
+
+1. Install the tool (it needs Node.js): `npm install -g @fission-ai/openspec`. From then on
+   `openspec list --specs`, `openspec show <spec>` and `openspec validate --specs --strict` work
+   on the specs, and `openspec new change <name>` / `openspec archive <name>` plan and close a
+   change.
+2. Give your assistant its OpenSpec commands, if you use one: in the repository's folder,
+   `openspec init --tools <assistant>` (for example `claude`, `cursor`, `github-copilot`,
+   `codex`; `openspec init --help` lists them all). It keeps the existing `openspec/` folder.
+3. Commit none of what this leaves on your computer: the changes being planned
+   (`openspec/changes/`) are ignored by git, and the files written for your assistant are your
+   own. After `openspec init`, check `git status` and leave out anything it added or changed.
+
+Archiving a change updates `openspec/specs/`: that, with the code, is what a feature branch
+commits.
+
 ## Building for Windows
 
 The package another person unpacks and runs:
