@@ -1,7 +1,7 @@
 # SML2 6GC Emulator and Level Editor
 
-Two programs for Super Mario Land 2: 6 Golden Coins, written in Rust, that use **your own**
-cartridge file:
+Two programs for Super Mario Land 2: 6 Golden Coins, written in Rust, that use the cartridge file
+**Super Mario Land 2 - 6 Golden Coins (USA, Europe).gb**, made from your own cartridge:
 
 - **`sml26gc`**, the game: an emulated Game Boy runs the original cartridge's program unchanged,
   with a resizable window or full screen, colour palettes, keyboard and controllers with any
@@ -13,9 +13,15 @@ cartridge file:
   each saved as an edited copy of the cartridge that the game's own program plays. Manual:
   [`docs/EDITOR.md`](docs/EDITOR.md).
 
-No game is included: you use a cartridge file from your own backup of a cartridge you own.
-Cartridges, saves and projects never go into this repository (see `.gitignore`). Not affiliated
-with or endorsed by Nintendo.
+No game is included: you use a cartridge file from your own backup of a cartridge you own. The
+programs accept exactly one dump, recognised by its contents whatever the file is called:
+
+| Cartridge file | SHA-1 |
+|---|---|
+| Super Mario Land 2 - 6 Golden Coins (USA, Europe).gb | `96e3a314561fb394cdf51101f9178a32713c2313` |
+
+Another version or a modified file is refused. Cartridges, saves and projects never go into this
+repository (see `.gitignore`). Not affiliated with or endorsed by Nintendo.
 
 ## How it is made
 
