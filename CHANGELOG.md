@@ -6,6 +6,12 @@ What each version of the programs brings, as a person using them notices it. The
 
 ## [Unreleased]
 
+### Changed
+
+- The programs, the read-me and the manuals name the one cartridge file accepted with its
+  revision, Super Mario Land 2 - 6 Golden Coins (USA, Europe) (Rev 1), and say that revisions 0
+  and 2 are refused. The accepted file is the same as before.
+
 ## [1.0.0] - 2026-11-21
 
 ### Added

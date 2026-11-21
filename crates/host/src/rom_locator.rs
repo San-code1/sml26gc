@@ -44,7 +44,7 @@ pub fn find_rom(arg: Option<PathBuf>) -> Option<PathBuf> {
     }
     let home = std::env::var("USERPROFILE").or_else(|_| std::env::var("HOME")).ok()?;
     let games = Path::new(&home).join("Games");
-    if let Some(r) = first_rom_in(&games.join("Super Mario Land 2 - 6 Golden Coins (USA, Europe)")) {
+    if let Some(r) = first_rom_in(&games.join("Super Mario Land 2 - 6 Golden Coins (USA, Europe) (Rev 1)")) {
         return Some(r);
     }
     for e in std::fs::read_dir(&games).ok()?.flatten() {

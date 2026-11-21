@@ -60,3 +60,14 @@ the original and `saves/<project>/` for a project.
 #### Scenario: Separate progress
 - **WHEN** a level is cleared playing "Islands" and VANILLA is chosen afterwards
 - **THEN** the original's progress does not have that level cleared
+
+### Requirement: The supported cartridge's name
+The supported cartridge SHALL be named in the game's texts with its revision, as Super Mario Land 2 - 6 Golden Coins (USA, Europe) (Rev 1), both when the game asks for it and when it refuses another file; the refusal SHALL say that other revisions of the game are refused too.
+
+#### Scenario: Asking for the cartridge
+- **WHEN** the game starts and no base cartridge was ever chosen
+- **THEN** it asks for the Super Mario Land 2 - 6 Golden Coins (USA, Europe) (Rev 1) cartridge file
+
+#### Scenario: Another revision
+- **WHEN** a file of revision 0 of Super Mario Land 2 - 6 Golden Coins (USA, Europe) is chosen
+- **THEN** it is refused, and the message names Super Mario Land 2 - 6 Golden Coins (USA, Europe) (Rev 1) and says other revisions are refused

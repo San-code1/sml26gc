@@ -21,7 +21,7 @@ game plays exactly as the original; everything below is added around it.
 ## Starting
 
 The first time, the game asks for your Super Mario Land 2 - 6 Golden Coins (USA, Europe)
-cartridge file (`.gb`, any file name). It is checked by its contents at every start and shared
+(Rev 1) cartridge file (`.gb`, any file name; revision 1 only, see the README). It is checked by its contents at every start and shared
 with the editor; it is only read, never changed.
 
 The start screen then shows what can be played, one at a time, as a cartridge with its title
