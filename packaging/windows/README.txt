@@ -95,8 +95,9 @@ The full lists are in the manuals.
 
 LICENCE AND LEGAL NOTICE
 
-Copyright 2026 The SML2 6GC authors. These programs are free software under the GNU General
-Public License, version 3 or later (LICENSE.txt): you may share and change them under the same
-licence. Their source code: {source}
+Copyright 2026 ogueta93 (https://github.com/ogueta93) and the SML2 6GC authors. These programs
+are free software under the GNU General Public License, version 3 or later (LICENSE.txt): you
+may share and change them under the same licence.
+Their source code: {source}
 LEGAL.md says what they contain, on what grounds they are made, and who is responsible for what.
 The licences of the fonts and libraries they include are in the licenses folder.

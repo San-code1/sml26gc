@@ -19,7 +19,7 @@ version = "1.0.0"
 edition = "2024"
 rust-version = "1.100"
 license = "GPL-3.0-or-later"
-authors = ["The SML2 6GC authors"]
+authors = ["ogueta93 (https://github.com/ogueta93)", "The SML2 6GC authors"]
 
 [workspace.dependencies]
 gb-core = { path = "crates/gb-core" }

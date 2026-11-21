@@ -1,6 +1,6 @@
 # Legal notice
 
-SML2 6GC Emulator and Level Editor (`sml26gc`, `sml26gc_editor`), copyright 2026 The SML2 6GC authors.
+SML2 6GC Emulator and Level Editor (`sml26gc`, `sml26gc_editor`), copyright 2026 ogueta93 (https://github.com/ogueta93) and the SML2 6GC authors.
 This notice is not legal advice; it states what the project is, what it contains and on what
 grounds it is made and shared.
 

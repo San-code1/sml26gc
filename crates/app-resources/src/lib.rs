@@ -148,7 +148,7 @@ fn windows_resource(out: &Path, program: &str, description: &str, image: Option<
     res.set("FileDescription", description);
     res.set("OriginalFilename", &format!("{program}.exe"));
     res.set("InternalName", program);
-    res.set("LegalCopyright", "Copyright 2026 The SML2 6GC authors. GPL-3.0-or-later. No game included; not affiliated with or endorsed by Nintendo.");
+    res.set("LegalCopyright", "Copyright 2026 ogueta93 (https://github.com/ogueta93) and the SML2 6GC authors. GPL-3.0-or-later. No game included; not affiliated with or endorsed by Nintendo.");
     if let Err(e) = res.compile() {
         println!("cargo:warning={program}: no icon or version details ({e})");
     }

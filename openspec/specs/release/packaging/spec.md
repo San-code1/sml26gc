@@ -102,7 +102,7 @@ The repository SHALL document, each in one place: the game's and the editor's us
 - **THEN** it names every tool and library to install (Rust through rustup, `build-essential`, `pkg-config`, `libasound2-dev`, `libudev-dev`, Git, Docker for packaging, and the optional OpenSpec CLI) with the command that installs them, their equivalents on Fedora, and the commands to build, run, test and package for Linux
 
 ### Requirement: Licence
-The project's own work SHALL be licensed under GPL-3.0-or-later, copyright The SML2 6GC authors, with each file's licence stated in `REUSE.toml` and the texts in `LICENSES/` (the fonts keep OFL-1.1). Each package SHALL carry the licence text and the address of the repository that holds the source code, and the executables' version details SHALL name the copyright holder and the licence.
+The project's own work SHALL be licensed under GPL-3.0-or-later, copyright ogueta93 (https://github.com/ogueta93) and the SML2 6GC authors, with each file's licence stated in `REUSE.toml` and the texts in `LICENSES/` (the fonts keep OFL-1.1). Each package SHALL carry the licence text and the address of the repository that holds the source code, and the executables' version details SHALL name the copyright holder and the licence.
 
 #### Scenario: Someone receives the zip
 - **WHEN** a person unpacks a package
@@ -110,7 +110,11 @@ The project's own work SHALL be licensed under GPL-3.0-or-later, copyright The S
 
 #### Scenario: Which licence a file has
 - **WHEN** a font file or a source file is looked up in `REUSE.toml`
-- **THEN** the font is OFL-1.1 with its authors, and the source file GPL-3.0-or-later, copyright The SML2 6GC authors
+- **THEN** the font is OFL-1.1 with its authors, and the source file GPL-3.0-or-later, copyright ogueta93 (https://github.com/ogueta93) and the SML2 6GC authors
+
+#### Scenario: The author's name travels with the code
+- **WHEN** someone reads the copyright notice of the repository, a package or an executable
+- **THEN** it names ogueta93 with the address of their GitHub profile
 
 ### Requirement: Legal notice
 A legal notice (`LEGAL.md`), also in each package, SHALL state what is and is not included, the legal grounds of the emulator and the editor, that the project is not commercial, who is responsible for what, that there is no warranty, and how a rights holder reaches the author.
