@@ -9,7 +9,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-15, macos-13]
+        os: [macos-15, macos-15-intel]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -24,7 +24,8 @@ jobs:
             codesign --verify --deep --strict --verbose=2 "$app"
           done
           shasum -a 256 dist/*.zip
-      - run: cargo test --release --workspace
+      # the golden fingerprint needs the cartridge, which never goes to GitHub
+      - run: cargo test --release --workspace -- --skip golden
       - uses: actions/upload-artifact@v4
         if: matrix.os == 'macos-15'
         with:
