@@ -208,7 +208,7 @@ pub fn secret_probe(rom_path: &Path) {
         if block_at(g.cart().rom(), l as usize, 0x4B).is_none() {
             continue;
         }
-        for &p in table.iter().enumerate().filter(|(_, &v)| v == l).map(|(p, _)| p as u8).collect::<Vec<_>>().iter() {
+        for &p in table.iter().enumerate().filter(|&(_, &v)| v == l).map(|(p, _)| p as u8).collect::<Vec<_>>().iter() {
             for b in [0x4A, 0x4B] {
                 match through_block(&g, p, l, b) {
                     Some(mut t) => {

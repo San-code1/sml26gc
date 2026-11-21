@@ -3,6 +3,7 @@ name = "project-model"
 description = "A project of the editor: the levels, maps and zones being edited, their files, and the cartridge built from them."
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 

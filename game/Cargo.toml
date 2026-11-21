@@ -3,6 +3,7 @@ name = "game"
 description = "Plays the cartridge on the emulated Game Boy, with pause menu, settings and the editor-made world map."
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 

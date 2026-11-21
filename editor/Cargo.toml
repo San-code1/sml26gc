@@ -3,6 +3,7 @@ name = "editor"
 description = "Level, object and world map editor writing an edited copy of the cartridge."
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 
