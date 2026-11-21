@@ -2,27 +2,70 @@
 //!
 //!   targets               the platforms a package can be built for
 //!   package TARGET        builds the game and the editor for TARGET and writes
-//!                         `dist/TARGET/<id>/` and `dist/<id>-<version>-TARGET.zip`
+//!                         `dist/TARGET/<id>/` and the target's packages in `dist/`
 //!   check-portable        checks the platform-independent crates for Linux
 //!
-//! A package holds the two executables, the read-me and the cartridge notice (`packaging/`),
-//! the licence (`LICENSE`), the legal notice (`LEGAL.md`) and the changelog, the manuals (`docs/GAME.md`,
-//! `docs/EDITOR.md`) and the other licences, and nothing else: it is built into its own folder under `target/`, apart
-//! from the developer's `target/release` and the files the programs write there.
+//! A package holds the two executables, the read-me (`packaging/<platform>/`) and the cartridge
+//! notice (`packaging/`), the licence (`LICENSE`), the legal notice (`LEGAL.md`) and the
+//! changelog, the manuals (`docs/GAME.md`, `docs/EDITOR.md`) and the other licences, and nothing
+//! else: it is built into its own folder under `target/`, apart from the developer's
+//! `target/release` and the files the programs write there.
 mod licences;
+mod linux;
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
 
-/// A platform a package can be built for.
+/// A platform a package can be built for, built on that platform.
 struct Target {
     name: &'static str,
     triple: &'static str,
-    /// Libraries an executable must not import (they are not on every computer).
-    forbidden_imports: &'static [&'static str],
+    /// `std::env::consts::OS` of the computer that builds it.
+    host_os: &'static str,
+    suffix: &'static str,
+    imports: Imports,
+    /// Its texts end their lines with CRLF.
+    crlf: bool,
+    readme: &'static str,
+    build: Build,
+    outputs: &'static [Output],
 }
 
-const TARGETS: &[Target] = &[Target { name: "windows-x64", triple: "x86_64-pc-windows-msvc", forbidden_imports: &["vcruntime", "api-ms-win-crt-", "msvcp"] }];
+/// Which shared libraries the executables may need.
+enum Imports {
+    /// Any but these (prefixes; they are not on every computer).
+    Deny(&'static [&'static str]),
+    /// Only these, and no glibc newer than `glibc` (the read-me names them all).
+    Allow { libraries: &'static [&'static str], glibc: (u32, u32) },
+}
+
+enum Build {
+    /// `cargo build` on this computer.
+    Here,
+    /// `cargo build` in the Linux build container (`packaging/linux/Dockerfile`).
+    Container,
+}
+
+enum Output {
+    Zip,
+    TarGz,
+    Deb,
+}
+
+const TARGETS: &[Target] = &[
+    Target { name: "windows-x64", triple: "x86_64-pc-windows-msvc", host_os: "windows", suffix: ".exe", imports: Imports::Deny(&["vcruntime", "api-ms-win-crt-", "msvcp"]), crlf: true, readme: "windows/README.txt", build: Build::Here, outputs: &[Output::Zip] },
+    Target {
+        name: "linux-x64",
+        triple: "x86_64-unknown-linux-gnu",
+        host_os: "linux",
+        suffix: "",
+        imports: Imports::Allow { libraries: &["libc.so.6", "libm.so.6", "libgcc_s.so.1", "ld-linux-x86-64.so.2", "libdl.so.2", "libpthread.so.0", "librt.so.1", "libasound.so.2", "libudev.so.1"], glibc: (2, 31) },
+        crlf: false,
+        readme: "linux/README.txt",
+        build: Build::Container,
+        outputs: &[Output::TarGz, Output::Deb],
+    },
+];
 
 /// The programs shipped: their crates (the binaries' names come from the manifests).
 const PROGRAMS: [&str; 2] = ["game", "editor"];
@@ -41,7 +84,7 @@ fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let result = match args.first().map(String::as_str) {
         Some("targets") => {
-            TARGETS.iter().for_each(|t| println!("{} ({})", t.name, t.triple));
+            TARGETS.iter().for_each(|t| println!("{} ({}, built on {})", t.name, t.triple, t.host_os));
             Ok(())
         }
         Some("package") => match TARGETS.iter().find(|t| Some(t.name) == args.get(1).map(String::as_str)) {
@@ -71,7 +114,7 @@ fn cargo() -> Command {
 }
 
 fn run(mut c: Command) -> Result<(), String> {
-    let status = c.status().map_err(|e| format!("cargo: {e}"))?;
+    let status = c.status().map_err(|e| format!("{}: {e}", c.get_program().to_string_lossy()))?;
     status.success().then_some(()).ok_or_else(|| format!("{c:?} failed"))
 }
 
@@ -84,20 +127,54 @@ fn metadata(triple: &str) -> Result<serde_json::Value, String> {
     serde_json::from_slice(&out.stdout).map_err(|e| format!("cargo metadata: {e}"))
 }
 
-fn package(t: &Target) -> Result<(), String> {
-    let (name, id) = (env!("PRODUCT_NAME"), env!("PRODUCT_ID"));
-    let mut build = cargo();
-    build.args(["build", "--profile", "dist", "--target", t.triple]);
-    for p in PROGRAMS {
-        build.args(["-p", p]);
+/// What the texts' `{...}` are filled with.
+struct Fill {
+    programs: Vec<String>,
+    /// The oldest glibc the Linux executables need, as `2.31`.
+    glibc: Option<String>,
+    version: String,
+    crlf: bool,
+}
+
+impl Fill {
+    fn text(&self, text: &str) -> String {
+        let text = text
+            .replace("{product}", env!("PRODUCT_NAME"))
+            .replace("{id}", env!("PRODUCT_ID"))
+            .replace("{game}", &self.programs[0])
+            .replace("{editor}", &self.programs[1])
+            .replace("{source}", env!("PRODUCT_SOURCE"))
+            .replace("{maintainer}", env!("PRODUCT_MAINTAINER"))
+            .replace("{glibc}", self.glibc.as_deref().unwrap_or("?"));
+        if self.crlf { text.replace("\r\n", "\n").replace('\n', "\r\n") } else { text }
     }
-    run(build)?;
+}
+
+fn package(t: &Target) -> Result<(), String> {
+    let id = env!("PRODUCT_ID");
+    if std::env::consts::OS != t.host_os {
+        return Err(format!("the {} package is built on {} (this computer runs {})", t.name, t.host_os, std::env::consts::OS));
+    }
     let meta = metadata(t.triple)?;
     let packages = meta["packages"].as_array().ok_or("cargo metadata: no packages")?;
-    let version = packages.iter().find(|p| p["name"] == PROGRAMS[0]).and_then(|p| p["version"].as_str()).ok_or("no game package")?.to_string();
+    let game = packages.iter().find(|p| p["name"] == PROGRAMS[0]).ok_or("no game package")?;
+    let version = game["version"].as_str().ok_or("no game version")?.to_string();
     let target_dir = PathBuf::from(meta["target_directory"].as_str().ok_or("cargo metadata: no target directory")?);
-    let built = target_dir.join(t.triple).join("dist");
-    let suffix = if t.triple.contains("windows") { ".exe" } else { "" };
+    let built = match t.build {
+        Build::Here => {
+            let mut build = cargo();
+            build.args(["build", "--profile", "dist", "--target", t.triple]);
+            for p in PROGRAMS {
+                build.args(["-p", p]);
+            }
+            run(build)?;
+            target_dir.join(t.triple).join("dist")
+        }
+        Build::Container => {
+            let rust = game["rust_version"].as_str().ok_or("no rust-version in the workspace")?;
+            linux::build_in_container(&root(), rust, t.triple, &PROGRAMS)?
+        }
+    };
 
     let folder = root().join("dist").join(t.name).join(id);
     if folder.exists() {
@@ -108,51 +185,65 @@ fn package(t: &Target) -> Result<(), String> {
     }
 
     let mut programs = Vec::new();
+    let mut glibc = None;
     for p in PROGRAMS {
         let bin = packages.iter().find(|q| q["name"] == p).and_then(|q| q["targets"].as_array()?.iter().find(|t| t["kind"][0] == "bin")?["name"].as_str()).ok_or(format!("no binary in {p}"))?;
-        let file = format!("{bin}{suffix}");
+        let file = format!("{bin}{}", t.suffix);
         let from = built.join(&file);
-        check_imports(&from, t)?;
+        match t.imports {
+            Imports::Deny(denied) => check_imports(&from, denied)?,
+            Imports::Allow { libraries, glibc: limit } => glibc = glibc.max(Some(linux::check_libraries(&from, libraries, limit)?)),
+        }
         std::fs::copy(&from, folder.join(&file)).map_err(|e| format!("{}: {e}", from.display()))?;
         programs.push(file);
     }
-
-    let fill = |text: &str| {
-        let text = text.replace("{product}", name).replace("{game}", &programs[0]).replace("{editor}", &programs[1]).replace("{source}", env!("PRODUCT_SOURCE"));
-        if suffix.is_empty() { text } else { text.replace("\r\n", "\n").replace('\n', "\r\n") }
-    };
-    for f in ["README.txt", "NO-CARTRIDGE.txt"] {
-        let text = std::fs::read_to_string(root().join("packaging").join(f)).map_err(|e| format!("packaging/{f}: {e}"))?;
-        std::fs::write(folder.join(f), fill(&text)).map_err(|e| format!("{f}: {e}"))?;
+    let fill = Fill { programs, glibc: glibc.map(|(a, b)| format!("{a}.{b}")), version: version.clone(), crlf: t.crlf };
+    if let Some(g) = &fill.glibc {
+        println!("glibc:   the executables need {g} or newer");
     }
-    for (from, to) in [("LICENSE", "LICENSE.txt"), ("LEGAL.md", "LEGAL.md"), ("CHANGELOG.md", "CHANGELOG.md")] {
-        let text = std::fs::read_to_string(root().join(from)).map_err(|e| format!("{from}: {e}"))?;
-        std::fs::write(folder.join(to), fill(&text)).map_err(|e| format!("{to}: {e}"))?;
+
+    let packaging = root().join("packaging");
+    for (from, to) in [(packaging.join(t.readme), "README.txt"), (packaging.join("NO-CARTRIDGE.txt"), "NO-CARTRIDGE.txt"), (root().join("LICENSE"), "LICENSE.txt"), (root().join("LEGAL.md"), "LEGAL.md"), (root().join("CHANGELOG.md"), "CHANGELOG.md")] {
+        let text = std::fs::read_to_string(&from).map_err(|e| format!("{}: {e}", from.display()))?;
+        std::fs::write(folder.join(to), fill.text(&text)).map_err(|e| format!("{to}: {e}"))?;
     }
     for f in MANUALS {
         let text = std::fs::read_to_string(root().join("docs").join(f)).map_err(|e| format!("docs/{f}: {e}"))?;
-        std::fs::write(folder.join("manuals").join(f), fill(&text)).map_err(|e| format!("manuals/{f}: {e}"))?;
+        std::fs::write(folder.join("manuals").join(f), fill.text(&text)).map_err(|e| format!("manuals/{f}: {e}"))?;
     }
     for f in FONT_LICENCES {
         std::fs::copy(root().join("fonts").join(f), folder.join("licenses").join(f)).map_err(|e| format!("fonts/{f}: {e}"))?;
     }
     let crates = licences::third_party(&meta, &PROGRAMS)?;
-    std::fs::write(folder.join("licenses").join("THIRD-PARTY.txt"), fill(&crates)).map_err(|e| format!("THIRD-PARTY.txt: {e}"))?;
-
-    let zip = root().join("dist").join(format!("{id}-{version}-{}.zip", t.name));
-    zip_folder(&folder, id, &zip)?;
+    std::fs::write(folder.join("licenses").join("THIRD-PARTY.txt"), fill.text(&crates)).map_err(|e| format!("THIRD-PARTY.txt: {e}"))?;
     println!("package: {}", folder.display());
-    println!("zip:     {}", zip.display());
+
+    for output in t.outputs {
+        let file = match output {
+            Output::Zip => {
+                let zip = root().join("dist").join(format!("{id}-{version}-{}.zip", t.name));
+                zip_folder(&folder, id, &zip)?;
+                zip
+            }
+            Output::TarGz => {
+                let tar = root().join("dist").join(format!("{id}-{version}-{}.tar.gz", t.name));
+                linux::tar_folder(&folder, id, &tar, &fill.programs)?;
+                tar
+            }
+            Output::Deb => linux::deb(&root(), &folder, &fill)?,
+        };
+        println!("written: {}", file.display());
+    }
     Ok(())
 }
 
-/// Stops when `exe` imports a library the target's computers may not have.
-fn check_imports(exe: &Path, t: &Target) -> Result<(), String> {
+/// Stops when `exe` imports a library starting with one of `denied`.
+fn check_imports(exe: &Path, denied: &[&str]) -> Result<(), String> {
     use object::read::Object;
     let data = std::fs::read(exe).map_err(|e| format!("{}: {e}", exe.display()))?;
     let file = object::File::parse(&*data).map_err(|e| format!("{}: {e}", exe.display()))?;
     let imports = file.imports().map_err(|e| format!("{}: {e}", exe.display()))?;
-    let mut bad: Vec<String> = imports.iter().map(|i| String::from_utf8_lossy(i.library()).to_lowercase()).filter(|l| t.forbidden_imports.iter().any(|f| l.starts_with(f))).collect();
+    let mut bad: Vec<String> = imports.iter().map(|i| String::from_utf8_lossy(i.library()).to_lowercase()).filter(|l| denied.iter().any(|f| l.starts_with(f))).collect();
     bad.sort();
     bad.dedup();
     if bad.is_empty() {
@@ -162,11 +253,8 @@ fn check_imports(exe: &Path, t: &Target) -> Result<(), String> {
     }
 }
 
-/// `folder`'s files into `zip`, under a top folder `top`.
-fn zip_folder(folder: &Path, top: &str, zip: &Path) -> Result<(), String> {
-    let file = std::fs::File::create(zip).map_err(|e| format!("{}: {e}", zip.display()))?;
-    let mut w = zip::ZipWriter::new(file);
-    let options = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+/// `folder`'s files, sorted, as paths relative to it with `/`.
+fn files_in(folder: &Path) -> Result<Vec<(PathBuf, String)>, String> {
     let mut stack = vec![folder.to_path_buf()];
     let mut files = Vec::new();
     while let Some(dir) = stack.pop() {
@@ -179,8 +267,18 @@ fn zip_folder(folder: &Path, top: &str, zip: &Path) -> Result<(), String> {
         }
     }
     files.sort();
-    for f in files {
+    Ok(files.into_iter().map(|f| {
         let rel = f.strip_prefix(folder).unwrap().to_string_lossy().replace('\\', "/");
+        (f, rel)
+    }).collect())
+}
+
+/// `folder`'s files into `zip`, under a top folder `top`.
+fn zip_folder(folder: &Path, top: &str, zip: &Path) -> Result<(), String> {
+    let file = std::fs::File::create(zip).map_err(|e| format!("{}: {e}", zip.display()))?;
+    let mut w = zip::ZipWriter::new(file);
+    let options = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+    for (f, rel) in files_in(folder)? {
         w.start_file(format!("{top}/{rel}"), options).map_err(|e| e.to_string())?;
         std::io::copy(&mut std::fs::File::open(&f).map_err(|e| format!("{}: {e}", f.display()))?, &mut w).map_err(|e| e.to_string())?;
     }

@@ -1,5 +1,5 @@
 [alias]
-# The release tool: `cargo xtask package windows-x64` (see xtask/).
+# The release tool: `cargo xtask package windows-x64 | linux-x64` (see xtask/).
 xtask = "run --quiet --release -p xtask --"
 
 # The C runtime inside the executables: they start on a Windows without the Visual C++
@@ -12,3 +12,5 @@ rustflags = ["-C", "target-feature=+crt-static"]
 PRODUCT_NAME = "SML2 6GC Emulator and Level Editor"
 PRODUCT_ID = "sml26gc"
 PRODUCT_SOURCE = "https://github.com/ogueta93/sml26gc"
+# Who the Linux .deb names as its maintainer (Debian needs an address).
+PRODUCT_MAINTAINER = "The SML2 6GC authors <1623086+ogueta93@users.noreply.github.com>"

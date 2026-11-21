@@ -9,6 +9,7 @@ use crate::domain::document::CheckpointRefused;
 use cart_model::checkpoint;
 use cart_model::level_start::{SPRITE_H, SPRITE_TOP, SPRITE_W};
 use macroquad::prelude::*;
+use super::inset::{mouse_position, is_mouse_button_pressed};
 
 pub(super) fn warn_col() -> Color {
     Color::new(1.0, 0.45, 0.35, 1.0)

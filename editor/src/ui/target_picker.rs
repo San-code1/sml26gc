@@ -12,6 +12,7 @@ use cart_model::new_zones;
 use cart_model::original_points::{self, OnMap};
 use cart_model::secret_exits::SecretTo;
 use macroquad::prelude::*;
+use super::inset::{screen_width, screen_height, mouse_position, is_mouse_button_pressed, is_key_pressed};
 
 /// What is being chosen: where world point `p`'s door leads, where exit `i` of the zone that
 /// was shown leads, or where level `l`'s secret exit leads.

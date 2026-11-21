@@ -1,6 +1,6 @@
 [package]
 name = "host"
-description = "Shared adapters to the computer: finding the cartridge, file locations, battery saves, PNG export."
+description = "Shared adapters to the computer: finding the cartridge, file locations, battery saves, PNG export, the file dialog off Windows."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -15,3 +15,6 @@ project-model.workspace = true
 
 [target.'cfg(windows)'.dependencies]
 windows-sys.workspace = true
+
+[target.'cfg(target_os = "linux")'.dependencies]
+rfd.workspace = true

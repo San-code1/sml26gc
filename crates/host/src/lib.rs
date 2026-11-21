@@ -1,9 +1,10 @@
 //! The computer side shared by the game, the editor and the tools: the base cartridge, where
-//! every file lives, battery saves, settings and PNG pictures. Nothing here knows about windows,
+//! every file lives, battery saves, settings, PNG pictures and the file dialog off Windows. Nothing here knows about windows,
 //! sound or keyboards.
 pub mod base_cartridge;
 pub mod battery;
 pub mod console;
+pub mod file_dialog;
 pub mod paths;
 pub mod png_out;
 pub mod projects;

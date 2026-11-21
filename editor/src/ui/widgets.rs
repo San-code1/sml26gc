@@ -3,6 +3,7 @@
 use cart_model::art::{LevelArt, Look, WorldArt};
 use cart_model::levels::{COLS, ROWS};
 use macroquad::prelude::*;
+use super::inset::{screen_width, screen_height, mouse_position, is_mouse_button_pressed};
 
 pub const PAL: [u32; 4] = [0xC4CFA1, 0x8B956D, 0x4D533C, 0x1F1F1F];
 /// Explanations, notes and hints: a blue that reads well on the panels' light shade.
@@ -170,6 +171,14 @@ thread_local! {
 /// Russian have their own).
 pub fn set_text_language(lang: Lang) {
     FACE.with(|f| f.set(Face::of(lang)));
+}
+
+/// `f` with the texts in `lang`'s font, then back to the font in use.
+pub fn with_text_language<R>(lang: Lang, f: impl FnOnce() -> R) -> R {
+    let current = FACE.with(|f| f.replace(Face::of(lang)));
+    let r = f();
+    FACE.with(|f| f.set(current));
+    r
 }
 
 /// The font texts are drawn with: None, the built-in one.

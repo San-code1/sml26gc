@@ -1,50 +1,38 @@
 //! The editor window's own menu bar (Win32): built on the window found by its title, whose
 //! window procedure is wrapped to queue the ids of the entries chosen. Off Windows, or if the
-//! window is not found, there is no bar and nothing is ever chosen.
+//! window is not found, there is none (the editor draws its own, `ui::drawn_menu_bar`).
 use crate::ports::{MenuBar, MenuEntry};
 
 pub struct WindowMenu {
-    bar: Option<imp::Bar>,
+    bar: imp::Bar,
 }
 
 impl WindowMenu {
-    /// The menu bar of the window titled `title`.
-    pub fn new(title: &str) -> WindowMenu {
-        WindowMenu { bar: imp::Bar::attach(title) }
+    /// The menu bar of the window titled `title`, if the system gives windows one.
+    pub fn attach(title: &str) -> Option<WindowMenu> {
+        imp::Bar::attach(title).map(|bar| WindowMenu { bar })
     }
 }
 
 impl MenuBar for WindowMenu {
     fn add_menu(&mut self, title: &str, entries: &[MenuEntry]) {
-        if let Some(b) = &self.bar {
-            b.add_menu(title, entries);
-        }
+        self.bar.add_menu(title, entries);
     }
 
     fn chosen(&mut self) -> Vec<u16> {
-        if self.bar.is_some() {
-            imp::take_chosen()
-        } else {
-            Vec::new()
-        }
+        imp::take_chosen()
     }
 
     fn enable(&mut self, id: u16, on: bool) {
-        if let Some(b) = &self.bar {
-            b.enable(id, on);
-        }
+        self.bar.enable(id, on);
     }
 
     fn check(&mut self, id: u16, on: bool) {
-        if let Some(b) = &self.bar {
-            b.check(id, on);
-        }
+        self.bar.check(id, on);
     }
 
     fn clear(&mut self) {
-        if let Some(b) = &self.bar {
-            b.clear();
-        }
+        self.bar.clear();
         let _ = self.chosen();
     }
 }
@@ -148,16 +136,25 @@ mod imp {
 mod imp {
     use crate::ports::MenuEntry;
 
-    pub struct Bar;
+    /// No system menu bar: never made.
+    pub enum Bar {}
 
     impl Bar {
         pub fn attach(_: &str) -> Option<Bar> {
             None
         }
-        pub fn add_menu(&self, _: &str, _: &[MenuEntry]) {}
-        pub fn enable(&self, _: u16, _: bool) {}
-        pub fn check(&self, _: u16, _: bool) {}
-        pub fn clear(&self) {}
+        pub fn add_menu(&self, _: &str, _: &[MenuEntry]) {
+            match *self {}
+        }
+        pub fn enable(&self, _: u16, _: bool) {
+            match *self {}
+        }
+        pub fn check(&self, _: u16, _: bool) {
+            match *self {}
+        }
+        pub fn clear(&self) {
+            match *self {}
+        }
     }
 
     pub fn take_chosen() -> Vec<u16> {

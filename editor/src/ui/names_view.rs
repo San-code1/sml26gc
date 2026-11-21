@@ -4,6 +4,7 @@ use super::widgets::*;
 use super::Editor;
 use cart_model::extra_levels::NAME_MAX;
 use macroquad::prelude::*;
+use super::inset::{mouse_position, is_mouse_button_pressed, is_key_pressed, get_char_pressed};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Named {

@@ -122,3 +122,15 @@ id: Folder ini tidak dapat ditulis: pengaturan, proyek, dan simpanan tidak akan 
 ru: В эту папку нельзя записывать: настройки, проекты и сохранения не будут сохранены. Переместите папку программы туда, где разрешена запись, например в Документы.
 zh: 无法写入此文件夹：设置、项目和存档将不会保存。请将程序文件夹移到可以写入的位置，例如"文档"。
 ko: 이 폴더에 쓸 수 없습니다. 설정, 프로젝트, 세이브가 저장되지 않습니다. 프로그램 폴더를 문서처럼 쓸 수 있는 곳으로 옮기세요.
+
+en: No file dialog is available on this computer: install xdg-desktop-portal (with the one of your desktop) or zenity. The game also takes the cartridge file as its argument.
+es: No hay ningun dialogo de ficheros en este ordenador: instala xdg-desktop-portal (con el de tu escritorio) o zenity. El juego tambien acepta el fichero del cartucho como argumento.
+ja: このコンピューターにはファイル選択ダイアログがありません。xdg-desktop-portal（お使いのデスクトップ用のものと一緒に）か zenity をインストールしてください。ゲームはカートリッジファイルを引数として受け取ることもできます。
+pt: Nao ha nenhum dialogo de arquivos neste computador: instale o xdg-desktop-portal (com o do seu ambiente de trabalho) ou o zenity. O jogo tambem aceita o arquivo do cartucho como argumento.
+fr: Aucune boite de dialogue de fichiers n'est disponible sur cet ordinateur : installez xdg-desktop-portal (avec celui de votre bureau) ou zenity. Le jeu accepte aussi le fichier de la cartouche en argument.
+de: Auf diesem Computer gibt es keinen Dateidialog: installiere xdg-desktop-portal (mit dem deines Desktops) oder zenity. Das Spiel nimmt die Moduldatei auch als Argument.
+it: Su questo computer non c'e nessuna finestra di dialogo per i file: installa xdg-desktop-portal (con quello del tuo desktop) o zenity. Il gioco accetta anche il file della cartuccia come argomento.
+id: Tidak ada dialog berkas di komputer ini: pasang xdg-desktop-portal (beserta milik desktopmu) atau zenity. Gim juga menerima berkas kartrid sebagai argumen.
+ru: На этом компьютере нет диалога выбора файлов: установите xdg-desktop-portal (вместе с портом вашего рабочего стола) или zenity. Игра также принимает файл картриджа как аргумент.
+zh: 这台电脑上没有可用的文件对话框：请安装 xdg-desktop-portal（以及你的桌面所用的那个）或 zenity。游戏也可以把卡带文件作为参数接收。
+ko: 이 컴퓨터에는 파일 대화 상자가 없습니다. xdg-desktop-portal(사용하는 데스크톱용 포털과 함께) 또는 zenity를 설치하세요. 게임은 카트리지 파일을 인수로 받을 수도 있습니다.

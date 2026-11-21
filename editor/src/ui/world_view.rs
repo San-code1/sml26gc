@@ -19,6 +19,7 @@ use cart_model::start_point::Start;
 use cart_model::world;
 use cart_model::zone_maps::ZONES;
 use macroquad::prelude::*;
+use super::inset::{screen_width, screen_height, mouse_position, is_mouse_button_pressed, is_mouse_button_down, mouse_wheel, is_key_pressed};
 
 /// Mario's place on a zone map is this far below where the game draws its point.
 const FEET: i32 = 4;

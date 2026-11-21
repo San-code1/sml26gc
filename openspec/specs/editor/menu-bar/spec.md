@@ -98,3 +98,26 @@ The menu SHALL be there in the editor and on the project screen.
 #### Scenario: Automatic
 - **WHEN** Language, Automatic is chosen on a Windows set to Spanish
 - **THEN** Automatic is ticked and the editor is in Spanish
+
+### Requirement: Menu bar inside the window on Linux
+On Linux, where the editor's window has no native menu bar, the editor SHALL draw its menu bar along the top of its own window, above the panels, with the same menus, entries, shortcuts shown, greyed-out and ticked entries as on Windows, in the editor's language. The panels SHALL start below it, and nothing the editor shows SHALL be hidden under it.
+
+#### Scenario: Opening File with the mouse
+- **WHEN** the user clicks File in the editor on Linux
+- **THEN** the File menu opens below it, listing its entries with their shortcuts, and clicking Export level opens the Save dialog for a level file, as Ctrl+E does
+
+#### Scenario: Closing a menu
+- **WHEN** a menu is open and the user clicks outside it or presses Esc
+- **THEN** the menu closes and nothing is chosen, and the click does not edit the level under it
+
+#### Scenario: Greyed-out entries
+- **WHEN** the world map editor is shown on Linux and the File menu is opened
+- **THEN** the level and zone file entries are greyed out and clicking them does nothing
+
+#### Scenario: Moving between menus
+- **WHEN** the File menu is open and the pointer moves over Tools
+- **THEN** the Tools menu opens in its place
+
+#### Scenario: Language ticked
+- **WHEN** the Language menu is opened on Linux after choosing Español
+- **THEN** Español is ticked and the bar reads Archivo, Herramientas, Idioma

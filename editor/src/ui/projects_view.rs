@@ -9,6 +9,7 @@ use crate::domain::files;
 use crate::ports::{FileDialogs, FileKind};
 use host::BaseProblem;
 use macroquad::prelude::*;
+use super::inset::{screen_width, screen_height, is_key_pressed, get_char_pressed};
 use std::path::PathBuf;
 
 const W: f32 = 640.0;
@@ -37,11 +38,13 @@ pub struct BaseScreen {
     problem: BaseProblem,
     /// The data folder cannot be written (the choice would not be kept).
     unwritable: bool,
+    /// Choosing the file found no dialog to open.
+    no_dialog: bool,
 }
 
 impl BaseScreen {
     pub fn new(lang: Lang, problem: BaseProblem) -> BaseScreen {
-        BaseScreen { lang, problem, unwritable: host::paths::data_dir_problem(lang).is_some() }
+        BaseScreen { lang, problem, unwritable: host::paths::data_dir_problem(lang).is_some(), no_dialog: false }
     }
 
     pub fn set_lang(&mut self, lang: Lang) {
@@ -56,13 +59,15 @@ impl BaseScreen {
         put_text(tr(lang, "BASE CARTRIDGE"), x, r.y + 40.0, 24.0, col(3));
         let c = if self.problem == BaseProblem::NotChosen { col(3) } else { Severity::Error.colour() };
         let after = lines(&self.problem.text(lang), x, r.y + 76.0, r.w - 48.0, 17.0, c);
-        if let Some(problem) = self.unwritable.then(|| host::paths::data_dir_problem(lang)).flatten() {
-            lines(problem, x, after + 8.0, r.w - 48.0, 15.0, Severity::Error.colour());
-        }
+        let problems = [self.unwritable.then(|| host::paths::data_dir_problem(lang)).flatten(), self.no_dialog.then(|| host::file_dialog::unavailable_text(lang))];
+        problems.into_iter().flatten().fold(after, |y, problem| lines(problem, x, y + 8.0, r.w - 48.0, 15.0, Severity::Error.colour()));
         let note = tr(lang, "The editor and the game share it; the file may have any name.");
         lines(note, x, r.y + r.h - 76.0, r.w - 48.0, 15.0, INFO);
         if button(Rect::new(x, r.y + r.h - 50.0, r.w - 48.0, ROW), tr(lang, "Choose the cartridge file..."), true, 17.0) {
-            let p = dialogs.pick_cartridge()?;
+            let Some(p) = dialogs.pick_cartridge() else {
+                self.no_dialog = !dialogs.available();
+                return None;
+            };
             match host::base_cartridge::choose(&p) {
                 Ok(()) => return Some(p),
                 Err(e) => self.problem = e,
@@ -146,7 +151,12 @@ impl ProjectsScreen {
     /// A project file from any folder as a new project (named after the file).
     fn import(&mut self, dialogs: &dyn FileDialogs) {
         let lang = self.lang;
-        let Some(path) = dialogs.open(FileKind::Project) else { return };
+        let Some(path) = dialogs.open(FileKind::Project) else {
+            if !dialogs.available() {
+                self.message = Some((host::file_dialog::unavailable_text(lang).into(), Severity::Error));
+            }
+            return;
+        };
         let stem = path.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
         let file = std::fs::read_to_string(&path).map_err(|e| e.to_string()).and_then(|t| files::read_project(&t).map_err(|e| format!("{e:?}")));
         let p = match file {
