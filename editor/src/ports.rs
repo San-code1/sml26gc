@@ -88,6 +88,8 @@ pub trait FileDialogs {
     fn pick_cartridge(&self) -> Option<PathBuf>;
     /// The language of the dialogs' titles from now on.
     fn set_lang(&mut self, lang: i18n::Lang);
+    /// Can a dialog open on this computer? (A cancelled one and a missing one both give None.)
+    fn available(&self) -> bool;
 }
 
 pub trait TextFiles {
@@ -101,7 +103,15 @@ pub enum MenuEntry<'a> {
     Separator,
 }
 
-/// The window's menu bar.
+/// What a menu bar drawn in the window took from the views this frame.
+#[derive(Clone, Copy, Default, PartialEq, Debug)]
+pub struct Taken {
+    pub mouse: bool,
+    pub keys: bool,
+}
+
+/// The window's menu bar: the system's (nothing to draw), or one drawn along the top of the
+/// window, whose `height` the views leave free.
 pub trait MenuBar {
     /// Add a menu at the right of the bar. Ids are not 0.
     fn add_menu(&mut self, title: &str, entries: &[MenuEntry]);
@@ -112,4 +122,14 @@ pub trait MenuBar {
     fn check(&mut self, id: u16, on: bool);
     /// Take every menu off the bar (to build it again).
     fn clear(&mut self);
+    /// The pixels it takes at the top of the window.
+    fn height(&self) -> f32 {
+        0.0
+    }
+    /// Read the mouse and keys, before the views do.
+    fn input(&mut self) -> Taken {
+        Taken::default()
+    }
+    /// Draw it, over the views.
+    fn draw(&mut self) {}
 }

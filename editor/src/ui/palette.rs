@@ -16,11 +16,14 @@ use cart_model::{checkpoint, level_graphics, world, zone_maps};
 use crate::domain::stamp::{Area, Stamp};
 use crate::domain::tools::ToolKind;
 use macroquad::prelude::*;
+use super::inset::{screen_width, screen_height, mouse_position, is_mouse_button_pressed, is_mouse_button_down, mouse_wheel};
 
-/// Draw only inside `r` (or everywhere with None).
+/// Draw only inside `r` (or everywhere with None); the scissor is in window pixels, below the
+/// menu bar's inset.
 pub(super) fn clip(r: Option<Rect>) {
     let d = screen_dpi_scale();
     let gl = unsafe { get_internal_gl() };
+    let r = r.map(|r| Rect { y: r.y + super::inset::top(), ..r });
     gl.quad_gl.scissor(r.map(|r| ((r.x * d) as i32, (r.y * d) as i32, (r.w * d) as i32, (r.h * d) as i32)));
 }
 

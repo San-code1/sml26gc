@@ -8,6 +8,7 @@ use super::Editor;
 use cart_model::level_tables::Tables;
 use cart_model::levels::LEVELS;
 use macroquad::prelude::*;
+use super::inset::{screen_width, screen_height, is_key_pressed};
 
 const PAD: f32 = 10.0;
 const ROW: f32 = 26.0;

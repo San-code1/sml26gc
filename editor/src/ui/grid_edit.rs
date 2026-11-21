@@ -7,6 +7,7 @@ use crate::domain::document::Grid;
 use crate::domain::stamp::{Area, Stamp};
 use crate::domain::tools::ToolKind;
 use macroquad::prelude::*;
+use super::inset::{is_mouse_button_pressed, is_mouse_button_released};
 
 /// What a palette selection or a pick from the grid gives to paint with.
 pub struct Brush {

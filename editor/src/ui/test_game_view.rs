@@ -6,6 +6,7 @@ use super::Editor;
 use super::widgets::*;
 use crate::domain::prefs::{Prefs, TEST_COINS, TEST_LIVES, TEST_POWERS};
 use macroquad::prelude::*;
+use super::inset::{screen_height, mouse_position, is_mouse_button_pressed, is_key_pressed};
 
 const W: f32 = 300.0;
 const PAD: f32 = 12.0;

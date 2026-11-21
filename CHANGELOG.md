@@ -6,6 +6,24 @@ What each version of the programs brings, as a person using them notices it. The
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-11-21
+
+### Added
+
+- Linux (x86-64; Debian 11, Ubuntu 20.04 and later distributions): the game and the editor as a
+  folder to unpack and run (`sml26gc-<version>-linux-x64.tar.gz`), or installed from
+  `sml26gc_<version>_amd64.deb` with launchers in the application menu and your files in
+  `~/.local/share/sml26gc`. On Linux the file dialogs are the desktop's own, the editor draws its
+  menu bar in its window, and the system's language comes from the locale.
+
+### Changed
+
+- The programs, the read-me and the manuals name the one cartridge file accepted with its
+  revision, Super Mario Land 2 - 6 Golden Coins (USA, Europe) (Rev 1), and say that revisions 0
+  and 2 are refused. The accepted file is the same as before.
+- The copyright notices (read-mes, legal notice, the programs' file details) name the author:
+  ogueta93 (https://github.com/ogueta93) and the SML2 6GC authors.
+
 ## [1.0.0] - 2026-11-21
 
 ### Added

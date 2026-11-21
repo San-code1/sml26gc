@@ -4,7 +4,8 @@
 //! Keys are read by their place on the keyboard (US layout), so only letters, comma, period
 //! and named keys are used: they sit in the same place on a Spanish keyboard. Plus and minus
 //! accept the keys that carry them on both layouts and the keypad.
-use macroquad::prelude::{is_key_down, is_key_pressed, KeyCode};
+use macroquad::prelude::{is_key_down, KeyCode};
+use super::inset::is_key_pressed;
 
 /// Where the editor is: which keys mean what depends on it.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]

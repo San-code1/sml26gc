@@ -3,17 +3,17 @@
 # are written without accents (the editor's built-in font has none). The translations other
 # than Spanish and Japanese are machine-written and await review by native speakers.
 
-en: Choose your Super Mario Land 2 - 6 Golden Coins (USA, Europe) cartridge file.
-es: Elige tu fichero de cartucho de Super Mario Land 2 - 6 Golden Coins (USA, Europe).
-ja: Super Mario Land 2 - 6 Golden Coins (USA, Europe) のカートリッジファイルを選んでください。
-pt: Escolha o seu arquivo de cartucho de Super Mario Land 2 - 6 Golden Coins (USA, Europe).
-fr: Choisissez votre fichier de cartouche Super Mario Land 2 - 6 Golden Coins (USA, Europe).
-de: Wahle deine Moduldatei von Super Mario Land 2 - 6 Golden Coins (USA, Europe).
-it: Scegli il tuo file della cartuccia di Super Mario Land 2 - 6 Golden Coins (USA, Europe).
-id: Pilih berkas kartrid Super Mario Land 2 - 6 Golden Coins (USA, Europe) milikmu.
-ru: Выберите файл картриджа Super Mario Land 2 - 6 Golden Coins (USA, Europe).
-zh: 请选择你的 Super Mario Land 2 - 6 Golden Coins (USA, Europe) 卡带文件。
-ko: Super Mario Land 2 - 6 Golden Coins (USA, Europe) 카트리지 파일을 선택하세요.
+en: Choose your Super Mario Land 2 - 6 Golden Coins (USA, Europe) (Rev 1) cartridge file.
+es: Elige tu fichero de cartucho de Super Mario Land 2 - 6 Golden Coins (USA, Europe) (Rev 1).
+ja: Super Mario Land 2 - 6 Golden Coins (USA, Europe) (Rev 1) のカートリッジファイルを選んでください。
+pt: Escolha o seu arquivo de cartucho de Super Mario Land 2 - 6 Golden Coins (USA, Europe) (Rev 1).
+fr: Choisissez votre fichier de cartouche Super Mario Land 2 - 6 Golden Coins (USA, Europe) (Rev 1).
+de: Wahle deine Moduldatei von Super Mario Land 2 - 6 Golden Coins (USA, Europe) (Rev 1).
+it: Scegli il tuo file della cartuccia di Super Mario Land 2 - 6 Golden Coins (USA, Europe) (Rev 1).
+id: Pilih berkas kartrid Super Mario Land 2 - 6 Golden Coins (USA, Europe) (Rev 1) milikmu.
+ru: Выберите файл картриджа Super Mario Land 2 - 6 Golden Coins (USA, Europe) (Rev 1).
+zh: 请选择你的 Super Mario Land 2 - 6 Golden Coins (USA, Europe) (Rev 1) 卡带文件。
+ko: Super Mario Land 2 - 6 Golden Coins (USA, Europe) (Rev 1) 카트리지 파일을 선택하세요.
 
 en: The cartridge file is not there any more:
 es: El fichero del cartucho ya no esta:
@@ -39,17 +39,17 @@ ru: Не удалось прочитать файл картриджа:
 zh: 无法读取卡带文件:
 ko: 카트리지 파일을 읽을 수 없습니다:
 
-en: This file is not Super Mario Land 2 - 6 Golden Coins (USA, Europe), the cartridge the tools work with:
-es: Este fichero no es Super Mario Land 2 - 6 Golden Coins (USA, Europe), el cartucho con el que trabajan las herramientas:
-ja: このファイルはツールが対応している Super Mario Land 2 - 6 Golden Coins (USA, Europe) ではありません:
-pt: Este arquivo nao e Super Mario Land 2 - 6 Golden Coins (USA, Europe), o cartucho com que as ferramentas trabalham:
-fr: Ce fichier n'est pas Super Mario Land 2 - 6 Golden Coins (USA, Europe), la cartouche avec laquelle les outils fonctionnent :
-de: Diese Datei ist nicht Super Mario Land 2 - 6 Golden Coins (USA, Europe), das Modul, mit dem die Werkzeuge arbeiten:
-it: Questo file non e Super Mario Land 2 - 6 Golden Coins (USA, Europe), la cartuccia con cui lavorano gli strumenti:
-id: Berkas ini bukan Super Mario Land 2 - 6 Golden Coins (USA, Europe), kartrid yang dipakai alat-alat ini:
-ru: Этот файл не Super Mario Land 2 - 6 Golden Coins (USA, Europe), картридж, с которым работают инструменты:
-zh: 此文件不是工具所支持的卡带 Super Mario Land 2 - 6 Golden Coins (USA, Europe):
-ko: 이 파일은 도구가 지원하는 카트리지인 Super Mario Land 2 - 6 Golden Coins (USA, Europe)가 아닙니다:
+en: This file is not Super Mario Land 2 - 6 Golden Coins (USA, Europe) (Rev 1), the cartridge the tools work with (other revisions of the game are refused too):
+es: Este fichero no es Super Mario Land 2 - 6 Golden Coins (USA, Europe) (Rev 1), el cartucho con el que trabajan las herramientas (las demas revisiones del juego tambien se rechazan):
+ja: このファイルはツールが対応している Super Mario Land 2 - 6 Golden Coins (USA, Europe) (Rev 1) ではありません（ほかのリビジョンも使えません）:
+pt: Este arquivo nao e Super Mario Land 2 - 6 Golden Coins (USA, Europe) (Rev 1), o cartucho com que as ferramentas trabalham (as outras revisoes do jogo tambem sao recusadas):
+fr: Ce fichier n'est pas Super Mario Land 2 - 6 Golden Coins (USA, Europe) (Rev 1), la cartouche avec laquelle les outils fonctionnent (les autres revisions du jeu sont aussi refusees) :
+de: Diese Datei ist nicht Super Mario Land 2 - 6 Golden Coins (USA, Europe) (Rev 1), das Modul, mit dem die Werkzeuge arbeiten (andere Revisionen des Spiels werden ebenfalls abgelehnt):
+it: Questo file non e Super Mario Land 2 - 6 Golden Coins (USA, Europe) (Rev 1), la cartuccia con cui lavorano gli strumenti (anche le altre revisioni del gioco vengono rifiutate):
+id: Berkas ini bukan Super Mario Land 2 - 6 Golden Coins (USA, Europe) (Rev 1), kartrid yang dipakai alat-alat ini (revisi lain dari gim ini juga ditolak):
+ru: Этот файл не Super Mario Land 2 - 6 Golden Coins (USA, Europe) (Rev 1), картридж, с которым работают инструменты (другие ревизии игры тоже не подходят):
+zh: 此文件不是工具所支持的卡带 Super Mario Land 2 - 6 Golden Coins (USA, Europe) (Rev 1)（该游戏的其他版本也不被接受）:
+ko: 이 파일은 도구가 지원하는 카트리지인 Super Mario Land 2 - 6 Golden Coins (USA, Europe) (Rev 1)가 아닙니다 (게임의 다른 리비전도 거부됩니다):
 
 en: The project has no project file.
 es: El proyecto no tiene fichero de proyecto.
@@ -122,3 +122,15 @@ id: Folder ini tidak dapat ditulis: pengaturan, proyek, dan simpanan tidak akan 
 ru: В эту папку нельзя записывать: настройки, проекты и сохранения не будут сохранены. Переместите папку программы туда, где разрешена запись, например в Документы.
 zh: 无法写入此文件夹：设置、项目和存档将不会保存。请将程序文件夹移到可以写入的位置，例如"文档"。
 ko: 이 폴더에 쓸 수 없습니다. 설정, 프로젝트, 세이브가 저장되지 않습니다. 프로그램 폴더를 문서처럼 쓸 수 있는 곳으로 옮기세요.
+
+en: No file dialog is available on this computer: install xdg-desktop-portal (with the one of your desktop) or zenity. The game also takes the cartridge file as its argument.
+es: No hay ningun dialogo de ficheros en este ordenador: instala xdg-desktop-portal (con el de tu escritorio) o zenity. El juego tambien acepta el fichero del cartucho como argumento.
+ja: このコンピューターにはファイル選択ダイアログがありません。xdg-desktop-portal（お使いのデスクトップ用のものと一緒に）か zenity をインストールしてください。ゲームはカートリッジファイルを引数として受け取ることもできます。
+pt: Nao ha nenhum dialogo de arquivos neste computador: instale o xdg-desktop-portal (com o do seu ambiente de trabalho) ou o zenity. O jogo tambem aceita o arquivo do cartucho como argumento.
+fr: Aucune boite de dialogue de fichiers n'est disponible sur cet ordinateur : installez xdg-desktop-portal (avec celui de votre bureau) ou zenity. Le jeu accepte aussi le fichier de la cartouche en argument.
+de: Auf diesem Computer gibt es keinen Dateidialog: installiere xdg-desktop-portal (mit dem deines Desktops) oder zenity. Das Spiel nimmt die Moduldatei auch als Argument.
+it: Su questo computer non c'e nessuna finestra di dialogo per i file: installa xdg-desktop-portal (con quello del tuo desktop) o zenity. Il gioco accetta anche il file della cartuccia come argomento.
+id: Tidak ada dialog berkas di komputer ini: pasang xdg-desktop-portal (beserta milik desktopmu) atau zenity. Gim juga menerima berkas kartrid sebagai argumen.
+ru: На этом компьютере нет диалога выбора файлов: установите xdg-desktop-portal (вместе с портом вашего рабочего стола) или zenity. Игра также принимает файл картриджа как аргумент.
+zh: 这台电脑上没有可用的文件对话框：请安装 xdg-desktop-portal（以及你的桌面所用的那个）或 zenity。游戏也可以把卡带文件作为参数接收。
+ko: 이 컴퓨터에는 파일 대화 상자가 없습니다. xdg-desktop-portal(사용하는 데스크톱용 포털과 함께) 또는 zenity를 설치하세요. 게임은 카트리지 파일을 인수로 받을 수도 있습니다.

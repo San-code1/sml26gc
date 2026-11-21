@@ -1,7 +1,8 @@
 //! Where every file lives. The game and the editor both use these, so they always agree
 //! (this is part of the contract between them, see docs/ARCHITECTURE.md, "Contract between game and editor").
 //!
-//! In the data folder (`data_dir`, the executables' own folder: the programs are portable):
+//! In the data folder (`data_dir`: the executables' own folder, as the programs are portable, or
+//! the user's data folder for the installed form):
 //!   base_cartridge.txt                the original cartridge file both programs use
 //!   settings.cfg                      the game's settings
 //!   editor.cfg                        the editor's own settings
@@ -18,10 +19,29 @@ pub fn exe_dir() -> PathBuf {
     std::env::current_exe().ok().and_then(|e| e.parent().map(|p| p.to_path_buf())).unwrap_or_else(|| PathBuf::from("."))
 }
 
-/// The folder every data file lives in: the executables' folder on every platform so far, so
-/// the unpacked package is self-contained.
+/// The file the installed form (the Linux `.deb`) puts next to the executables: its data lives in
+/// the user's folder, since the executables' folder cannot be written.
+pub const INSTALLED_MARKER: &str = "installed";
+
+/// The folder every data file lives in, created when missing: the executables' folder, so the
+/// unpacked package is self-contained; for the installed form, `$XDG_DATA_HOME/<id>`.
 pub fn data_dir() -> PathBuf {
-    exe_dir()
+    static DIR: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+    DIR.get_or_init(|| {
+        let dir = data_dir_for(&exe_dir(), std::env::var_os("XDG_DATA_HOME"), std::env::var_os("HOME"));
+        let _ = std::fs::create_dir_all(&dir);
+        dir
+    })
+    .clone()
+}
+
+/// A relative `XDG_DATA_HOME` is invalid and ignored (XDG Base Directory specification).
+fn data_dir_for(exe_dir: &Path, xdg_data_home: Option<std::ffi::OsString>, home: Option<std::ffi::OsString>) -> PathBuf {
+    if !exe_dir.join(INSTALLED_MARKER).is_file() {
+        return exe_dir.to_path_buf();
+    }
+    let base = xdg_data_home.map(PathBuf::from).filter(|d| d.is_absolute()).or_else(|| home.map(|h| PathBuf::from(h).join(".local/share")));
+    base.map_or_else(|| exe_dir.to_path_buf(), |b| b.join(env!("PRODUCT_ID")))
 }
 
 /// Why the data folder is of no use, in `lang`: None when it can be written. Tried by making and
@@ -179,6 +199,21 @@ mod tests {
         assert!(manifest("game").contains(&format!("[[bin]]\nname = \"{GAME_PROGRAM}\"")));
         assert!(manifest("editor").contains(&format!("[[bin]]\nname = \"{EDITOR_PROGRAM}\"")));
         assert!(game_exe().file_stem().is_some_and(|s| s == GAME_PROGRAM));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_data_folder_of_each_form() {
+        let exe = std::env::temp_dir().join(format!("sml26gc-data-dir-{}", std::process::id()));
+        std::fs::create_dir_all(&exe).unwrap();
+        let (xdg, home) = (Some("/home/u/.data".into()), Some("/home/u".into()));
+        assert_eq!(data_dir_for(&exe, xdg.clone(), home.clone()), exe);
+        std::fs::write(exe.join(INSTALLED_MARKER), "").unwrap();
+        assert_eq!(data_dir_for(&exe, xdg, home.clone()), Path::new("/home/u/.data/sml26gc"));
+        assert_eq!(data_dir_for(&exe, None, home.clone()), Path::new("/home/u/.local/share/sml26gc"));
+        assert_eq!(data_dir_for(&exe, Some("relative".into()), home), Path::new("/home/u/.local/share/sml26gc"));
+        assert_eq!(data_dir_for(&exe, None, None), exe);
+        std::fs::remove_dir_all(&exe).unwrap();
     }
 
     #[test]

@@ -24,6 +24,8 @@ use macroquad::prelude::*;
 use i18n::Lang;
 use ports::{FileDialogs, MenuBar, PrefsStore};
 use std::path::PathBuf;
+use ui::drawn_menu_bar::DrawnMenuBar;
+use ui::inset;
 use ui::{language_menu, BaseScreen, Editor, Leave, Mode, Ports, ProjectsChoice, ProjectsScreen, TAB_POINTS};
 
 const TITLE: &str = "SML2 6GC Editor";
@@ -45,7 +47,10 @@ async fn main() {
     let mut dialogs = SystemDialogs { lang, owner: TITLE };
     clear_background(ui::col(3));
     next_frame().await;
-    let mut menu: Box<dyn MenuBar> = Box::new(WindowMenu::new(TITLE));
+    let mut menu: Box<dyn MenuBar> = match WindowMenu::attach(TITLE) {
+        Some(m) => Box::new(m),
+        None => Box::<DrawnMenuBar>::default(),
+    };
     language_menu::add(&mut *menu, lang, fs_repository::PrefsFile.load().language);
 
     // the base cartridge, asked for until a valid one is chosen
@@ -55,10 +60,13 @@ async fn main() {
             let mut screen = BaseScreen::new(lang, problem);
             let mut frames = 0;
             loop {
+                inset::begin(&mut *menu);
                 if choose_language(&mut *menu, &mut lang, &mut dialogs) {
                     screen.set_lang(lang);
                 }
-                if let Some(p) = screen.frame(&dialogs) {
+                let chosen = screen.frame(&dialogs);
+                inset::end(&mut *menu);
+                if let Some(p) = chosen {
                     break p;
                 }
                 if macroquad::input::is_quit_requested() || shoot(&shot, &mut frames) {
@@ -84,10 +92,13 @@ async fn main() {
                 }
                 let mut frames = 0;
                 loop {
+                    inset::begin(&mut *menu);
                     if choose_language(&mut *menu, &mut lang, &mut dialogs) {
                         screen.set_lang(lang);
                     }
-                    match screen.frame(&dialogs) {
+                    let chosen = screen.frame(&dialogs);
+                    inset::end(&mut *menu);
+                    match chosen {
                         Some(ProjectsChoice::Open(n)) => break n,
                         Some(ProjectsChoice::Quit) => return,
                         None => {}

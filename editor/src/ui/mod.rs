@@ -5,8 +5,10 @@
 mod blank_view;
 mod blank_zone_view;
 mod catalogue_view;
+pub mod drawn_menu_bar;
 mod files_view;
 mod grid_edit;
+pub mod inset;
 mod level_panel;
 mod level_view;
 mod menu;
@@ -50,6 +52,7 @@ use cart_model::map_routes::Place;
 use cart_model::original_points::OnMap;
 use cart_model::zone_maps::ZONES;
 use macroquad::prelude::*;
+use inset::{screen_width, screen_height, is_mouse_button_pressed, is_mouse_button_down, is_mouse_button_released, mouse_wheel, is_key_pressed};
 use std::collections::HashMap;
 use widgets::*;
 
@@ -423,7 +426,14 @@ impl Editor {
     }
 
     /// One frame: the menu, shortcuts, input, then drawing.
+    /// One frame: the views below the menu bar, the bar over them.
     pub fn frame(&mut self) {
+        inset::begin(&mut *self.menu);
+        self.views_frame();
+        inset::end(&mut *self.menu);
+    }
+
+    fn views_frame(&mut self) {
         new_frame_texts();
         if self.asking.is_some() {
             self.unsaved_frame();

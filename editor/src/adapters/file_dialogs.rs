@@ -1,6 +1,7 @@
 //! The system's Save and Open dialogs for level, zone, world map and project files, starting
 //! in the kind's folder of `exports\` (`host::paths`; a project's in its own,
-//! `exports\projects\<name>`). Off Windows there is no dialog: every request is cancelled.
+//! `exports\projects\<name>`). Win32 on Windows, the desktop's dialog elsewhere
+//! (`host::file_dialog`).
 use crate::ports::{FileDialogs, FileKind};
 use crate::texts::tr;
 use i18n::Lang;
@@ -56,6 +57,10 @@ impl FileDialogs for SystemDialogs {
     fn set_lang(&mut self, lang: Lang) {
         self.lang = lang;
     }
+
+    fn available(&self) -> bool {
+        imp::available()
+    }
 }
 
 #[cfg(windows)]
@@ -63,6 +68,10 @@ mod imp {
     use std::path::PathBuf;
     use windows_sys::Win32::UI::Controls::Dialogs::*;
     use windows_sys::Win32::UI::WindowsAndMessaging::FindWindowW;
+
+    pub fn available() -> bool {
+        true
+    }
 
     fn wide(s: &str) -> Vec<u16> {
         s.encode_utf16().chain(Some(0)).collect()
@@ -111,7 +120,11 @@ mod imp {
 
 #[cfg(not(windows))]
 mod imp {
-    pub fn dialog(_: &str, _: &str, _: &str, _: &str, _: Option<&str>, _: &std::path::Path) -> Option<std::path::PathBuf> {
-        None
+    pub use host::file_dialog::available;
+
+    /// `ext`: one extension, or several in the Win32 filter's form (`nmbzone;*.nmbworld`).
+    pub fn dialog(_: &str, what: &str, title: &str, ext: &str, save: Option<&str>, dir: &std::path::Path) -> Option<std::path::PathBuf> {
+        let exts: Vec<&str> = ext.split(";*.").collect();
+        host::file_dialog::ask(&host::file_dialog::Request { title, what, exts: &exts, dir, save })
     }
 }

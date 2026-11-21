@@ -75,7 +75,7 @@ Why each step: `docs/DEVELOPMENT.md`, "Workflow and releases".
 
 ## Licences
 
-The project is `GPL-3.0-or-later` (copyright The SML2 6GC authors): new files fall under it through
+The project is `GPL-3.0-or-later` (copyright ogueta93 (https://github.com/ogueta93) and the SML2 6GC authors): new files fall under it through
 `REUSE.toml`. Anything brought in from elsewhere (code, fonts, art) must have a licence
 compatible with the GPL, get its own entry in `REUSE.toml` and its licence text in `LICENSES/`.
 Nothing of the game or of Nintendo goes in (`LEGAL.md`).

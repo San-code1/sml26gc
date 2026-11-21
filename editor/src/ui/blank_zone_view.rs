@@ -7,6 +7,7 @@ use cart_model::new_zones::BASES;
 use cart_model::original_points::OnMap;
 use cart_model::zone_maps;
 use macroquad::prelude::*;
+use super::inset::{screen_width, screen_height, is_key_pressed};
 use crate::domain::document::ZoneRefusal;
 
 const PAD: f32 = 10.0;

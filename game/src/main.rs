@@ -20,7 +20,7 @@ use adapters::gilrs_pad::GilrsPad;
 use adapters::macroquad_display::{save_window_png, MacroquadDisplay, MacroquadWindow};
 use adapters::macroquad_keyboard::MacroquadKeyboard;
 use adapters::macroquad_picker::{Choice, Picker};
-use adapters::win32;
+use adapters::system_window;
 use application::preferences::Preferences;
 use application::session::{Flow, GameSession, SessionParts, TestGame};
 use domain::keys::Key;
@@ -157,7 +157,7 @@ fn main() {
     let checking = args.screenshot.is_some();
     let title = if checking { format!("{TITLE} [check {}]", std::process::id()) } else { TITLE.to_string() };
     if checking {
-        win32::remember_foreground();
+        system_window::remember_foreground();
     }
     let conf = macroquad::window::Conf {
         window_title: title.clone(),
@@ -251,7 +251,7 @@ async fn run(args: Args, found: Result<PathBuf, String>, checking: bool, title: 
 
     loop {
         if checking && render_frames == 1 {
-            win32::send_to_back(&title);
+            system_window::send_to_back(&title);
         }
         let dt = macroquad::time::get_frame_time();
         let mut next = None;
@@ -287,7 +287,7 @@ async fn run(args: Args, found: Result<PathBuf, String>, checking: bool, title: 
                     }
                     Choice::Browse => {
                         let (t, kind) = picker.dialog_texts();
-                        if let Some(p) = win32::pick_cartridge(&title, picker.start_dir().as_deref(), t, kind) {
+                        if let Some(p) = system_window::pick_cartridge(&title, picker.start_dir().as_deref(), t, kind) {
                             let last = SettingsFile.load().last_play;
                             match host::base_cartridge::choose(&p) {
                                 Ok(()) => {
@@ -296,6 +296,8 @@ async fn run(args: Args, found: Result<PathBuf, String>, checking: bool, title: 
                                 }
                                 Err(e) => picker.error = Some(e.text(picker.lang())),
                             }
+                        } else if !system_window::dialog_available() {
+                            picker.error = Some(host::file_dialog::unavailable_text(picker.lang()).into());
                         }
                         None
                     }
@@ -321,7 +323,7 @@ async fn run(args: Args, found: Result<PathBuf, String>, checking: bool, title: 
                 }
             }
             App::Run(session) => {
-                pad.poll(checking || win32::in_front(&title));
+                pad.poll(checking || system_window::in_front(&title));
                 if session.frame_with(dt, &keyboard, &pad, &audio) == Flow::Quit {
                     break;
                 }

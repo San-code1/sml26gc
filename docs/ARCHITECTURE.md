@@ -41,20 +41,35 @@ with ports and adapters around them. Behaviour is guarded by the golden fingerpr
 What depends on the operating system (window menus, file dialogs, the system language, the
 console, starting the other program, icons and version details) is only in `adapters/` folders,
 `crates/host`, `crates/app-resources`, build scripts and `xtask/`, each piece with a Windows
-branch and a fallback for other systems; `crates/host/tests/platform_boundary.rs` checks it.
-Every data file lives in `host::paths::data_dir()` (the executables' folder: the programs are
-portable); `exe_dir()` only finds the other program.
+branch and one for other systems; `crates/host/tests/platform_boundary.rs` checks it.
+Every data file lives in `host::paths::data_dir()`: the executables' folder (the programs are
+portable), or `$XDG_DATA_HOME/sml26gc` when the file `installed` sits beside the executables (only
+the Linux `.deb` puts it there). `exe_dir()` only finds the other program.
+
+- File dialogs: Win32 in the programs' adapters (`game/src/adapters/system_window.rs`,
+  `editor/src/adapters/file_dialogs.rs`); elsewhere `host::file_dialog` (the desktop portal or
+  zenity through `rfd`), which also says when no dialog can open (`FileDialogs::available`).
+- The system language: the Windows UI language, or `LC_ALL` / `LC_MESSAGES` / `LANG`
+  (`host::system_language`).
+- The editor's menu bar: the Win32 one (`editor/src/adapters/menu_bar.rs`) when the system gives
+  the window one, else `ui::drawn_menu_bar` along the top of the window. The `MenuBar` port says
+  its `height` and reads its `input` before the views; `ui::inset` moves the views below it (a
+  camera, and its own `screen_width`/`screen_height`/mouse/key functions, which the view modules
+  import by name in place of macroquad's) and keeps clicks and keys from them while a menu is open.
 
 Windows builds link the C runtime in (`.cargo/config.toml`) and use the window subsystem; the
 programs call `host::console::attach()` so their command-line modes print to the terminal they
-were started from. The product's name and short id are `PRODUCT_NAME` / `PRODUCT_ID` in
-`.cargo/config.toml`; the version is the workspace's.
+were started from. The product's name, short id, source address and the `.deb`'s maintainer are
+`PRODUCT_*` in `.cargo/config.toml`; the version is the workspace's.
 
 `cargo xtask package TARGET` builds `game` and `editor` with the `dist` profile for the target's
-triple (into `target/<triple>/dist/`, apart from `target/release`), checks the executables'
-imports, and assembles `dist/TARGET/sml26gc/` (executables, `packaging/` texts, font licences,
-the third-party crates' licences from `cargo metadata`) and its zip. A new platform is one entry
-of `TARGETS` in `xtask/src/main.rs` and its adapters' branches.
+triple: on Windows into `target/<triple>/dist/`; for Linux in a Debian 11 container
+(`packaging/linux/Dockerfile`, `xtask/src/linux.rs`) into `target/linux-container/`. It checks
+the executables' libraries (Windows: no C runtime DLLs; Linux: only the allowed ones, glibc 2.31
+at most), assembles `dist/TARGET/sml26gc/` (executables, `packaging/` texts, font licences, the
+third-party crates' licences from `cargo metadata`) and writes the target's outputs: the zip, or
+the `.tar.gz` and the `.deb`. A new platform is one entry of `TARGETS` in `xtask/src/main.rs` and
+its adapters' branches.
 
 ## `gb-core`
 

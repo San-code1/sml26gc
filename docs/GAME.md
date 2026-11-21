@@ -1,6 +1,6 @@
 # The game (sml26gc)
 
-`sml26gc.exe` plays Super Mario Land 2: 6 Golden Coins from your own cartridge file, and the
+`sml26gc` (`sml26gc.exe` on Windows) plays Super Mario Land 2: 6 Golden Coins from your own cartridge file, and the
 projects made in the editor. The cartridge's own program runs on an emulated Game Boy, so the
 game plays exactly as the original; everything below is added around it.
 
@@ -21,7 +21,7 @@ game plays exactly as the original; everything below is added around it.
 ## Starting
 
 The first time, the game asks for your Super Mario Land 2 - 6 Golden Coins (USA, Europe)
-cartridge file (`.gb`, any file name). It is checked by its contents at every start and shared
+(Rev 1) cartridge file (`.gb`, any file name; revision 1 only, see the README). It is checked by its contents at every start and shared
 with the editor; it is only read, never changed.
 
 The start screen then shows what can be played, one at a time, as a cartridge with its title
@@ -63,8 +63,8 @@ project saved in the editor plays at once.
 | Restart level (cheats mode, test games) | F8 | |
 | Full screen | F11 | |
 
-A controller (XInput or Windows.Gaming.Input) plays as soon as it is connected, together with
-the keyboard. Every binding is changed in the pause menu, Controls.
+A controller (on Windows XInput or Windows.Gaming.Input, on Linux any the system sees) plays as
+soon as it is connected, together with the keyboard. Every binding is changed in the pause menu, Controls.
 
 ## The pause menu
 
@@ -83,7 +83,7 @@ Esc opens it (in a level, Enter does too); the frame's footer shows the keys. Es
 | File select | The game's file select (to change save slot) |
 | Quit | Closes the game |
 
-Settings are kept in `settings.cfg`, next to the program.
+Settings are kept in `settings.cfg`, with your other files (below).
 
 ## Cheats mode
 
@@ -122,13 +122,13 @@ tried.
 ## Your files
 
 All beside the program: `base_cartridge.txt` (the cartridge chosen), `settings.cfg`,
-`saves\vanilla\` (the original game's battery save) and `saves\<project>\` (each project's, and
+`saves/vanilla/` (the original game's battery save) and `saves/<project>/` (each project's, and
 its progress in new zones). Keep the folder where it can be written; the game warns when it
-cannot.
+cannot. Installed on Linux from the `.deb`, they are in `~/.local/share/sml26gc/` instead.
 
 ## Command line
 
-    sml26gc.exe ["path\to\cartridge.gb"] [--project NAME] [--cheats] [--level N [--start X,Y]]
+    sml26gc ["path/to/cartridge.gb"] [--project NAME] [--cheats] [--level N [--start X,Y]]
 
 Without a cartridge the start screen opens. `--project` plays that project with its saves;
 `--level N` starts level N (with `--start`, Mario at that x and feet y). The editor adds more

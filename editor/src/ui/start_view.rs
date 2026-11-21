@@ -6,6 +6,7 @@ use super::{Editor, Mode};
 use cart_model::level_start::{Start, SPRITE_H, SPRITE_TOP, SPRITE_W};
 use cart_model::levels::ROWS;
 use macroquad::prelude::*;
+use super::inset::{screen_height, is_mouse_button_pressed, is_mouse_button_down};
 
 /// What a click on the level places.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
