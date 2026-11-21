@@ -14,8 +14,8 @@ STARTING
   {editor}    edits levels, objects and the world map (manuals\EDITOR.md)
 
 Unpack the whole folder somewhere you can write, such as Documents, and open a program. The
-first time, it asks for your Super Mario Land 2 - 6 Golden Coins (USA, Europe) cartridge file
-(.gb); both programs then use it. The file is only read, never changed.
+first time, it asks for your Super Mario Land 2 - 6 Golden Coins (USA, Europe) (Rev 1)
+cartridge file (.gb); both programs then use it. The file is only read, never changed.
 
 
 WHAT THE COMPUTER NEEDS
@@ -60,9 +60,11 @@ The window does not open, or closes at once, or the message mentions OpenGL or W
   saves would be lost. Move the whole folder to Documents or another folder of yours.
 
 The cartridge is refused
-  Only one dump is supported: Super Mario Land 2 - 6 Golden Coins (USA, Europe), recognised by
-  its contents (SHA-1 96e3a314561fb394cdf51101f9178a32713c2313), whatever its file name. Another
-  version or a modified file is refused.
+  Only one dump is supported: Super Mario Land 2 - 6 Golden Coins (USA, Europe) (Rev 1), that
+  is revision 1 of the game, recognised by its contents (SHA-1
+  96e3a314561fb394cdf51101f9178a32713c2313), whatever its file name. Revision 0 (often named
+  without "(Rev 1)"), revision 2 and modified files are refused. In PowerShell,
+  Get-FileHash -Algorithm SHA1 FILE gives a file's SHA-1.
 
 No sound
   Check that Windows has a default output device and that the game's volume (pause menu,

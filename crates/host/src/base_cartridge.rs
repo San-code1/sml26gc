@@ -5,7 +5,8 @@ use crate::texts::tr;
 use i18n::Lang;
 use std::path::{Path, PathBuf};
 
-/// Super Mario Land 2 - 6 Golden Coins (USA, Europe).
+/// Super Mario Land 2 - 6 Golden Coins (USA, Europe) (Rev 1): revision 1, byte $014C of the
+/// header; revisions 0 and 2 differ and are refused.
 pub const SUPPORTED_SHA1: &str = "96e3a314561fb394cdf51101f9178a32713c2313";
 
 /// Why there is no usable base cartridge.
@@ -22,10 +23,10 @@ impl BaseProblem {
     /// What to tell the person.
     pub fn text(&self, lang: Lang) -> String {
         match self {
-            BaseProblem::NotChosen => tr(lang, "Choose your Super Mario Land 2 - 6 Golden Coins (USA, Europe) cartridge file.").to_string(),
+            BaseProblem::NotChosen => tr(lang, "Choose your Super Mario Land 2 - 6 Golden Coins (USA, Europe) (Rev 1) cartridge file.").to_string(),
             BaseProblem::Missing(p) => format!("{}\n{}", tr(lang, "The cartridge file is not there any more:"), p.display()),
             BaseProblem::Unreadable(p) => format!("{}\n{}", tr(lang, "The cartridge file could not be read:"), p.display()),
-            BaseProblem::Other(p) => format!("{}\n{}", tr(lang, "This file is not Super Mario Land 2 - 6 Golden Coins (USA, Europe), the cartridge the tools work with:"), p.display()),
+            BaseProblem::Other(p) => format!("{}\n{}", tr(lang, "This file is not Super Mario Land 2 - 6 Golden Coins (USA, Europe) (Rev 1), the cartridge the tools work with (other revisions of the game are refused too):"), p.display()),
         }
     }
 }

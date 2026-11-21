@@ -74,3 +74,14 @@ to save, discard or cancel.
 #### Scenario: Closing with changes
 - **WHEN** a level was edited and the editor window is closed
 - **THEN** the editor asks; Cancel keeps it open with the changes
+
+### Requirement: The supported cartridge's name
+The supported cartridge SHALL be named in the editor's texts with its revision, as Super Mario Land 2 - 6 Golden Coins (USA, Europe) (Rev 1), both when the editor asks for it and when it refuses another file; the refusal SHALL say that other revisions of the game are refused too.
+
+#### Scenario: Asking for the cartridge
+- **WHEN** the editor starts and no base cartridge was ever chosen
+- **THEN** it asks for the Super Mario Land 2 - 6 Golden Coins (USA, Europe) (Rev 1) cartridge file
+
+#### Scenario: Another revision
+- **WHEN** a file of revision 0 of Super Mario Land 2 - 6 Golden Coins (USA, Europe) is chosen
+- **THEN** it is refused, and the message names Super Mario Land 2 - 6 Golden Coins (USA, Europe) (Rev 1) and says other revisions are refused
