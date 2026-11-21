@@ -10,7 +10,7 @@ Development happens on Windows 11 (x64); the Windows package is built there.
 
 | Tool | Why | How to get it |
 |---|---|---|
-| Rust (stable, MSVC toolchain `stable-x86_64-pc-windows-msvc`) | The language of every program (edition 2021; built with 1.100) | [rustup](https://rustup.rs): run `rustup-init.exe`, keep the default (MSVC) toolchain; `rustup update` later |
+| Rust (stable, MSVC toolchain `stable-x86_64-pc-windows-msvc`) | The language of every program: edition 2024, Rust 1.100 or later (`rust-version` in `Cargo.toml`; older toolchains are refused) | [rustup](https://rustup.rs): run `rustup-init.exe`, keep the default (MSVC) toolchain; `rustup update` later |
 | Visual Studio 2022 Build Tools, workload **Desktop development with C++** (MSVC v143 and a Windows 11 SDK) | The linker (`link.exe`) Rust uses on Windows, and the resource compiler (`rc.exe`) that puts the icons and version details in the executables | [Visual Studio downloads](https://visualstudio.microsoft.com/downloads/), "Build Tools for Visual Studio 2022" (rustup offers it when it is missing) |
 | Git | The repository and its workflow (`AGENTS.md`) | [git-scm.com](https://git-scm.com) (Git Bash runs `tools/research/all_commands.sh`) |
 | Your own Super Mario Land 2 - 6 Golden Coins (USA, Europe) cartridge file | Running the programs, the golden fingerprint test and the research tool | Your backup of your cartridge. Never put it, or anything made from it, in the repository |

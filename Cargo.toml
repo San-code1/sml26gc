@@ -1,5 +1,5 @@
 [workspace]
-resolver = "2"
+resolver = "3"
 members = [
     "crates/gb-core",
     "crates/cart-model",
@@ -16,7 +16,8 @@ members = [
 ]
 [workspace.package]
 version = "1.0.0"
-edition = "2021"
+edition = "2024"
+rust-version = "1.100"
 license = "GPL-3.0-or-later"
 authors = ["The SML2 6GC authors"]
 

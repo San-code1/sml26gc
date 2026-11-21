@@ -3,6 +3,7 @@ name = "app-resources"
 description = "Build-time only: a program's icon (from its PNG in assets/icons) and, on Windows, its version details, for the build scripts of the game and the editor."
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 publish = false
