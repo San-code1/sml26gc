@@ -1,4 +1,5 @@
-//! The language the system shows its own texts in (Windows: the user's display language).
+//! The language the system shows its own texts in (Windows: the user's display language; other
+//! systems: the locale variables).
 use i18n::Lang;
 
 /// The system's language when it is one of `Lang::ALL`, English otherwise.
@@ -26,7 +27,33 @@ mod imp {
 mod imp {
     use i18n::Lang;
 
+    /// The locale variables in the order POSIX gives them precedence for messages.
     pub fn system_language() -> Lang {
-        std::env::var("LANG").map(|t| Lang::from_tag(&t)).unwrap_or(Lang::En)
+        let var = |name| std::env::var(name).ok();
+        from_locale([var("LC_ALL"), var("LC_MESSAGES"), var("LANG")])
+    }
+
+    /// The first locale set and naming a language (`C` and `POSIX` name none).
+    fn from_locale(locales: [Option<String>; 3]) -> Lang {
+        locales.into_iter().flatten().find(|l| !l.is_empty() && !["C", "POSIX"].contains(&l.split('.').next().unwrap_or(""))).map_or(Lang::En, |l| Lang::from_tag(&l))
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        fn some(s: &str) -> Option<String> {
+            Some(s.to_string())
+        }
+
+        #[test]
+        fn locale_variables_in_order() {
+            assert_eq!(from_locale([None, None, some("es_ES.UTF-8")]), Lang::Es);
+            assert_eq!(from_locale([some("fr_FR.UTF-8"), some("de_DE.UTF-8"), some("es_ES.UTF-8")]), Lang::Fr);
+            assert_eq!(from_locale([some(""), some("de_DE.UTF-8"), some("es_ES.UTF-8")]), Lang::De);
+            assert_eq!(from_locale([some("C.UTF-8"), None, some("ja_JP.UTF-8")]), Lang::Ja);
+            assert_eq!(from_locale([some("POSIX"), None, None]), Lang::En);
+            assert_eq!(from_locale([None, None, None]), Lang::En);
+        }
     }
 }

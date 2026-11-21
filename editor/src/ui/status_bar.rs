@@ -3,6 +3,7 @@
 use super::widgets::*;
 use super::{Editor, Mode};
 use macroquad::prelude::*;
+use super::inset::screen_width;
 
 impl Editor {
     /// While objects are being captured in the background, a box at the bottom right of the

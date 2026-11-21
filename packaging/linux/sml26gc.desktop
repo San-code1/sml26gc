@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=SML2 6GC
+GenericName=Game Boy emulator
+Comment=Plays Super Mario Land 2: 6 Golden Coins from your own cartridge file, and the projects made in the editor
+Exec={game} %f
+Icon={game}
+Terminal=false
+Categories=Game;Emulator;
+Keywords=Super Mario Land 2;6 Golden Coins;Game Boy;

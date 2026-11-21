@@ -12,6 +12,7 @@ use crate::domain::object_catalogue::CatalogueObject;
 use crate::domain::object_names::{self, Category, CATEGORIES};
 use cart_model::enemy_sets::{self, Enemy};
 use macroquad::prelude::*;
+use super::inset::{screen_width, screen_height, mouse_position, is_mouse_button_pressed, mouse_wheel, is_key_pressed};
 
 const PAD: f32 = 10.0;
 const ROW: f32 = 26.0;

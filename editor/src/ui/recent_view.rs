@@ -8,6 +8,7 @@ use crate::domain::stamp::{Area, Stamp};
 use crate::domain::tools::ToolKind;
 use cart_model::original_points::OnMap;
 use macroquad::prelude::*;
+use super::inset::{mouse_position, is_mouse_button_pressed};
 
 /// How many each row keeps.
 const KEPT: usize = 8;

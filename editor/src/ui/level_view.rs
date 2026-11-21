@@ -4,6 +4,7 @@ use super::widgets::*;
 use super::{Editor, Mode, LEVEL_SIZE};
 use cart_model::levels::{COLS, ROWS};
 use macroquad::prelude::*;
+use super::inset::{screen_width, screen_height, mouse_position, is_mouse_button_down};
 
 impl Editor {
     /// Where the whole-level overview sits (top right of the level view).

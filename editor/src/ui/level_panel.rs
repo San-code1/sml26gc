@@ -17,6 +17,7 @@ use cart_model::level_goals::Goal;
 use cart_model::level_settings::{MUSICS, PALETTES, TIME_MAX, TIME_MIN};
 use cart_model::levels::LEVELS;
 use macroquad::prelude::*;
+use super::inset::{screen_width, screen_height, mouse_position, is_mouse_button_pressed, mouse_wheel};
 
 /// What the side panel shows below its head.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]

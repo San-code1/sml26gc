@@ -10,6 +10,7 @@ use crate::domain::files::{FileError, Origin, OriginOf};
 use cart_model::levels::LEVELS;
 use cart_model::original_points::OnMap;
 use macroquad::prelude::*;
+use super::inset::is_mouse_button_down;
 
 impl Editor {
     /// A dialog takes the keyboard while it is open, so the editor would never see Ctrl or
@@ -173,6 +174,7 @@ impl Editor {
         match e {
             ExchangeError::Io(e) => format!("{}: {e}", tr(lang, "The file could not be read or written")),
             ExchangeError::NoRoom => tr(lang, "There can't be more levels.").into(),
+            ExchangeError::NoDialog => host::file_dialog::unavailable_text(lang).into(),
             ExchangeError::Zone(ZoneRefusal::TooManyZones(max)) => format!("{} {max}.", tr(lang, "No more new zones: there can be")),
             ExchangeError::Zone(_) => tr(lang, "New zones are made from the Tree, Pumpkin, Macro, Space or Mario zone.").into(),
             ExchangeError::WorldAsZone => tr(lang, "This is a world map file: the game has one world map, so it replaces it (Replace zone on the world map) and is not a new zone.").into(),

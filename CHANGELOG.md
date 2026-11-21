@@ -6,6 +6,14 @@ What each version of the programs brings, as a person using them notices it. The
 
 ## [Unreleased]
 
+### Added
+
+- Linux (x86-64; Debian 11, Ubuntu 20.04 and later distributions): the game and the editor as a
+  folder to unpack and run (`sml26gc-<version>-linux-x64.tar.gz`), or installed from
+  `sml26gc_<version>_amd64.deb` with launchers in the application menu and your files in
+  `~/.local/share/sml26gc`. On Linux the file dialogs are the desktop's own, the editor draws its
+  menu bar in its window, and the system's language comes from the locale.
+
 ### Changed
 
 - The programs, the read-me and the manuals name the one cartridge file accepted with its

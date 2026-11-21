@@ -21,20 +21,27 @@ pub enum ExchangeError {
     ProtectedZone,
     /// A world map file imported as a new zone.
     WorldAsZone,
+    /// No file dialog can open on this computer.
+    NoDialog,
 }
 
 /// What a finished action did; None from the functions below means the dialog was cancelled.
 pub type Done<T> = Result<Option<T>, ExchangeError>;
 
 fn write(dialogs: &dyn FileDialogs, out: &dyn TextFiles, kind: FileKind, name: &str, text: impl FnOnce() -> String) -> Done<PathBuf> {
-    let Some(path) = dialogs.save_as(kind, name) else { return Ok(None) };
+    let Some(path) = dialogs.save_as(kind, name) else { return cancelled(dialogs) };
     out.write(&path, &text()).map_err(ExchangeError::Io)?;
     Ok(Some(path))
 }
 
 fn read(dialogs: &dyn FileDialogs, input: &dyn TextFiles, kind: FileKind) -> Done<String> {
-    let Some(path) = dialogs.open(kind) else { return Ok(None) };
+    let Some(path) = dialogs.open(kind) else { return cancelled(dialogs) };
     input.read(&path).map(Some).map_err(ExchangeError::Io)
+}
+
+/// No file from the dialog: cancelled, or there was no dialog.
+fn cancelled<T>(dialogs: &dyn FileDialogs) -> Done<T> {
+    if dialogs.available() { Ok(None) } else { Err(ExchangeError::NoDialog) }
 }
 
 /// Level `l` of project `project` as a level file, marked as coming from them.

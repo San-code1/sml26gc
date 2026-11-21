@@ -7,11 +7,15 @@ on a supported platform, with only what the programs need and the notices they m
 ## Requirements
 
 ### Requirement: One command builds a platform's package
-A single command run from the repository, naming a platform target (`windows-x64` for now), SHALL build the editor and the game for that target in release and assemble the package folder `dist/<target>/sml26gc/`, then write `dist/sml26gc-<version>-<target>.zip` holding that folder. It SHALL start from an empty package folder each time, so nothing from an earlier package remains. An unknown target SHALL stop with a message listing the known ones, and nothing SHALL be written.
+A single command run from the repository, naming a platform target (`windows-x64` or `linux-x64`), SHALL build the editor and the game for that target in release, assemble the package folder `dist/<target>/sml26gc/` from an empty folder each time, and write the target's packages (see "Each platform's packages"). An unknown target SHALL stop with a message listing the known ones, and nothing SHALL be written.
 
 #### Scenario: Building the Windows package
 - **WHEN** the developer runs the package command for `windows-x64`
 - **THEN** `dist/windows-x64/sml26gc/` holds the editor and the game built in release, and `dist/sml26gc-<version>-windows-x64.zip` holds that folder
+
+#### Scenario: Building the Linux packages
+- **WHEN** the developer runs the package command for `linux-x64` on Linux
+- **THEN** `dist/linux-x64/sml26gc/` holds the editor and the game built in release, `dist/sml26gc-<version>-linux-x64.tar.gz` holds that folder with both programs executable, and `dist/sml26gc_<version>_amd64.deb` installs them as `release/linux-install` says
 
 #### Scenario: An unknown target
 - **WHEN** the package command is run for `amiga`
@@ -22,11 +26,15 @@ The package folder SHALL hold exactly: the game and editor executables, a read-m
 
 #### Scenario: The developer's own files stay out
 - **WHEN** the package is built on a computer whose `target/release` holds projects, saves, `settings.cfg`, `editor.cfg`, `base_cartridge.txt` and `.pdb` files
-- **THEN** none of them is in the package folder or the zip
+- **THEN** none of them is in the package folder, the zip, the `.tar.gz` or the `.deb`
 
 #### Scenario: Listing the package
 - **WHEN** the Windows package folder is listed
 - **THEN** it holds `sml26gc.exe`, `sml26gc_editor.exe`, `README.txt`, `NO-CARTRIDGE.txt`, `LICENSE.txt`, `LEGAL.md`, `CHANGELOG.md`, `manuals/` (`GAME.md`, `EDITOR.md`) and `licenses/`, and nothing else
+
+#### Scenario: Listing the Linux package
+- **WHEN** the Linux package folder is listed
+- **THEN** it holds `sml26gc`, `sml26gc_editor`, `README.txt`, `NO-CARTRIDGE.txt`, `LICENSE.txt`, `LEGAL.md`, `CHANGELOG.md`, `manuals/` (`GAME.md`, `EDITOR.md`) and `licenses/`, and nothing else
 
 ### Requirement: No cartridge is included
 The package SHALL NOT contain any cartridge or data taken from one, and SHALL say so: `NO-CARTRIDGE.txt` (and the read-me) SHALL state that the programs include no game, that the person uses a cartridge file from their own backup of a cartridge they own, that the authors take no responsibility for where it was obtained, and that the product is not affiliated with or endorsed by Nintendo. The programs SHALL keep asking for the cartridge on first run, as they do now.
@@ -68,7 +76,7 @@ The product name, the short id, the version and the list of platform targets SHA
 - **THEN** the zip is named with `0.2.0`, both executables' Properties show `0.2.0`, and no text of the package names a version
 
 ### Requirement: The package says what a computer needs
-The package's read-me SHALL say what a computer needs to run the programs and that nothing else needs installing, and SHALL say, for each way a program can fail to start or work, its cause and what to do.
+Each platform's read-me SHALL say what a computer needs to run the programs and that nothing else needs installing, and SHALL say, for each way a program can fail to start or work, its cause and what to do.
 
 #### Scenario: A computer without a graphics driver
 - **WHEN** the game closes at once on a fresh Windows 11 without its graphics driver
@@ -78,12 +86,20 @@ The package's read-me SHALL say what a computer needs to run the programs and th
 - **WHEN** the read-me is read
 - **THEN** it gives the Windows version, the graphics driver (OpenGL 3.1, at least 2.1), the optional sound device and controller, how to see a program's messages from a terminal, and what to do for SmartScreen, a missing or old graphics driver (the maker's driver, 3D acceleration in a virtual machine, the OpenGL Compatibility Pack, Remote Desktop), a missing Visual C++ runtime (the redistributable to download), a folder that cannot be written, a refused cartridge, no sound and a controller that does nothing
 
+#### Scenario: What the Linux read-me covers
+- **WHEN** the Linux package's read-me is read
+- **THEN** it gives the oldest glibc (2.31) and example distributions (Debian 11, Ubuntu 20.04 and later, Fedora, Mint, Arch), the libraries the programs use with the Debian/Ubuntu and Fedora packages that provide them, the graphics driver (OpenGL 3.1, at least 2.1), the optional sound device, controller and file dialog (desktop portal or zenity), how to unpack and start the programs from a terminal or the file manager, how to install the `.deb` instead, and what to do for a program that is not executable, a missing library, a missing or old graphics driver, a folder that cannot be written, no file dialog, a refused cartridge, no sound and a controller that does nothing (access to `/dev/input`)
+
 ### Requirement: Documentation for players and developers
-The repository SHALL document, each in one place: what the game adds to the original and how to use it (a user manual), what the editor lets a person do and how (a user manual), how to prepare a computer to develop (the language, tools and how to install them), how to build, check and package for Windows, and how and why the emulator and the editor were made. The README SHALL describe both programs briefly and link to each document.
+The repository SHALL document, each in one place: the game's and the editor's user manuals, how to prepare a computer to develop on each supported platform (the language, tools and system libraries and how to install them), how to build, run, check and package on each, and how and why the emulator and the editor were made. The README SHALL describe both programs briefly, name the supported platforms and link to each document.
 
 #### Scenario: A new developer
 - **WHEN** someone with a fresh Windows 11 reads the development guide
 - **THEN** it names every tool to install (Rust with the MSVC toolchain, the Visual Studio Build Tools with the C++ workload and a Windows SDK, Git, and the optional OpenSpec CLI), where to get each, and the commands to build, test and package
+
+#### Scenario: A new developer on Linux
+- **WHEN** someone with a fresh Ubuntu 24.04 reads the development guide
+- **THEN** it names every tool and library to install (Rust through rustup, `build-essential`, `pkg-config`, `libasound2-dev`, `libudev-dev`, Git, Docker for packaging, and the optional OpenSpec CLI) with the command that installs them, their equivalents on Fedora, and the commands to build, run, test and package for Linux
 
 ### Requirement: Licence
 The project's own work SHALL be licensed under GPL-3.0-or-later, copyright The SML2 6GC authors, with each file's licence stated in `REUSE.toml` and the texts in `LICENSES/` (the fonts keep OFL-1.1). Each package SHALL carry the licence text and the address of the repository that holds the source code, and the executables' version details SHALL name the copyright holder and the licence.
@@ -102,3 +118,40 @@ A legal notice (`LEGAL.md`), also in each package, SHALL state what is and is no
 #### Scenario: What the legal notice covers
 - **WHEN** `LEGAL.md` is read
 - **THEN** it says no game or Nintendo material is included, gives the grounds (study and interoperability of programs, the user's own backup, changes for one's own use, names used only to say what the programs work with), says nobody makes money from the project, that each person answers for their use and their cartridge file's origin, and gives the author's contact
+
+### Requirement: Each platform's packages
+The Windows target SHALL write `dist/sml26gc-<version>-windows-x64.zip` holding the package folder. The Linux target SHALL write `dist/sml26gc-<version>-linux-x64.tar.gz` holding the package folder with both programs executable, and `dist/sml26gc_<version>_amd64.deb` holding the same files placed as `release/linux-install` says, plus its launchers and icons.
+
+#### Scenario: The Linux packages' contents
+- **WHEN** the Linux packages are built
+- **THEN** unpacking the `.tar.gz` gives `sml26gc/` with `sml26gc` and `sml26gc_editor` executable, and the `.deb`'s file list holds the same executables, texts, manuals and licences plus two launchers and two icons
+
+### Requirement: The Linux executables' libraries are checked
+When building the Linux packages, the package command SHALL stop, naming the library, if either executable needs a shared library outside the set the Linux read-me names, and SHALL stop if they need a glibc newer than 2.31, naming the version and the symbol's library. The oldest glibc they need SHALL be printed and stated in the read-me and the `.deb`'s dependencies.
+
+#### Scenario: An unexpected library
+- **WHEN** a dependency makes the editor link against `libgtk-3.so.0` and the Linux package is built
+- **THEN** the command stops and names `libgtk-3.so.0` and the executable that needs it, and no package is written
+
+#### Scenario: The glibc version
+- **WHEN** the Linux package is built on Ubuntu 24.04
+- **THEN** the command prints a glibc of at most 2.31, and the `.deb` depends on `libc6` of at least that version
+
+#### Scenario: Executables built against a newer glibc
+- **WHEN** the Linux executables were linked against glibc 2.39
+- **THEN** the command stops, says they need glibc 2.39 where 2.31 is the limit, and writes no package
+
+### Requirement: Linux packages built in a Debian 11 container
+The package command for `linux-x64` SHALL build the game and the editor inside a Docker container of Debian 11 (glibc 2.31) holding the C toolchain, the ALSA and udev headers and the workspace's Rust version, building that image first when missing or outdated. The files it writes SHALL belong to the developer, not root. Without a usable Docker it SHALL stop before building, saying how to install Docker and get access to it.
+
+#### Scenario: Packaging on Ubuntu 24.04
+- **WHEN** the developer runs the package command for `linux-x64` on Ubuntu 24.04 with Docker
+- **THEN** the executables are built in the Debian 11 container, the packages are written to `dist/`, and every file written is owned by the developer
+
+#### Scenario: Docker missing
+- **WHEN** the package command for `linux-x64` is run where `docker` is not installed, or the developer cannot use it
+- **THEN** it says Docker is needed, how to install it and join the `docker` group, and writes nothing
+
+#### Scenario: A new Rust version
+- **WHEN** the workspace's `rust-version` is raised and the Linux package is built
+- **THEN** the build image is rebuilt with that Rust before building

@@ -1,12 +1,15 @@
 # Development
 
-How to set up a computer to work on the project, build and check it, make the Windows package,
-and how the emulator and the editor were made. The rules for changing the code are in
+How to set up a computer to work on the project, build and check it, make the Windows and Linux
+packages, and how the emulator and the editor were made. The rules for changing the code are in
 [`AGENTS.md`](../AGENTS.md); the code's layout in [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
 ## What you need
 
-Development happens on Windows 11 (x64); the Windows package is built there.
+Development happens on Windows 11 or Linux, on x86-64; each platform's package is built on that
+platform.
+
+### Windows
 
 | Tool | Why | How to get it |
 |---|---|---|
@@ -17,6 +20,29 @@ Development happens on Windows 11 (x64); the Windows package is built there.
 | Optional: Node.js and the OpenSpec CLI (`npm install -g @fission-ai/openspec`) | Planning changes as specs (`openspec/`) | [nodejs.org](https://nodejs.org) |
 | Optional: the Linux target (`rustup target add x86_64-unknown-linux-gnu`) | `cargo xtask check-portable` | rustup |
 
+### Linux
+
+Any distribution where the tools below install; the commands are for Ubuntu 24.04 (Debian and
+Mint alike) and Fedora.
+
+| Tool | Why | How to get it |
+|---|---|---|
+| Rust (stable, through rustup) | The language of every program: Rust 1.100 or later | `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \| sh`, then `rustup update` later. The distribution's own `rustc` is usually too old |
+| A C toolchain and `pkg-config` | The linker, and the build scripts of the sound and controller crates | `build-essential pkg-config` / `gcc pkgconf-pkg-config` |
+| The ALSA and udev headers | Building `cpal` (sound) and `gilrs` (controllers) | `libasound2-dev libudev-dev` / `alsa-lib-devel systemd-devel` |
+| Git | The repository and its workflow (`AGENTS.md`) | `git` |
+| Docker, with your user in the `docker` group | Building the Linux packages (below, "Building for Linux") | `docker.io` / `moby-engine`; then `sudo usermod -aG docker $USER` and log out and in |
+| `dpkg-deb` | Writing the `.deb` | Part of `dpkg` on Debian and Ubuntu; `dpkg` on Fedora |
+| Your own Super Mario Land 2 - 6 Golden Coins (USA, Europe) (Rev 1) cartridge file | As on Windows | As on Windows |
+| Optional: Node.js and the OpenSpec CLI (`npm install -g @fission-ai/openspec`) | Planning changes as specs (`openspec/`) | Node.js from the distribution or [nvm](https://github.com/nvm-sh/nvm) |
+
+In one go:
+
+    sudo apt install build-essential pkg-config libasound2-dev libudev-dev git docker.io
+    sudo dnf install gcc pkgconf-pkg-config alsa-lib-devel systemd-devel git moby-engine dpkg
+
+### Both
+
 Every other dependency (macroquad, cpal, gilrs, png...) is a Rust crate Cargo downloads by itself.
 No Python, CMake or other build system is needed.
 
@@ -26,10 +52,15 @@ No Python, CMake or other build system is needed.
     target\release\sml26gc.exe ["path\to\game.gb"] [--project NAME | --test] [--level N] [--cheats]
     target\release\sml26gc_editor.exe
 
+On Linux the same, with `target/release/sml26gc` and `target/release/sml26gc_editor`. They need
+what any player's computer needs (`packaging/linux/README.txt`, "What the computer needs"); built
+this way they need the glibc of the computer that built them, which is fine for your own use but
+not for giving them to others (use the package, below).
+
 The emulator is too slow unoptimised, so even `cargo build` (debug) is optimised; use `--release`
 for playing. `.cargo/config.toml` links the C runtime into every Windows build.
 
-Both programs keep their files next to themselves, in `target\release\`: the base cartridge
+Both programs keep their files next to themselves, in `target/release/`: the base cartridge
 choice (`base_cartridge.txt`), `settings.cfg`, `editor.cfg`, the projects (`editor\projects\`),
 the saves (`saves\`), `exports\` and `cache\`. `cargo clean` deletes them with the build: copy
 them out first.
@@ -39,14 +70,14 @@ them out first.
 | Command | What it does |
 |---|---|
 | `cargo test --release --workspace` | Every test, with the golden fingerprint (`regression/`, see its README): needs the cartridge (`SML2_ROM`, or where the game finds it) |
-| `$env:GOLDEN_UPDATE=1; cargo test --release -p regression --test golden` | Rewrites the fingerprint, only for an intended behaviour change |
-| `target\release\research.exe COMMAND ...` | The reverse-engineering tool (`tools/research`): disassembly, memory watch and trace, ROM views, checks that play edited data. The cartridge comes from the command line, `RESEARCH_ROM`, the base cartridge, a `rom` folder or `%USERPROFILE%\Games` |
+| `$env:GOLDEN_UPDATE=1; cargo test --release -p regression --test golden` (Linux: `GOLDEN_UPDATE=1 cargo test ...`) | Rewrites the fingerprint, only for an intended behaviour change |
+| `target\release\research.exe COMMAND ...` (Linux: `target/release/research`) | The reverse-engineering tool (`tools/research`): disassembly, memory watch and trace, ROM views, checks that play edited data. The cartridge comes from the command line, `RESEARCH_ROM`, the base cartridge, a `rom` folder or `%USERPROFILE%\Games` |
 | `sh tools/research/all_commands.sh EXE DIR` | Runs a fixed set of research commands into `DIR`, to compare two builds file by file |
 | `sml26gc.exe --research menushots DIR` | The pause menu's screens in every language, as pictures |
 | `sml26gc.exe --self-test out.json` | Checks the game's rules read from the cartridge (`MECHANICS.md`) against the running game |
 | `sml26gc.exe --dump DIR --script ... --frames N --every N` | Screens of a scripted run |
 | `sml26gc.exe --screenshot FILE [--start-screen]`, `sml26gc_editor.exe --screenshot FILE [--project NAME --level N]` | One picture of the window, with default settings (unattended checks) |
-| `cargo xtask targets`, `cargo xtask package TARGET`, `cargo xtask check-portable` | The release tool, below |
+| `cargo xtask targets`, `cargo xtask package TARGET`, `cargo xtask check-portable` | The release tool, below ("Building for Windows", "Building for Linux") |
 
 Never run `cargo fmt`: the code is formatted by hand (`AGENTS.md`).
 
@@ -82,8 +113,8 @@ The package another person unpacks and runs:
 2. Checks that neither executable needs the Visual C++ runtime DLLs (`VCRUNTIME140.dll`,
    `api-ms-win-crt-*`): `.cargo/config.toml` links the C runtime in (`+crt-static`).
 3. Writes `dist\windows-x64\sml26gc\`, emptied first: `sml26gc.exe`, `sml26gc_editor.exe`,
-   `README.txt` and `NO-CARTRIDGE.txt` (from `packaging/`, with the product and program names
-   filled in), `LICENSE.txt` (the GPL), `LEGAL.md`, `CHANGELOG.md`, `manuals\` (`docs/GAME.md`,
+   `README.txt` (`packaging/windows/`) and `NO-CARTRIDGE.txt` (`packaging/`), with the product
+   and program names filled in, `LICENSE.txt` (the GPL), `LEGAL.md`, `CHANGELOG.md`, `manuals\` (`docs/GAME.md`,
    `docs/EDITOR.md`) and `licenses\` (the fonts' and those of every Rust crate compiled in, from
    `cargo metadata`).
 4. Zips that folder to `dist\sml26gc-<version>-windows-x64.zip`.
@@ -103,7 +134,7 @@ What goes into the executables:
 
 A package is published only as part of a release (below, "Workflow and releases"). What a
 computer needs to run it, and what to do when it does not start, is in
-[`packaging/README.txt`](../packaging/README.txt).
+[`packaging/windows/README.txt`](../packaging/windows/README.txt).
 
 Build errors and their cause:
 
@@ -114,8 +145,57 @@ Build errors and their cause:
 | `... needs VCRUNTIME140.dll` from the xtask | `.cargo/config.toml` was not applied (built from another folder, or `RUSTFLAGS` set in the environment, which overrides it) |
 | `error: failed to remove file ... .exe` | The program is open: close it and build again |
 
-Other platforms: the code is ready for them (see `ARCHITECTURE.md`, "Platforms and packaging");
-each is built on its own system.
+## Building for Linux
+
+The packages another person unpacks or installs, on Linux with Docker:
+
+    cargo xtask package linux-x64
+
+1. Builds the image `sml26gc-build-linux:<rust-version>` from `packaging/linux/Dockerfile`:
+   Debian 11 with the C toolchain, the ALSA and udev headers and Rust at the workspace's
+   `rust-version`, installed by rustup. Docker keeps it, so later runs reuse it at once; raising
+   `rust-version` makes a new one.
+2. Builds the game and the editor with the `dist` profile inside that image, as your own user
+   (every file it writes is yours), with the repository mounted and the build folder
+   `target/linux-container/` (apart from your own `target/release/`). The downloaded crates stay
+   in the Docker volume `sml26gc-cargo` between runs.
+3. Checks each executable needs only the libraries `packaging/linux/README.txt` names (glibc,
+   ALSA, udev) and no glibc newer than 2.31, and prints the version it needs.
+4. Writes `dist/linux-x64/sml26gc/`, as for Windows but with `README.txt` from
+   `packaging/linux/`, then two packages:
+   - `dist/sml26gc-<version>-linux-x64.tar.gz`: that folder, the programs executable.
+   - `dist/sml26gc_<version>_amd64.deb`, made with `dpkg-deb` from `target/deb/`: the programs in
+     `/usr/lib/sml26gc/` with the file `installed` that sends their data to
+     `~/.local/share/sml26gc` (`host::paths::data_dir`), the commands in `/usr/bin`, the launchers
+     (`packaging/linux/*.desktop`) and 256x256 icons scaled from `assets/icons/`, the documents in
+     `/usr/share/doc/sml26gc/` (with `packaging/linux/copyright`), and its dependencies.
+     `PRODUCT_MAINTAINER` in `.cargo/config.toml` is its maintainer.
+
+Why a container: an executable linked on a computer needs at least that computer's glibc (built
+on Ubuntu 24.04 it would need 2.39 and not start on Ubuntu 22.04). Debian 11's glibc 2.31 lets one
+`.tar.gz` and one `.deb` run on Debian 11, Ubuntu 20.04 and every later distribution. To change
+the base, edit the `FROM` line of the Dockerfile and the `glibc` limit of `linux-x64` in
+`xtask/src/main.rs`, together, and the versions in `packaging/linux/README.txt`. Debian 11 left
+long-term support in August 2026, so the Dockerfile installs its packages from
+`archive.debian.org`, where Debian keeps them for good.
+
+To free the space: `docker image rm sml26gc-build-linux:<rust-version>`, `docker volume rm
+sml26gc-cargo`, and `target/linux-container/` (it goes with `cargo clean`).
+
+Build errors and their cause:
+
+| Error | Cause and fix |
+|---|---|
+| `... Docker does not answer` | Docker is not installed or your user cannot use it: install it, `sudo usermod -aG docker $USER`, log out and in |
+| `permission denied while trying to connect to the Docker daemon socket` | The same: your user is not in the `docker` group yet (log out and in after adding it) |
+| `the linux-x64 package is built on linux` | The command was run on Windows: run it on Linux |
+| `... needs libXYZ.so, which the Linux read-me does not name` | A dependency now links another system library: add it to the read-me, the `.deb`'s `Depends` and the allowed list in `xtask/src/main.rs`, or avoid it |
+| `... needs glibc 2.xx, newer than the 2.31 ...` | The executables were not built in the container (or the Dockerfile's base changed): run the command again |
+| `dpkg-deb is needed` | Install `dpkg` |
+| `Temporary failure resolving 'archive.debian.org'` while building the image | No network: check the connection |
+
+A package is published only as part of a release (below). What a computer needs to run it is in
+[`packaging/linux/README.txt`](../packaging/linux/README.txt).
 
 ## Workflow and releases
 
@@ -150,10 +230,12 @@ Publishing release X.Y.Z, once the user has asked for it and agreed the number:
    new empty "Unreleased" above it, run the tests, commit "Release X.Y.Z", push.
 2. `git checkout main`, `git merge --no-ff develop`, `git tag -a vX.Y.Z -m "Version X.Y.Z"`,
    `git push origin main vX.Y.Z`.
-3. `cargo xtask package windows-x64` (from `main`): `dist\sml26gc-X.Y.Z-windows-x64.zip`.
+3. From `main`, on Windows `cargo xtask package windows-x64`
+   (`dist\sml26gc-X.Y.Z-windows-x64.zip`) and on Linux `cargo xtask package linux-x64`
+   (`dist/sml26gc-X.Y.Z-linux-x64.tar.gz` and `dist/sml26gc_X.Y.Z_amd64.deb`).
 4. On GitHub, Releases, "Draft a new release": choose the tag `vX.Y.Z`, paste the changelog's
-   section as the text, attach the zip, publish (or `gh release create vX.Y.Z <zip> --notes-file
-   <section>` with the GitHub CLI).
+   section as the text, attach the three files, publish (or `gh release create vX.Y.Z <files>
+   --notes-file <section>` with the GitHub CLI).
 
 ## How the emulator was made, and why
 

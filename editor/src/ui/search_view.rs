@@ -5,6 +5,7 @@
 use super::widgets::*;
 use super::Editor;
 use macroquad::prelude::*;
+use super::inset::{mouse_position, is_mouse_button_pressed, is_key_pressed, get_char_pressed};
 
 const MOST: usize = 24;
 

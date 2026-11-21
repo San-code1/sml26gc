@@ -9,6 +9,7 @@ use crate::domain::object_names::{self, Category};
 use cart_model::art::Look;
 use cart_model::objects::Obj;
 use macroquad::prelude::*;
+use super::inset::{screen_width, screen_height, mouse_position, is_mouse_button_pressed, is_mouse_button_down};
 
 /// New pictures between two writes of the cache.
 const LOOKS_SAVE_EVERY: usize = 16;

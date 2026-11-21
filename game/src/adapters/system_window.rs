@@ -1,6 +1,6 @@
-//! Windows itself: keeping the check window out of the way (it goes behind the others and
-//! focus returns to whatever had it), and the system's dialog to open a cartridge file.
-//! Does nothing outside Windows.
+//! The system around the window: keeping the check window out of the way (it goes behind the
+//! others and focus returns to whatever had it; Windows only), and the system's dialog to open a
+//! cartridge file (Win32, or `host::file_dialog` elsewhere).
 
 #[cfg(windows)]
 mod imp {
@@ -42,6 +42,10 @@ mod imp {
         Some(std::path::PathBuf::from(String::from_utf16_lossy(&file[..n])))
     }
 
+    pub fn dialog_available() -> bool {
+        true
+    }
+
     /// Is the window titled `title` the one in front (taking the keyboard)?
     pub fn in_front(title: &str) -> bool {
         let w: Vec<u16> = title.encode_utf16().chain(Some(0)).collect();
@@ -73,9 +77,14 @@ mod imp {
     pub fn in_front(_: &str) -> bool {
         true
     }
-    pub fn pick_cartridge(_: &str, _: Option<&std::path::Path>, _: &str, _: &str) -> Option<std::path::PathBuf> {
-        None
+    pub fn pick_cartridge(_: &str, dir: Option<&std::path::Path>, title: &str, kind: &str) -> Option<std::path::PathBuf> {
+        let dir = dir.map_or_else(host::paths::data_dir, |d| d.to_path_buf());
+        host::file_dialog::ask(&host::file_dialog::Request { title, what: kind, exts: &["gb", "gbc"], dir: &dir, save: None })
+    }
+
+    pub fn dialog_available() -> bool {
+        host::file_dialog::available()
     }
 }
 
-pub use imp::{in_front, pick_cartridge, remember_foreground, send_to_back};
+pub use imp::{dialog_available, in_front, pick_cartridge, remember_foreground, send_to_back};

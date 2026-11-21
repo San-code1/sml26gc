@@ -38,10 +38,20 @@ to its recorded behaviour) and the specs in `openspec/specs/`.
 
 ## Playing
 
-Unpack the release zip (`sml26gc-<version>-windows-x64.zip`) in a folder you can write to, such
-as Documents, and open `sml26gc.exe` or `sml26gc_editor.exe`; the first time, either asks for
-your cartridge file. Nothing needs installing on Windows 11 (64-bit). What to do when a
-program does not start: [`packaging/README.txt`](packaging/README.txt), the read-me in the zip.
+The programs run on Windows 11 and Linux (x86-64; Debian 11, Ubuntu 20.04 and later
+distributions). Nothing needs installing besides them; the first time, either program asks for
+your cartridge file.
+
+- **Windows**: unpack `sml26gc-<version>-windows-x64.zip` in a folder you can write to, such as
+  Documents, and open `sml26gc.exe` or `sml26gc_editor.exe`.
+- **Linux**: unpack `sml26gc-<version>-linux-x64.tar.gz` in your home folder and run
+  `./sml26gc` or `./sml26gc_editor` in the `sml26gc` folder (any distribution); or, on Debian,
+  Ubuntu, Mint and the like, install `sml26gc_<version>_amd64.deb`
+  (`sudo apt install ./sml26gc_<version>_amd64.deb`) and open them from the application menu.
+
+What a computer needs and what to do when a program does not start: the read-me in the package,
+[`packaging/windows/README.txt`](packaging/windows/README.txt) or
+[`packaging/linux/README.txt`](packaging/linux/README.txt).
 
 ## Documentation
 
@@ -49,8 +59,8 @@ program does not start: [`packaging/README.txt`](packaging/README.txt), the read
 |---|---|
 | [`docs/GAME.md`](docs/GAME.md) | Playing: what the game adds to the original, controls, menus, cheats |
 | [`docs/EDITOR.md`](docs/EDITOR.md) | Editing: projects, levels, objects, maps, zones, test games, files |
-| [`packaging/README.txt`](packaging/README.txt) | Running the release on a computer: requirements and problems |
-| [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) | Developers: tools to install, building, checks, the Windows package, how the emulator and the editor were made |
+| [`packaging/windows/README.txt`](packaging/windows/README.txt), [`packaging/linux/README.txt`](packaging/linux/README.txt) | Running the release on a computer: requirements and problems |
+| [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) | Developers: tools to install, building, checks, the Windows and Linux packages, how the emulator and the editor were made |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | The code's layout, dependencies and the contract between the two programs |
 | [`docs/MECHANICS.md`](docs/MECHANICS.md) | The game's rules, read from its program |
 | [`AGENTS.md`](AGENTS.md) | Rules for changing the repository |

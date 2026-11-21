@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=SML2 6GC Editor
+GenericName=Level editor
+Comment=Edits the levels, objects and world map of Super Mario Land 2: 6 Golden Coins into a copy of your cartridge
+Exec={editor}
+Icon={editor}
+Terminal=false
+Categories=Game;Development;
+Keywords=Super Mario Land 2;6 Golden Coins;Game Boy;Level editor;

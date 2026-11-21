@@ -1,6 +1,6 @@
 # The editor (sml26gc_editor)
 
-`sml26gc_editor.exe` changes Super Mario Land 2: 6 Golden Coins in projects: each project is an
+`sml26gc_editor` (`sml26gc_editor.exe` on Windows) changes Super Mario Land 2: 6 Golden Coins in projects: each project is an
 edited copy of your cartridge that the game's own program plays, so every edited level keeps the
 original's physics, enemies and music. Your base cartridge is never changed.
 
@@ -24,7 +24,7 @@ original's physics, enemies and music. Your base cartridge is never changed.
 
 At start (and from File, Projects..., Ctrl+Shift+O) the project screen lists the projects, the
 last one first, and creates, renames, duplicates, deletes or imports them. Each project is a
-folder (`editor\projects\<name>\`) with its project file (what was edited) and the cartridge made
+folder (`editor/projects/<name>/`) with its project file (what was edited) and the cartridge made
 from it over the base cartridge; the cartridge is made again when missing or older, also by the
 game. A project opens where it was last saved (the level, or the zone editor's map), a new one on
 the world map. Leaving with unsaved changes asks to save, discard or cancel.
@@ -51,6 +51,10 @@ wheel or a right-drag.
 
 The Language menu: English, Spanish, Japanese, Portuguese, French, German, Italian, Indonesian,
 Russian, Simplified Chinese or Korean; Automatic follows the system's. Kept in `editor.cfg`.
+
+The File, Tools and Language menus are in the window's menu bar. On Linux the editor draws it
+along the top of its window: a click on a title opens its menu (then the pointer moves between
+menus), a click on an entry chooses it, and a click elsewhere or Esc closes it.
 
 ## Levels
 
@@ -145,5 +149,5 @@ the bottom right shows how far it is. Tools, Capture the object pictures again s
 ## Your files
 
 All beside the program: `editor.cfg` (language, zoom, listening volume, test game values), the
-projects (`editor\projects\`), `exports\` and `cache\`; `base_cartridge.txt` is shared with the
-game.
+projects (`editor/projects/`), `exports/` and `cache/`; `base_cartridge.txt` is shared with the
+game. Installed on Linux from the `.deb`, they are in `~/.local/share/sml26gc/` instead.

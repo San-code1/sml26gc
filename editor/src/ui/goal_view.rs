@@ -9,6 +9,7 @@ use cart_model::new_zones;
 use cart_model::original_points::{self, OnMap};
 use cart_model::secret_exits::{self, SecretTo};
 use macroquad::prelude::*;
+use super::inset::{is_mouse_button_pressed, is_mouse_button_down};
 
 impl Editor {
     fn goal_of(p: Placing) -> Option<Goal> {
