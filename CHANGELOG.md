@@ -6,6 +6,8 @@ What each version of the programs brings, as a person using them notices it. The
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-11-21
+
 ### Added
 
 - Linux (x86-64; Debian 11, Ubuntu 20.04 and later distributions): the game and the editor as a
