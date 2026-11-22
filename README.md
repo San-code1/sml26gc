@@ -13,6 +13,16 @@ Two programs for Super Mario Land 2: 6 Golden Coins, written in Rust, that use t
   each saved as an edited copy of the cartridge that the game's own program plays. Manual:
   [`docs/EDITOR.md`](docs/EDITOR.md).
 
+<p align="center">
+  <a href="https://github.com/user-attachments/assets/8e903758-367d-45dd-a2b7-1f1c42a80132"><img height="200" alt="The editor placing objects in one of the game's levels" src="https://github.com/user-attachments/assets/8e903758-367d-45dd-a2b7-1f1c42a80132"></a>
+  <a href="https://github.com/user-attachments/assets/8ba4f9d2-a19a-44c6-83d7-51c9340cd75c"><img height="200" alt="The edited level played in the game" src="https://github.com/user-attachments/assets/8ba4f9d2-a19a-44c6-83d7-51c9340cd75c"></a>
+  <br>
+  <sub>A level changed in the editor, then played in the game (click to enlarge). Recorded with
+  the author's own cartridge backup: the game graphics shown belong to Nintendo and appear only
+  to illustrate the tools; no game data is included in or distributed with this project
+  (<a href="LEGAL.md">LEGAL.md</a>).</sub>
+</p>
+
 No game is included: you use a cartridge file from your own backup of a cartridge you own. The
 programs accept exactly one dump, revision 1 of the game, recognised by its contents whatever the
 file is called:
