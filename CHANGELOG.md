@@ -14,6 +14,11 @@ What each version of the programs brings, as a person using them notices it. The
   editor's shortcuts use Cmd in place of Ctrl, Cmd+Ctrl+F also turns full screen on and off, and
   the language follows the Mac's preferred languages.
 
+### Fixed
+
+- An object placed in one of the game's levels to the left of objects already there now appears
+  when the level is played; before, it could be missing (new levels were not affected).
+
 ## [1.1.0] - 2026-11-21
 
 ### Added
